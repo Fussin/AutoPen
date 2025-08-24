@@ -152,10 +152,74 @@ def verify_2fa():
 
 from flask_login import logout_user
 
+from cyberhunter_3d.web.models import Scan, Target
+from werkzeug.utils import secure_filename
+from concurrent.futures import ThreadPoolExecutor
+from cyberhunter_3d.core.scan_manager import run_scan
+
+# --- Background Task Executor ---
+# Using a simple thread pool for background tasks.
+# For a production app, a more robust solution like Celery would be better.
+executor = ThreadPoolExecutor(max_workers=2)
+
+
+@app.route('/submit-targets', methods=['POST'])
+@login_required
+def submit_targets():
+    targets_text = request.form.get('targets', '')
+    target_file = request.files.get('target_file')
+
+    raw_targets = []
+
+    # 1. Get targets from textarea
+    if targets_text:
+        raw_targets.extend(targets_text.strip().splitlines())
+
+    # 2. Get targets from file
+    if target_file and target_file.filename != '':
+        # It's good practice to secure the filename, though we don't save the file
+        filename = secure_filename(target_file.filename)
+        if filename.endswith('.txt') or filename.endswith('.csv'):
+            try:
+                content = target_file.read().decode('utf-8')
+                raw_targets.extend(content.strip().splitlines())
+            except Exception as e:
+                flash(f"Error reading file: {e}", 'danger')
+                return redirect(url_for('dashboard'))
+
+    # 3. Clean and validate targets
+    targets = {line.strip() for line in raw_targets if line.strip()}
+
+    if not targets:
+        flash('No valid targets submitted.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # 4. Create Scan and Target objects in DB
+    new_scan = Scan(user_id=current_user.id, status='QUEUED')
+    db.session.add(new_scan)
+
+    # We need to flush to get the new_scan.id before creating targets
+    db.session.flush()
+
+    for target_value in targets:
+        new_target = Target(value=target_value, scan_id=new_scan.id)
+        db.session.add(new_target)
+
+    db.session.commit()
+
+    # Trigger the scan in the background
+    executor.submit(run_scan, new_scan.id, app)
+
+    flash(f'{len(targets)} targets have been queued for scanning.', 'success')
+    return redirect(url_for('dashboard'))
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('dashboard.html')
+    # Fetch scans for the current user, ordered by most recent
+    scans = Scan.query.filter_by(user_id=current_user.id).order_by(Scan.created_at.desc()).all()
+    return render_template('dashboard.html', scans=scans)
 
 @app.route('/logout')
 @login_required
@@ -163,6 +227,17 @@ def logout():
     logout_user()
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
+
+@app.route('/scan/<int:scan_id>')
+@login_required
+def scan_results(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    # Ensure the user can only view their own scans
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to view this scan.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    return render_template('scan_results.html', scan=scan)
 
 # --- Main Execution ---
 if __name__ == '__main__':

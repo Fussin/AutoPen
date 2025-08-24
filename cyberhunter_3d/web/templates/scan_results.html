@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h2>Scan Results for #{{ scan.id }}</h2>
+    <a href="{{ url_for('dashboard') }}" class="button">Back to Dashboard</a>
+  </div>
+
+  <p>
+    <strong>Status:</strong>
+    <span style="padding: 0.2em 0.5em; border-radius: 4px; color: white; background-color:
+      {% if scan.status == 'COMPLETED' %}#28a745
+      {% elif scan.status == 'RUNNING' %}#007bff
+      {% elif scan.status == 'FAILED' %}#dc3545
+      {% else %}#6c757d
+      {% endif %};">
+      {{ scan.status }}
+    </span>
+  </p>
+  <p><strong>Created:</strong> {{ scan.created_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+  <p><strong>Last Updated:</strong> {{ scan.updated_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Targets</h3>
+  <ul>
+    {% for target in scan.targets %}
+      <li>{{ target.value }}</li>
+    {% endfor %}
+  </ul>
+
+  <h3>Results</h3>
+  {% if scan.results %}
+    <pre style="background-color: #1a1a1a; padding: 1em; border-radius: 4px; border: 1px solid #444; white-space: pre-wrap; word-wrap: break-word;">{{ scan.results }}</pre>
+  {% elif scan.status == 'COMPLETED' %}
+    <p>Scan completed with no results found.</p>
+  {% else %}
+    <p>Scan is not yet complete. Results will appear here once the scan is finished.</p>
+  {% endif %}
+
+{% endblock %}
