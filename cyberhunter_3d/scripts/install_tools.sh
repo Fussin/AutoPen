@@ -3,7 +3,23 @@
 # Exit on any error
 set -e
 
+# --- Check for root privileges ---
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root or with sudo, as this script needs to install packages."
+  exit 1
+fi
+
 echo "Starting installation of CyberHunter 3D reconnaissance tools..."
+
+# --- System package installation (apt) ---
+echo "Installing system packages (nmap)..."
+if ! [ -x "$(command -v nmap)" ]; then
+  apt-get update
+  apt-get install -y nmap
+else
+  echo "nmap is already installed."
+fi
+echo "nmap installed successfully."
 
 # --- Go tools installation ---
 echo "Checking for Go installation..."
