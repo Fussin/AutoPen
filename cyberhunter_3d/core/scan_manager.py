@@ -2,6 +2,7 @@ from cyberhunter_3d.web.models import db, Scan, Target
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
+from cyberhunter_3d.core.scope_validator import ScopeValidator
 
 def run_scan(scan_id, app):
     """
@@ -17,20 +18,22 @@ def run_scan(scan_id, app):
             return
 
         try:
-            # 1. Update status to RUNNING
+            # 1. Update status to RUNNING and initialize validator
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} status updated to RUNNING.")
 
-            # 2. Process targets, expanding where necessary (e.g., ASNs)
+            validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
+
+            # 2. Process targets, expanding and validating
             all_results = []
-            # Make a mutable copy of the targets to process
+            out_of_scope_items = set()
             targets_to_scan = list(scan.targets)
 
             i = 0
             while i < len(targets_to_scan):
                 target = targets_to_scan[i]
-                i += 1 # Increment early to avoid infinite loops on expansion
+                i += 1
 
                 if target.type == 'asn':
                     print(f"Expanding ASN: AS{target.value}")
@@ -38,36 +41,47 @@ def run_scan(scan_id, app):
                     if cidrs:
                         print(f"Found {len(cidrs)} CIDRs for AS{target.value}. Adding to scan queue.")
                         for cidr in cidrs:
-                            # Create a new "virtual" target to be scanned
-                            virtual_target = Target(value=cidr, type='cidr')
-                            targets_to_scan.append(virtual_target)
-                    continue # Move to the next target, skip scanning the ASN itself
+                            targets_to_scan.append(Target(value=cidr, type='cidr'))
+                    continue
 
                 elif target.type in ['domain', 'wildcard_domain']:
-                    print(f"Dispatching '{target.value}' to subdomain enumerator.")
+                    print(f"Finding subdomains for '{target.value}'...")
                     subdomains = enumerate_subdomains(target.value)
-                    if subdomains:
-                        result_header = f"--- Subdomains for {target.value} ---"
-                        all_results.append(result_header)
-                        all_results.extend(sorted(list(subdomains)))
+                    in_scope_subdomains = []
+                    for sub in subdomains:
+                        if validator.is_in_scope(sub):
+                            in_scope_subdomains.append(sub)
+                        else:
+                            out_of_scope_items.add(f"{sub} (from {target.value})")
+
+                    if in_scope_subdomains:
+                        all_results.append(f"--- In-Scope Subdomains for {target.value} ---")
+                        all_results.extend(sorted(in_scope_subdomains))
                         all_results.append("\n")
 
                 elif target.type in ['ip_address', 'cidr']:
+                    # For now, we assume primary targets like IPs/CIDRs are in scope
+                    # by definition, but we could add validation here too if needed.
+                    # The main validation is for assets discovered *from* these targets.
                     print(f"Dispatching '{target.value}' to IP/port scanner.")
                     ip_scan_results = scan_ip_target(target.value)
                     if ip_scan_results:
-                        result_header = f"--- Nmap Scan Results for {target.value} ---"
-                        all_results.append(result_header)
+                        all_results.append(f"--- Nmap Scan Results for {target.value} ---")
                         all_results.append(ip_scan_results)
                         all_results.append("\n")
                 else:
                     print(f"Skipping target with unknown type: {target.type}")
 
-            # 3. Store consolidated results
+            # 3. Store consolidated results, including out-of-scope items
+            if out_of_scope_items:
+                all_results.append("--- Skipped (Out of Scope) ---")
+                all_results.extend(sorted(list(out_of_scope_items)))
+                all_results.append("\n")
+
             if all_results:
                 scan.results = "\n".join(all_results)
             else:
-                scan.results = "Scan completed, but no results were found."
+                scan.results = "Scan completed. No in-scope results were found."
 
             print(f"Scan {scan_id} processing complete.")
 
