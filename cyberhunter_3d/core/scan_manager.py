@@ -2,6 +2,7 @@ from cyberhunter_3d.web.models import db, Scan, Target
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
+from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 
 def run_scan(scan_id, app):
@@ -42,6 +43,15 @@ def run_scan(scan_id, app):
                         print(f"Found {len(cidrs)} CIDRs for AS{target.value}. Adding to scan queue.")
                         for cidr in cidrs:
                             targets_to_scan.append(Target(value=cidr, type='cidr'))
+                    continue
+
+                elif target.type == 'org_name':
+                    print(f"Expanding Organization: {target.value}")
+                    assets = get_assets_for_org(target.value)
+                    if assets:
+                        print(f"Found {len(assets)} assets for {target.value}. Adding to scan queue.")
+                        for asset_value, asset_type in assets:
+                            targets_to_scan.append(Target(value=asset_value, type=asset_type))
                     continue
 
                 elif target.type in ['domain', 'wildcard_domain']:
