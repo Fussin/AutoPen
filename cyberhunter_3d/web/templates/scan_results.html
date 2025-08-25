@@ -10,6 +10,7 @@
     <span style="padding: 0.2em 0.5em; border-radius: 4px; color: white; background-color:
       {% if scan.status == 'COMPLETED' %}#28a745
       {% elif scan.status == 'RUNNING' %}#007bff
+      {% elif scan.status == 'PENDING_REVIEW' %}#ffc107
       {% elif scan.status == 'FAILED' %}#dc3545
       {% else %}#6c757d
       {% endif %};">

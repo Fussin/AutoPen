@@ -61,6 +61,7 @@
                 <span style="padding: 0.2em 0.5em; border-radius: 4px; color: white; background-color:
                 {% if scan.status == 'COMPLETED' %}#28a745
                 {% elif scan.status == 'RUNNING' %}#007bff
+                {% elif scan.status == 'PENDING_REVIEW' %}#ffc107
                 {% elif scan.status == 'FAILED' %}#dc3545
                 {% else %}#6c757d
                 {% endif %};">
@@ -69,7 +70,11 @@
             </td>
             <td style="padding: 8px; border-bottom: 1px solid #444;">{{ scan.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
             <td style="padding: 8px; border-bottom: 1px solid #444;">
-              <a href="{{ url_for('scan_results', scan_id=scan.id) }}">View Results</a>
+              {% if scan.status == 'PENDING_REVIEW' %}
+                <a href="{{ url_for('review_scan', scan_id=scan.id) }}" style="font-weight: bold;">Review & Launch</a>
+              {% elif scan.status in ['COMPLETED', 'FAILED', 'RUNNING'] %}
+                <a href="{{ url_for('scan_results', scan_id=scan.id) }}">View Results</a>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}

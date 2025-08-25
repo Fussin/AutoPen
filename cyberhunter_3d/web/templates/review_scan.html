@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h2>Review Scope for Scan #{{ scan.id }}</h2>
+    <a href="{{ url_for('dashboard') }}" class="button">Back to Dashboard</a>
+  </div>
+
+  <p>
+    <strong>Status:</strong>
+    <span style="padding: 0.2em 0.5em; border-radius: 4px; color: white; background-color: #ffc107;">
+      {{ scan.status }}
+    </span>
+  </p>
+  <p><strong>Discovery Summary:</strong> {{ scan.results }}</p>
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Discovered Assets to be Scanned</h3>
+  <p>The following assets were discovered and are in scope. Review them before launching the intensive scan (e.g., port scanning).</p>
+
+  {% if scan.assets %}
+    {# Group assets by type for organized display #}
+    {% set subdomains = scan.assets|selectattr('type', 'equalto', 'subdomain')|list %}
+    {% set ips = scan.assets|selectattr('type', 'equalto', 'ip_address')|list %}
+    {% set cidrs = scan.assets|selectattr('type', 'equalto', 'cidr')|list %}
+
+    {% if subdomains %}
+      <h4>Subdomains</h4>
+      <ul>
+        {% for asset in subdomains %}
+          <li>{{ asset.value }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if ips or cidrs %}
+      <h4>IPs and CIDR Ranges</h4>
+      <ul>
+        {% for asset in ips %}
+          <li>{{ asset.value }} (IP Address)</li>
+        {% endfor %}
+        {% for asset in cidrs %}
+          <li>{{ asset.value }} (CIDR Block)</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+  {% else %}
+    <p>No assets were found in the discovery phase.</p>
+  {% endif %}
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <form method="post" action="{{ url_for('launch_scan', scan_id=scan.id) }}">
+    <button type="submit" class="button" style="background-color: #28a745;">Launch Intensive Scan</button>
+  </form>
+
+{% endblock %}
