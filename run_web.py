@@ -195,8 +195,17 @@ def submit_targets():
         flash('No valid targets could be parsed. Please check your input.', 'danger')
         return redirect(url_for('dashboard'))
 
-    # 4. Create Scan and Target objects in DB
-    new_scan = Scan(user_id=current_user.id, status='QUEUED')
+    # 4. Get scope rules from form
+    in_scope_rules = request.form.get('in_scope_rules', '')
+    out_of_scope_rules = request.form.get('out_of_scope_rules', '')
+
+    # 5. Create Scan and Target objects in DB
+    new_scan = Scan(
+        user_id=current_user.id,
+        status='QUEUED',
+        in_scope_rules=in_scope_rules,
+        out_of_scope_rules=out_of_scope_rules
+    )
     db.session.add(new_scan)
 
     # We need to flush to get the new_scan.id before creating targets

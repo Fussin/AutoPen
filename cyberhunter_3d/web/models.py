@@ -30,6 +30,10 @@ class Scan(db.Model):
     targets = db.relationship('Target', backref='scan', lazy=True, cascade="all, delete-orphan")
     results = db.Column(db.Text, nullable=True)
 
+    # Fields for scope definition
+    in_scope_rules = db.Column(db.Text, nullable=True)
+    out_of_scope_rules = db.Column(db.Text, nullable=True)
+
     def __repr__(self):
         return f'<Scan {self.id} - {self.status}>'
 

@@ -18,6 +18,23 @@
     <label for="target_file" style="margin-top: 1em;">Or Upload a File</label>
     <input type="file" id="target_file" name="target_file">
 
+    <div style="display: flex; gap: 2em; margin-top: 1em;">
+      <div style="flex: 1;">
+        <label for="in_scope_rules">In-Scope Rules (one per line)</label>
+        <textarea id="in_scope_rules" name="in_scope_rules" rows="4" placeholder="*.example.com&#10;another-domain.net"></textarea>
+        <small style="color: #bbb; display: block; margin-top: 0.5em;">
+          Define the assets that are explicitly in scope. Wildcards (*) are supported.
+        </small>
+      </div>
+      <div style="flex: 1;">
+        <label for="out_of_scope_rules">Out-of-Scope Rules (one per line)</label>
+        <textarea id="out_of_scope_rules" name="out_of_scope_rules" rows="4" placeholder="*.dev.example.com&#10;legacy.another-domain.net"></textarea>
+        <small style="color: #bbb; display: block; margin-top: 0.5em;">
+          Define assets to explicitly exclude. Takes precedence over in-scope rules.
+        </small>
+      </div>
+    </div>
+
     <button type="submit" class="button" style="margin-top: 1.5em;">Start Scan</button>
   </form>
 
