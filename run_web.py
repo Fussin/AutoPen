@@ -152,7 +152,7 @@ def verify_2fa():
 
 from flask_login import logout_user
 
-from cyberhunter_3d.web.models import Scan, Target
+from cyberhunter_3d.web.models import Scan, Target, Asset
 from cyberhunter_3d.core.target_parser import parse_targets
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
@@ -279,9 +279,20 @@ def launch_scan(scan_id):
         return redirect(url_for('dashboard'))
 
     if scan.status == 'PENDING_REVIEW':
+        # Get the list of approved asset IDs from the form
+        approved_asset_ids = request.form.getlist('approved_assets', type=int)
+        approved_set = set(approved_asset_ids)
+
+        # Update the approval status for all assets in this scan
+        for asset in scan.assets:
+            if asset.id not in approved_set:
+                asset.is_approved_for_scan = False
+
+        db.session.commit()
+
         # Trigger the execution phase in the background
         executor.submit(run_execution_phase, scan.id, app)
-        flash('Intensive scan has been launched!', 'success')
+        flash(f'Intensive scan launched on {len(approved_set)} assets!', 'success')
     else:
         flash('This scan cannot be launched.', 'danger')
 

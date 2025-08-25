@@ -104,7 +104,11 @@ def run_execution_phase(scan_id, app):
             out_of_scope_count = 0 # We need to track this across phases
 
             # 1. Port Scanning
-            ip_targets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type.in_(['ip_address', 'cidr'])).all()
+            ip_targets = Asset.query.filter(
+                Asset.scan_id == scan.id,
+                Asset.is_approved_for_scan == True,
+                Asset.type.in_(['ip_address', 'cidr'])
+            ).all()
             for target in ip_targets:
                 print(f"Port scanning '{target.value}'...")
                 ip_scan_assets = scan_ip_target(target.value)
@@ -131,7 +135,11 @@ def run_execution_phase(scan_id, app):
 
             # 3. Expansion Phase (Analytics Correlation)
             print("Starting Expansion: Analytics Correlation")
-            domain_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type.in_(['domain', 'subdomain'])).all()
+            domain_assets = Asset.query.filter(
+                Asset.scan_id == scan.id,
+                Asset.is_approved_for_scan == True,
+                Asset.type.in_(['domain', 'subdomain'])
+            ).all()
             unique_domains = list(set(asset.value for asset in domain_assets))
             analytics_found_count = 0
             if unique_domains:

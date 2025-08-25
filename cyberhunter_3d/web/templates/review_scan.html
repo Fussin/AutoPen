@@ -15,44 +15,52 @@
 
   <hr style="border-color: #444; margin: 2em 0;">
 
-  <h3>Discovered Assets to be Scanned</h3>
-  <p>The following assets were discovered and are in scope. Review them before launching the intensive scan (e.g., port scanning).</p>
-
-  {% if scan.assets %}
-    {# Group assets by type for organized display #}
-    {% set subdomains = scan.assets|selectattr('type', 'equalto', 'subdomain')|list %}
-    {% set ips = scan.assets|selectattr('type', 'equalto', 'ip_address')|list %}
-    {% set cidrs = scan.assets|selectattr('type', 'equalto', 'cidr')|list %}
-
-    {% if subdomains %}
-      <h4>Subdomains</h4>
-      <ul>
-        {% for asset in subdomains %}
-          <li>{{ asset.value }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-
-    {% if ips or cidrs %}
-      <h4>IPs and CIDR Ranges</h4>
-      <ul>
-        {% for asset in ips %}
-          <li>{{ asset.value }} (IP Address)</li>
-        {% endfor %}
-        {% for asset in cidrs %}
-          <li>{{ asset.value }} (CIDR Block)</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-
-  {% else %}
-    <p>No assets were found in the discovery phase.</p>
-  {% endif %}
-
-  <hr style="border-color: #444; margin: 2em 0;">
+  <h3>Refine Scan Scope</h3>
+  <p>The following assets were discovered. Uncheck any you wish to exclude from the intensive scanning phase.</p>
 
   <form method="post" action="{{ url_for('launch_scan', scan_id=scan.id) }}">
-    <button type="submit" class="button" style="background-color: #28a745;">Launch Intensive Scan</button>
+    <div style="margin-bottom: 1em;">
+      <button type="button" onclick="toggleCheckboxes(true)" class="button-small">Select All</button>
+      <button type="button" onclick="toggleCheckboxes(false)" class="button-small">Deselect All</button>
+    </div>
+
+    <div id="asset-list" style="height: 400px; overflow-y: auto; border: 1px solid #444; padding: 1em; border-radius: 4px;">
+      {% if scan.assets %}
+        {% for asset in scan.assets %}
+          <div>
+            <input type="checkbox" name="approved_assets" value="{{ asset.id }}" id="asset-{{ asset.id }}" checked>
+            <label for="asset-{{ asset.id }}">{{ asset.value }} <span style="color: #aaa;">({{ asset.type.replace('_', ' ')|title }})</span></label>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p>No assets were found in the discovery phase.</p>
+      {% endif %}
+    </div>
+
+    <hr style="border-color: #444; margin: 2em 0;">
+
+    <button type="submit" class="button" style="background-color: #28a745;">Launch Scan on {{ scan.assets|length }} Selected Assets</button>
   </form>
+
+  <script>
+    function toggleCheckboxes(checked) {
+      const checkboxes = document.querySelectorAll('#asset-list input[type="checkbox"]');
+      checkboxes.forEach(checkbox => checkbox.checked = checked);
+      updateButtonCount();
+    }
+
+    function updateButtonCount() {
+      const count = document.querySelectorAll('#asset-list input[type="checkbox"]:checked').length;
+      const button = document.querySelector('button[type="submit"]');
+      button.textContent = `Launch Scan on ${count} Selected Assets`;
+    }
+
+    // Add event listeners to update count on change
+    document.addEventListener('DOMContentLoaded', () => {
+      const checkboxes = document.querySelectorAll('#asset-list input[type="checkbox"]');
+      checkboxes.forEach(checkbox => checkbox.addEventListener('change', updateButtonCount));
+      updateButtonCount(); // Initial count
+    });
+  </script>
 
 {% endblock %}

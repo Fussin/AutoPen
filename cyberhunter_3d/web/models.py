@@ -61,6 +61,7 @@ class Asset(db.Model):
     type = db.Column(db.String(50), nullable=False) # e.g., 'subdomain', 'ip_address', 'open_port'
     value = db.Column(db.String(255), nullable=False)
     details = db.Column(db.JSON, nullable=True) # For extra info like port details
+    is_approved_for_scan = db.Column(db.Boolean, nullable=False, default=True)
     first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
