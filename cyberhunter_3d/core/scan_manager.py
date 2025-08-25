@@ -1,6 +1,7 @@
-from cyberhunter_3d.web.models import db, Scan
+from cyberhunter_3d.web.models import db, Scan, Target
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
+from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 
 def run_scan(scan_id, app):
     """
@@ -21,17 +22,35 @@ def run_scan(scan_id, app):
             db.session.commit()
             print(f"Scan {scan_id} status updated to RUNNING.")
 
-            # 2. Dispatch targets to appropriate scanners
+            # 2. Process targets, expanding where necessary (e.g., ASNs)
             all_results = []
-            for target in scan.targets:
-                if target.type in ['domain', 'wildcard_domain']:
+            # Make a mutable copy of the targets to process
+            targets_to_scan = list(scan.targets)
+
+            i = 0
+            while i < len(targets_to_scan):
+                target = targets_to_scan[i]
+                i += 1 # Increment early to avoid infinite loops on expansion
+
+                if target.type == 'asn':
+                    print(f"Expanding ASN: AS{target.value}")
+                    cidrs = get_cidrs_for_asn(target.value)
+                    if cidrs:
+                        print(f"Found {len(cidrs)} CIDRs for AS{target.value}. Adding to scan queue.")
+                        for cidr in cidrs:
+                            # Create a new "virtual" target to be scanned
+                            virtual_target = Target(value=cidr, type='cidr')
+                            targets_to_scan.append(virtual_target)
+                    continue # Move to the next target, skip scanning the ASN itself
+
+                elif target.type in ['domain', 'wildcard_domain']:
                     print(f"Dispatching '{target.value}' to subdomain enumerator.")
                     subdomains = enumerate_subdomains(target.value)
                     if subdomains:
                         result_header = f"--- Subdomains for {target.value} ---"
                         all_results.append(result_header)
                         all_results.extend(sorted(list(subdomains)))
-                        all_results.append("\n") # Add spacing
+                        all_results.append("\n")
 
                 elif target.type in ['ip_address', 'cidr']:
                     print(f"Dispatching '{target.value}' to IP/port scanner.")
@@ -40,7 +59,7 @@ def run_scan(scan_id, app):
                         result_header = f"--- Nmap Scan Results for {target.value} ---"
                         all_results.append(result_header)
                         all_results.append(ip_scan_results)
-                        all_results.append("\n") # Add spacing
+                        all_results.append("\n")
                 else:
                     print(f"Skipping target with unknown type: {target.type}")
 

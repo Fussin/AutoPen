@@ -45,20 +45,31 @@ class TestTargetParser(unittest.TestCase):
         ]
         self.assertEqual(parse_targets(inputs), expected)
 
+    def test_asns(self):
+        inputs = ['AS15169', 'as1234', '5678']
+        expected = [
+            ('15169', 'asn'),
+            ('1234', 'asn'),
+            ('5678', 'asn')
+        ]
+        self.assertEqual(parse_targets(inputs), expected)
+
     def test_mixed_valid_inputs(self):
         inputs = [
             'example.com',
             '*.google.com',
             '1.1.1.1',
             '8.8.0.0/16',
-            '   whitespace.com   '
+            '   whitespace.com   ',
+            'AS15169'
         ]
         expected = [
             ('example.com', 'domain'),
             ('google.com', 'wildcard_domain'),
             ('1.1.1.1', 'ip_address'),
             ('8.8.0.0/16', 'cidr'),
-            ('whitespace.com', 'domain')
+            ('whitespace.com', 'domain'),
+            ('15169', 'asn')
         ]
         # The order might not be guaranteed, so we'll sort both lists
         self.assertCountEqual(parse_targets(inputs), expected)
