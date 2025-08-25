@@ -29,6 +29,9 @@ CIDR_REGEX = re.compile(
     r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/([0-9]|[1-2][0-9]|3[0-2])$'
 )
 
+# Regex for ASN identifiers (e.g., AS15169, as1234, 1234)
+ASN_REGEX = re.compile(r'^(?:as|AS)?(\d+)$')
+
 
 def parse_single_target(target_str: str) -> Tuple[str, str]:
     """
@@ -49,9 +52,6 @@ def parse_single_target(target_str: str) -> Tuple[str, str]:
         base_domain = wildcard_match.group(1)
         return base_domain, 'wildcard_domain'
 
-    if DOMAIN_REGEX.match(target_str):
-        return target_str, 'domain'
-
     if IP_ADDRESS_REGEX.match(target_str):
         # Further validation for valid IP ranges (0-255) can be added here
         # For now, the regex is a good first pass.
@@ -59,6 +59,15 @@ def parse_single_target(target_str: str) -> Tuple[str, str]:
 
     if CIDR_REGEX.match(target_str):
         return target_str, 'cidr'
+
+    asn_match = ASN_REGEX.match(target_str)
+    if asn_match:
+        # For ASNs, we normalize by storing just the number
+        asn_number = asn_match.group(1)
+        return asn_number, 'asn'
+
+    if DOMAIN_REGEX.match(target_str):
+        return target_str, 'domain'
 
     return target_str, 'unknown'
 
