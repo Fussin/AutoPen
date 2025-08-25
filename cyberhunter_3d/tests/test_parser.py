@@ -54,6 +54,14 @@ class TestTargetParser(unittest.TestCase):
         ]
         self.assertEqual(parse_targets(inputs), expected)
 
+    def test_org_names(self):
+        inputs = ['org:"Google LLC"', 'ORG:"Example, Inc."']
+        expected = [
+            ('Google LLC', 'org_name'),
+            ('Example, Inc.', 'org_name')
+        ]
+        self.assertEqual(parse_targets(inputs), expected)
+
     def test_mixed_valid_inputs(self):
         inputs = [
             'example.com',
@@ -61,7 +69,8 @@ class TestTargetParser(unittest.TestCase):
             '1.1.1.1',
             '8.8.0.0/16',
             '   whitespace.com   ',
-            'AS15169'
+            'AS15169',
+            'org:"Example University"'
         ]
         expected = [
             ('example.com', 'domain'),
@@ -69,7 +78,8 @@ class TestTargetParser(unittest.TestCase):
             ('1.1.1.1', 'ip_address'),
             ('8.8.0.0/16', 'cidr'),
             ('whitespace.com', 'domain'),
-            ('15169', 'asn')
+            ('15169', 'asn'),
+            ('Example University', 'org_name')
         ]
         # The order might not be guaranteed, so we'll sort both lists
         self.assertCountEqual(parse_targets(inputs), expected)

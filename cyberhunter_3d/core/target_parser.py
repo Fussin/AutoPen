@@ -32,6 +32,9 @@ CIDR_REGEX = re.compile(
 # Regex for ASN identifiers (e.g., AS15169, as1234, 1234)
 ASN_REGEX = re.compile(r'^(?:as|AS)?(\d+)$')
 
+# Regex for Organization Name format (e.g., org:"Google LLC")
+ORG_NAME_REGEX = re.compile(r'^org:"([^"]+)"$', re.IGNORECASE)
+
 
 def parse_single_target(target_str: str) -> Tuple[str, str]:
     """
@@ -40,10 +43,19 @@ def parse_single_target(target_str: str) -> Tuple[str, str]:
     Returns a tuple of (normalized_value, type).
     'type' can be 'domain', 'wildcard_domain', 'ip_address', 'cidr', or 'unknown'.
     """
-    target_str = target_str.strip().lower()
+    target_str = target_str.strip() # Keep original case for org names
 
     if not target_str:
         return None, 'empty'
+
+    # Check for org name first, as it's a very specific format
+    org_match = ORG_NAME_REGEX.match(target_str)
+    if org_match:
+        org_name = org_match.group(1)
+        return org_name, 'org_name'
+
+    # For all other types, use lowercase
+    target_str = target_str.lower()
 
     # Check for wildcard first, as it's more specific than domain
     wildcard_match = WILDCARD_DOMAIN_REGEX.match(target_str)
