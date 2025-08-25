@@ -1,18 +1,17 @@
 import subprocess
-from typing import Set
+from typing import List, Dict
 
-def get_cidrs_for_asn(asn: str) -> Set[str]:
+def get_cidrs_for_asn(asn: str) -> List[Dict[str, str]]:
     """
     Uses amass to find all CIDR ranges for a given ASN.
 
     :param asn: The Autonomous System Number (as a string, e.g., "15169").
-    :return: A set of CIDR strings.
+    :return: A list of asset dictionaries, e.g., [{'type': 'cidr', 'value': '...'}].
     """
     print(f"Starting ASN lookup for AS{asn} using amass...")
-    cidrs = set()
+    assets = []
     try:
         # amass intel -asn <number>
-        # We assume amass is in the system's PATH
         command = ['amass', 'intel', '-asn', asn]
         result = subprocess.run(
             command,
@@ -24,15 +23,15 @@ def get_cidrs_for_asn(asn: str) -> Set[str]:
         output = result.stdout
         if not output:
             print(f"Amass produced no output for AS{asn}")
-            return cidrs
+            return assets
 
         # Amass output for this command is one CIDR per line
         for line in output.strip().splitlines():
             # Basic validation that it looks like a CIDR
             if '/' in line and '.' in line:
-                cidrs.add(line.strip())
+                assets.append({'type': 'cidr', 'value': line.strip()})
 
-        print(f"Found {len(cidrs)} CIDRs for AS{asn}.")
+        print(f"Found {len(assets)} CIDRs for AS{asn}.")
 
     except FileNotFoundError:
         print("Error: 'amass' command not found. Please ensure it is installed and in your PATH.")
@@ -40,15 +39,4 @@ def get_cidrs_for_asn(asn: str) -> Set[str]:
         print(f"Error running amass for AS{asn}: {e}")
         print(f"Stderr: {e.stderr}")
 
-    return cidrs
-
-if __name__ == '__main__':
-    # For direct testing of this module
-    # Note: This requires amass to be installed and will perform a live lookup.
-    test_asn = "15169" # Google's ASN
-    found_cidrs = get_cidrs_for_asn(test_asn)
-
-    if found_cidrs:
-        print(f"\n--- CIDRs for AS{test_asn} ---")
-        for cidr in sorted(list(found_cidrs)):
-            print(cidr)
+    return assets

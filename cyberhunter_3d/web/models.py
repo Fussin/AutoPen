@@ -34,6 +34,9 @@ class Scan(db.Model):
     in_scope_rules = db.Column(db.Text, nullable=True)
     out_of_scope_rules = db.Column(db.Text, nullable=True)
 
+    # Relationship to discovered assets
+    assets = db.relationship('Asset', backref='scan', lazy=True, cascade="all, delete-orphan")
+
     def __repr__(self):
         return f'<Scan {self.id} - {self.status}>'
 
@@ -49,3 +52,18 @@ class Target(db.Model):
 
     def __repr__(self):
         return f'<Target {self.value} ({self.type})>'
+
+class Asset(db.Model):
+    """
+    Asset model to store individual discovered assets from a scan.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(50), nullable=False) # e.g., 'subdomain', 'ip_address', 'open_port'
+    value = db.Column(db.String(255), nullable=False)
+    details = db.Column(db.JSON, nullable=True) # For extra info like port details
+    first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Asset {self.value} ({self.type})>'

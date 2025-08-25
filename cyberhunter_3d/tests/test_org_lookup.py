@@ -35,14 +35,14 @@ class TestOrgLookup(unittest.TestCase):
         )
 
         # Check that the output is parsed correctly
-        expected_assets = {
-            ("104.154.0.0/15", "cidr"),
-            ("example.com", "domain"),
-            ("another.com", "domain"),
-            ("8.8.8.0/24", "cidr"),
-            ("wildcard.com", "wildcard_domain"),
-        }
-        self.assertEqual(assets, expected_assets)
+        expected_assets = [
+            {'type': 'cidr', 'value': '104.154.0.0/15'},
+            {'type': 'domain', 'value': 'example.com'},
+            {'type': 'domain', 'value': 'another.com'},
+            {'type': 'cidr', 'value': '8.8.8.0/24'},
+            {'type': 'wildcard_domain', 'value': 'wildcard.com'}
+        ]
+        self.assertCountEqual(assets, expected_assets)
 
     @patch('cyberhunter_3d.core.reconnaissance.org_lookup.subprocess.run')
     def test_get_assets_for_org_amass_error(self, mock_subprocess_run):

@@ -32,66 +32,44 @@ def parse_nmap_xml(xml_output: str) -> List[Dict[str, Any]]:
 
     return results
 
-def format_scan_results(parsed_data: List[Dict[str, Any]]) -> str:
-    """
-    Formats the parsed nmap data into a human-readable string.
-    """
-    report_lines = []
-    for host in parsed_data:
-        report_lines.append(f"Host: {host['ip']}")
-        if not host['ports']:
-            report_lines.append("  No open ports found.")
-        else:
-            for port in host['ports']:
-                # Handle cases where product or version might be None
-                service_product = port.get('service_product') or ''
-                service_version = port.get('service_version') or ''
-                service_info = f"{service_product} {service_version}".strip()
-
-                report_lines.append(
-                    f"  - Port {port['portid']}/{port['protocol']} ({port['state']}): "
-                    f"{port['service_name']}"
-                    f"{f' ({service_info})' if service_info else ''}"
-                )
-        report_lines.append("") # Add a blank line for spacing
-    return "\n".join(report_lines)
-
-
-def scan_ip_target(target: str) -> str:
+def scan_ip_target(target: str) -> List[Dict[str, Any]]:
     """
     Runs an nmap scan on a single IP address or CIDR range.
-    Returns a formatted string of the results.
+    Returns a list of asset dictionaries.
     """
     print(f"Starting nmap scan for target: {target}")
+    assets = []
     try:
         # -sV: Probe open ports to determine service/version info
         # -oX -: Output scan in XML format to stdout
-        # We assume nmap is in the system's PATH
         command = ['nmap', '-sV', '-oX', '-', target]
         result = subprocess.run(command, capture_output=True, text=True, check=True)
 
         xml_output = result.stdout
         if not xml_output:
             print(f"nmap produced no output for target: {target}")
-            return ""
+            return assets
 
         parsed_data = parse_nmap_xml(xml_output)
-        formatted_results = format_scan_results(parsed_data)
+
+        # Transform the parsed data into our asset structure
+        for host_info in parsed_data:
+            # We only care about hosts with open ports for now
+            open_ports = [p for p in host_info.get('ports', []) if p.get('state') == 'open']
+            if open_ports:
+                assets.append({
+                    'type': 'host_with_open_ports',
+                    'value': host_info['ip'],
+                    'details': {'ports': open_ports}
+                })
 
         print(f"nmap scan for {target} completed.")
-        return formatted_results
+        return assets
 
     except FileNotFoundError:
         print("Error: 'nmap' command not found. Please ensure it is installed and in your PATH.")
-        return "Error: nmap not found."
+        return []
     except subprocess.CalledProcessError as e:
         print(f"Error running nmap for {target}: {e}")
         print(f"Stderr: {e.stderr}")
-        return f"Error scanning {target}."
-
-if __name__ == '__main__':
-    # For direct testing of this module
-    test_target = "127.0.0.1" # or a test machine IP
-    scan_results = scan_ip_target(test_target)
-    print("\n--- Scan Report ---")
-    print(scan_results)
+        return []

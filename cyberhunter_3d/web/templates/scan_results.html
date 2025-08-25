@@ -28,13 +28,60 @@
     {% endfor %}
   </ul>
 
-  <h3>Results</h3>
-  {% if scan.results %}
-    <pre style="background-color: #1a1a1a; padding: 1em; border-radius: 4px; border: 1px solid #444; white-space: pre-wrap; word-wrap: break-word;">{{ scan.results }}</pre>
+  <h3>Summary</h3>
+  <p>{{ scan.results or "Scan is not yet complete." }}</p>
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Discovered Assets</h3>
+  {% if scan.assets %}
+    {# Group assets by type for organized display #}
+    {% set subdomains = scan.assets|selectattr('type', 'equalto', 'subdomain')|list %}
+    {% set hosts = scan.assets|selectattr('type', 'equalto', 'host_with_open_ports')|list %}
+
+    {% if subdomains %}
+      <h4>Subdomains</h4>
+      <ul>
+        {% for asset in subdomains %}
+          <li>{{ asset.value }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if hosts %}
+      <h4>Hosts with Open Ports</h4>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host IP</th>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Open Ports</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for host in hosts %}
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #444; vertical-align: top;">{{ host.value }}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #444;">
+                <table style="width: 100%; font-size: 0.9em;">
+                  {% for port in host.details.ports %}
+                    <tr>
+                      <td><strong>{{ port.portid }}/{{ port.protocol }}</strong></td>
+                      <td>{{ port.service_name }}</td>
+                      <td><em>{{ port.service_product }} {{ port.service_version }}</em></td>
+                    </tr>
+                  {% endfor %}
+                </table>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
   {% elif scan.status == 'COMPLETED' %}
-    <p>Scan completed with no results found.</p>
+    <p>Scan completed, but no in-scope assets were discovered.</p>
   {% else %}
-    <p>Scan is not yet complete. Results will appear here once the scan is finished.</p>
+    <p>Results will appear here once the scan is finished.</p>
   {% endif %}
 
 {% endblock %}
