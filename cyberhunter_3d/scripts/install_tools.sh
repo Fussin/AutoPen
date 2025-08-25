@@ -46,6 +46,10 @@ go install -v github.com/OWASP/Amass/v3/cmd/amass@latest
 echo "Installing assetfinder..."
 go install -v github.com/tomnomnom/assetfinder@latest
 
+# Install dnsx
+echo "Installing dnsx..."
+go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest
+
 echo "Go-based tools installed successfully."
 
 # --- Python tools installation ---
