@@ -7,7 +7,7 @@ import subprocess
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from cyberhunter_3d.core.reconnaissance.ip_scan import parse_nmap_xml, format_scan_results, scan_ip_target
+from cyberhunter_3d.core.reconnaissance.ip_scan import parse_nmap_xml, scan_ip_target
 
 # Sample nmap XML output for testing
 SAMPLE_NMAP_XML = """
@@ -62,41 +62,37 @@ class TestIpScan(unittest.TestCase):
         self.assertEqual(port3['portid'], '443')
         self.assertEqual(port3['state'], 'closed')
 
-    def test_format_scan_results(self):
-        parsed_data = parse_nmap_xml(SAMPLE_NMAP_XML.strip())
-        formatted_string = format_scan_results(parsed_data)
-
-        self.assertIn("Host: 127.0.0.1", formatted_string)
-        self.assertIn("- Port 22/tcp (open): ssh (OpenSSH 8.2p1)", formatted_string)
-        self.assertIn("- Port 80/tcp (open): http (Apache httpd 2.4.41)", formatted_string)
-        # Test that a service with no product/version is formatted correctly
-        self.assertIn("- Port 443/tcp (closed): https", formatted_string)
-        self.assertNotIn(" ()", formatted_string) # Ensure empty parentheses are not added
-
     @patch('cyberhunter_3d.core.reconnaissance.ip_scan.subprocess.run')
     def test_scan_ip_target_success(self, mock_subprocess_run):
         # Mock the subprocess call to return the sample XML
         mock_subprocess_run.return_value.stdout = SAMPLE_NMAP_XML
         mock_subprocess_run.return_value.stderr = ""
 
-        result = scan_ip_target("127.0.0.1")
+        assets = scan_ip_target("127.0.0.1")
 
         # Check that nmap was called correctly
         mock_subprocess_run.assert_called_once_with(
             ['nmap', '-sV', '-oX', '-', '127.0.0.1'],
             capture_output=True, text=True, check=True
         )
-        # Check that the output is formatted correctly
-        self.assertIn("Host: 127.0.0.1", result)
-        self.assertIn("Port 22/tcp", result)
+
+        # Check that the output is parsed into the correct structure
+        self.assertEqual(len(assets), 1)
+        asset = assets[0]
+        self.assertEqual(asset['type'], 'host_with_open_ports')
+        self.assertEqual(asset['value'], '127.0.0.1')
+        self.assertIn('ports', asset['details'])
+        # Only open ports should be included
+        self.assertEqual(len(asset['details']['ports']), 2)
+        self.assertEqual(asset['details']['ports'][0]['portid'], '22')
 
     @patch('cyberhunter_3d.core.reconnaissance.ip_scan.subprocess.run')
     def test_scan_ip_target_nmap_error(self, mock_subprocess_run):
         # Mock a failed subprocess call
         mock_subprocess_run.side_effect = subprocess.CalledProcessError(1, "nmap", stderr="Some nmap error")
 
-        result = scan_ip_target("127.0.0.1")
-        self.assertEqual(result, "Error scanning 127.0.0.1.")
+        assets = scan_ip_target("127.0.0.1")
+        self.assertEqual(assets, [])
 
 if __name__ == '__main__':
     unittest.main()

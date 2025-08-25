@@ -25,7 +25,7 @@ class TestAsnLookup(unittest.TestCase):
         mock_subprocess_run.return_value.stdout = SAMPLE_AMASS_OUTPUT.strip()
         mock_subprocess_run.return_value.stderr = ""
 
-        cidrs = get_cidrs_for_asn("15169")
+        assets = get_cidrs_for_asn("15169")
 
         # Check that amass was called correctly
         mock_subprocess_run.assert_called_once_with(
@@ -34,9 +34,14 @@ class TestAsnLookup(unittest.TestCase):
         )
 
         # Check that the output is parsed correctly
-        self.assertEqual(len(cidrs), 4)
-        self.assertIn("8.8.8.0/24", cidrs)
-        self.assertIn("35.192.0.0/12", cidrs)
+        self.assertEqual(len(assets), 4)
+        expected_assets = [
+            {'type': 'cidr', 'value': '8.8.8.0/24'},
+            {'type': 'cidr', 'value': '8.8.4.0/24'},
+            {'type': 'cidr', 'value': '35.192.0.0/12'},
+            {'type': 'cidr', 'value': '104.154.0.0/15'}
+        ]
+        self.assertCountEqual(assets, expected_assets)
 
     @patch('cyberhunter_3d.core.reconnaissance.asn_lookup.subprocess.run')
     def test_get_cidrs_for_asn_amass_error(self, mock_subprocess_run):

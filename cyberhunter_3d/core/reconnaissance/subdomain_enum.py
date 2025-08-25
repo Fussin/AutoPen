@@ -51,9 +51,12 @@ def run_command(command: List[str], domain: str) -> Set[str]:
     return subdomains
 
 
-def enumerate_subdomains(domain: str) -> Set[str]:
+from typing import Dict
+
+def enumerate_subdomains(domain: str) -> List[Dict[str, str]]:
     """
-    Runs multiple subdomain enumeration tools in parallel and returns a unified set of results.
+    Runs multiple subdomain enumeration tools in parallel and returns a unified
+    set of results as a list of asset dictionaries.
     """
     print(f"Starting subdomain enumeration for: {domain}")
 
@@ -64,43 +67,24 @@ def enumerate_subdomains(domain: str) -> Set[str]:
         ['python3', SUBLIST3R_PATH, '-d', '{domain}', '-o', '{output_file}'],
     ]
 
-    all_subdomains = set()
+    all_subdomains_str = set()
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(commands)) as executor:
-        # Schedule each command to run
         future_to_command = {executor.submit(run_command, cmd, domain): cmd for cmd in commands}
-
         for future in concurrent.futures.as_completed(future_to_command):
             command = future_to_command[future]
             try:
                 subdomains = future.result()
                 print(f"Found {len(subdomains)} subdomains with {' '.join(command)}")
-                all_subdomains.update(subdomains)
+                all_subdomains_str.update(subdomains)
             except Exception as exc:
                 print(f"'{' '.join(command)}' generated an exception: {exc}")
 
-    print(f"Total unique subdomains found: {len(all_subdomains)}")
-    return all_subdomains
+    print(f"Total unique subdomains found: {len(all_subdomains_str)}")
 
-def save_results(subdomains: Set[str], output_filename: str):
-    """Saves a set of subdomains to a file, sorted alphabetically."""
-    print(f"Saving {len(subdomains)} unique subdomains to {output_filename}")
-    with open(output_filename, 'w') as f:
-        for subdomain in sorted(list(subdomains)):
-            f.write(subdomain + '\n')
-    print("Results saved.")
+    # Convert the set of strings to a list of asset dictionaries
+    assets = [
+        {'type': 'subdomain', 'value': sub}
+        for sub in all_subdomains_str
+    ]
 
-
-if __name__ == '__main__':
-    # This is for testing the module directly
-    target_domain = "example.com"
-    results = enumerate_subdomains(target_domain)
-
-    # The spec requires the output file to be name Subdomain.txt
-    output_file = "Subdomain.txt"
-    save_results(results, output_file)
-
-    # For verification, print the contents of the created file
-    print(f"\n--- Contents of {output_file} ---")
-    if os.path.exists(output_file):
-        with open(output_file, 'r') as f:
-            print(f.read())
+    return assets
