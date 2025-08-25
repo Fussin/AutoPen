@@ -156,7 +156,7 @@ from cyberhunter_3d.web.models import Scan, Target
 from cyberhunter_3d.core.target_parser import parse_targets
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
-from cyberhunter_3d.core.scan_manager import run_scan
+from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_execution_phase
 
 # --- Background Task Executor ---
 # Using a simple thread pool for background tasks.
@@ -221,10 +221,10 @@ def submit_targets():
 
     db.session.commit()
 
-    # Trigger the scan in the background
-    executor.submit(run_scan, new_scan.id, app)
+    # Trigger the discovery phase in the background
+    executor.submit(run_discovery_phase, new_scan.id, app)
 
-    flash(f'{len(parsed_targets)} targets have been queued for scanning.', 'success')
+    flash(f'{len(parsed_targets)} targets have been queued for discovery.', 'success')
     return redirect(url_for('dashboard'))
 
 
@@ -252,6 +252,41 @@ def scan_results(scan_id):
         return redirect(url_for('dashboard'))
 
     return render_template('scan_results.html', scan=scan)
+
+
+@app.route('/review/<int:scan_id>')
+@login_required
+def review_scan(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to review this scan.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # Only allow review if the scan is in the correct state
+    if scan.status != 'PENDING_REVIEW':
+        flash('This scan is not awaiting review.', 'info')
+        return redirect(url_for('dashboard'))
+
+    return render_template('review_scan.html', scan=scan)
+
+
+@app.route('/launch/<int:scan_id>', methods=['POST'])
+@login_required
+def launch_scan(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to launch this scan.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    if scan.status == 'PENDING_REVIEW':
+        # Trigger the execution phase in the background
+        executor.submit(run_execution_phase, scan.id, app)
+        flash('Intensive scan has been launched!', 'success')
+    else:
+        flash('This scan cannot be launched.', 'danger')
+
+    return redirect(url_for('dashboard'))
+
 
 # --- Main Execution ---
 if __name__ == '__main__':
