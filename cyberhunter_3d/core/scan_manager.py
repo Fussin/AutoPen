@@ -3,6 +3,8 @@ from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomai
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
+from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
+from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 
 def run_scan(scan_id, app):
@@ -61,25 +63,80 @@ def run_scan(scan_id, app):
                 else:
                     print(f"Skipping target with unknown type: {target.type}")
 
-            # 3. Validation and Persistence
+            # 3. Validation and Persistence (Phase 1)
             print(f"Validating and persisting {len(discovered_assets)} discovered assets...")
             in_scope_count = 0
             for asset_data in discovered_assets:
                 if validator.is_in_scope(asset_data['value']):
-                    new_asset = Asset(
-                        type=asset_data['type'],
-                        value=asset_data['value'],
-                        details=asset_data.get('details'),
-                        scan_id=scan.id
-                    )
-                    db.session.add(new_asset)
-                    in_scope_count += 1
+                    # Avoid adding duplicate assets from the same scan
+                    if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
+                        new_asset = Asset(
+                            type=asset_data['type'],
+                            value=asset_data['value'],
+                            details=asset_data.get('details'),
+                            scan_id=scan.id
+                        )
+                        db.session.add(new_asset)
+                        in_scope_count += 1
                 else:
                     out_of_scope_count += 1
 
-            # 4. Finalize Scan
+            # Commit phase 1 assets so we can query them for expansion
+            db.session.commit()
+            print(f"Phase 1 complete. Persisted {in_scope_count} new assets.")
+
+            # 4. Expansion Phase (Reverse DNS)
+            print("Starting Phase 2: Target Expansion (Reverse DNS)")
+            # Gather all unique IPs from assets in this scan
+            ip_assets = Asset.query.filter(
+                Asset.scan_id == scan.id,
+                Asset.type == 'host_with_open_ports'
+            ).all()
+            unique_ips = list(set(asset.value for asset in ip_assets))
+
+            expansion_found_count = 0
+            if unique_ips:
+                hostnames = get_hostnames_for_ips(unique_ips)
+                for hostname in hostnames:
+                    if validator.is_in_scope(hostname):
+                        if not Asset.query.filter_by(scan_id=scan.id, type='subdomain', value=hostname).first():
+                            new_asset = Asset(type='subdomain', value=hostname, scan_id=scan.id)
+                            db.session.add(new_asset)
+                            expansion_found_count += 1
+                    else:
+                        out_of_scope_count += 1
+            print(f"Expansion complete. Found {expansion_found_count} new in-scope hostnames.")
+            in_scope_count += expansion_found_count
+
+            # Commit phase 2 assets so we can query them for the next phase
+            db.session.commit()
+
+            # 5. Expansion Phase (Analytics Correlation)
+            print("Starting Phase 3: Target Expansion (Analytics Correlation)")
+            domain_assets = Asset.query.filter(
+                Asset.scan_id == scan.id,
+                Asset.type.in_(['domain', 'subdomain'])
+            ).all()
+            unique_domains = list(set(asset.value for asset in domain_assets))
+
+            analytics_found_count = 0
+            if unique_domains:
+                related_domains = find_related_domains_by_analytics(unique_domains)
+                for domain in related_domains:
+                    if validator.is_in_scope(domain):
+                        if not Asset.query.filter_by(scan_id=scan.id, type='subdomain', value=domain).first():
+                            new_asset = Asset(type='subdomain', value=domain, scan_id=scan.id)
+                            db.session.add(new_asset)
+                            analytics_found_count += 1
+                    else:
+                        out_of_scope_count += 1
+            print(f"Analytics expansion complete. Found {analytics_found_count} new in-scope domains.")
+            in_scope_count += analytics_found_count
+
+            # 6. Finalize Scan
             summary = (
-                f"Scan complete. Found {in_scope_count} in-scope assets. "
+                f"Scan complete. Found {in_scope_count} in-scope assets "
+                f"(including {expansion_found_count} from rDNS and {analytics_found_count} from analytics). "
                 f"Skipped {out_of_scope_count} out-of-scope assets."
             )
             scan.results = summary
