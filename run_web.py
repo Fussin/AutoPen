@@ -162,6 +162,7 @@ from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_execution_
 # Using a simple thread pool for background tasks.
 # For a production app, a more robust solution like Celery would be better.
 executor = ThreadPoolExecutor(max_workers=2)
+app.executor = executor
 
 
 @app.route('/submit-targets', methods=['POST'])
@@ -242,6 +243,17 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    if request.method == 'POST':
+        current_user.regenerate_api_key()
+        db.session.commit()
+        flash('API Key has been regenerated!', 'success')
+        return redirect(url_for('profile'))
+    return render_template('profile.html')
+
+
 @app.route('/scan/<int:scan_id>')
 @login_required
 def scan_results(scan_id):
@@ -298,6 +310,10 @@ def launch_scan(scan_id):
 
     return redirect(url_for('dashboard'))
 
+
+# --- API Blueprint Registration ---
+from cyberhunter_3d.web.api import api_bp
+app.register_blueprint(api_bp)
 
 # --- Main Execution ---
 if __name__ == '__main__':

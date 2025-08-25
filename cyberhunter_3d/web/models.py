@@ -1,3 +1,4 @@
+import secrets
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime
@@ -13,10 +14,14 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     otp_secret = db.Column(db.String(16), nullable=False)
+    api_key = db.Column(db.String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
     scans = db.relationship('Scan', backref='user', lazy=True)
 
     def __repr__(self):
         return f'<User {self.username}>'
+
+    def regenerate_api_key(self):
+        self.api_key = secrets.token_hex(32)
 
 class Scan(db.Model):
     """
