@@ -39,7 +39,9 @@ class Target(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     value = db.Column(db.String(255), nullable=False)
+    # The type of target, e.g., 'domain', 'ip_address', 'cidr', 'wildcard_domain'
+    type = db.Column(db.String(50), nullable=False, default='unknown')
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
 
     def __repr__(self):
-        return f'<Target {self.value}>'
+        return f'<Target {self.value} ({self.type})>'
