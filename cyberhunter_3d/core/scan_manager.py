@@ -4,6 +4,7 @@ from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
+from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 
 def run_scan(scan_id, app):
@@ -107,9 +108,35 @@ def run_scan(scan_id, app):
             print(f"Expansion complete. Found {expansion_found_count} new in-scope hostnames.")
             in_scope_count += expansion_found_count
 
-            # 5. Finalize Scan
+            # Commit phase 2 assets so we can query them for the next phase
+            db.session.commit()
+
+            # 5. Expansion Phase (Analytics Correlation)
+            print("Starting Phase 3: Target Expansion (Analytics Correlation)")
+            domain_assets = Asset.query.filter(
+                Asset.scan_id == scan.id,
+                Asset.type.in_(['domain', 'subdomain'])
+            ).all()
+            unique_domains = list(set(asset.value for asset in domain_assets))
+
+            analytics_found_count = 0
+            if unique_domains:
+                related_domains = find_related_domains_by_analytics(unique_domains)
+                for domain in related_domains:
+                    if validator.is_in_scope(domain):
+                        if not Asset.query.filter_by(scan_id=scan.id, type='subdomain', value=domain).first():
+                            new_asset = Asset(type='subdomain', value=domain, scan_id=scan.id)
+                            db.session.add(new_asset)
+                            analytics_found_count += 1
+                    else:
+                        out_of_scope_count += 1
+            print(f"Analytics expansion complete. Found {analytics_found_count} new in-scope domains.")
+            in_scope_count += analytics_found_count
+
+            # 6. Finalize Scan
             summary = (
-                f"Scan complete. Found {in_scope_count} in-scope assets (including {expansion_found_count} from expansion). "
+                f"Scan complete. Found {in_scope_count} in-scope assets "
+                f"(including {expansion_found_count} from rDNS and {analytics_found_count} from analytics). "
                 f"Skipped {out_of_scope_count} out-of-scope assets."
             )
             scan.results = summary
