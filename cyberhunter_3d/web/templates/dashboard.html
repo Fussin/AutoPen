@@ -10,7 +10,10 @@
   <h3>Submit New Scan</h3>
   <form method="post" action="{{ url_for('submit_targets') }}" enctype="multipart/form-data">
     <label for="targets">Enter Targets (one per line)</label>
-    <textarea id="targets" name="targets" rows="5" placeholder="example.com\n192.168.1.1\nAS15169"></textarea>
+    <textarea id="targets" name="targets" rows="5" placeholder="example.com&#10;*.example.com&#10;192.168.1.1&#10;10.0.0.0/8"></textarea>
+    <small style="color: #bbb; display: block; margin-top: 0.5em;">
+      Accepted formats: domains (e.g., example.com), wildcards (*.example.com), IPs (1.2.3.4), and CIDRs (10.0.0.0/8).
+    </small>
 
     <label for="target_file" style="margin-top: 1em;">Or Upload a File</label>
     <input type="file" id="target_file" name="target_file">

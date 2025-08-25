@@ -24,7 +24,7 @@
   <h3>Targets</h3>
   <ul>
     {% for target in scan.targets %}
-      <li>{{ target.value }}</li>
+      <li>{{ target.value }} <span style="color: #aaa;">({{ target.type.replace('_', ' ')|title }})</span></li>
     {% endfor %}
   </ul>
 

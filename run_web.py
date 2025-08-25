@@ -153,6 +153,7 @@ def verify_2fa():
 from flask_login import logout_user
 
 from cyberhunter_3d.web.models import Scan, Target
+from cyberhunter_3d.core.target_parser import parse_targets
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_scan
@@ -187,11 +188,11 @@ def submit_targets():
                 flash(f"Error reading file: {e}", 'danger')
                 return redirect(url_for('dashboard'))
 
-    # 3. Clean and validate targets
-    targets = {line.strip() for line in raw_targets if line.strip()}
+    # 3. Parse, normalize, and validate targets using the new parser
+    parsed_targets = parse_targets(raw_targets)
 
-    if not targets:
-        flash('No valid targets submitted.', 'danger')
+    if not parsed_targets:
+        flash('No valid targets could be parsed. Please check your input.', 'danger')
         return redirect(url_for('dashboard'))
 
     # 4. Create Scan and Target objects in DB
@@ -201,8 +202,12 @@ def submit_targets():
     # We need to flush to get the new_scan.id before creating targets
     db.session.flush()
 
-    for target_value in targets:
-        new_target = Target(value=target_value, scan_id=new_scan.id)
+    for target_value, target_type in parsed_targets:
+        new_target = Target(
+            value=target_value,
+            type=target_type,
+            scan_id=new_scan.id
+        )
         db.session.add(new_target)
 
     db.session.commit()
@@ -210,7 +215,7 @@ def submit_targets():
     # Trigger the scan in the background
     executor.submit(run_scan, new_scan.id, app)
 
-    flash(f'{len(targets)} targets have been queued for scanning.', 'success')
+    flash(f'{len(parsed_targets)} targets have been queued for scanning.', 'success')
     return redirect(url_for('dashboard'))
 
 
