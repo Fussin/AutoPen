@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="auth-container">
   <h2>Enter 2FA Code</h2>
   <p>Enter the code from your authenticator app.</p>
   <form method="post">
@@ -7,4 +8,5 @@
     <input type="text" id="token" name="token" required pattern="\\d{6}" title="Enter a 6-digit code" autocomplete="off" inputmode="numeric">
     <button type="submit" class="button">Verify</button>
   </form>
+</div>
 {% endblock %}

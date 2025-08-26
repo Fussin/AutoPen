@@ -266,6 +266,17 @@ def scan_results(scan_id):
     return render_template('scan_results.html', scan=scan)
 
 
+@app.route('/graph/<int:scan_id>')
+@login_required
+def graph_view(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to view this graph.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    return render_template('graph_view.html', scan=scan)
+
+
 @app.route('/review/<int:scan_id>')
 @login_required
 def review_scan(scan_id):

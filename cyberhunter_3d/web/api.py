@@ -121,3 +121,33 @@ def get_scan_results(scan_id):
         })
 
     return jsonify({'scan_id': scan.id, 'assets': assets})
+
+@api_bp.route('/scans/<int:scan_id>/graph', methods=['GET'])
+@require_api_key
+def get_scan_graph(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
+    if scan.user_id != user.id:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    graph_definition = 'graph TD\n'
+    scan_node = f'scan{scan.id}("Scan #{scan.id}")'
+    graph_definition += f'    {scan_node}\n'
+
+    # Add targets as nodes
+    for target in scan.targets:
+        target_node = f'target{target.id}("{target.value} ({target.type})")'
+        graph_definition += f'    {target_node}\n'
+        graph_definition += f'    {scan_node} --> {target_node}\n'
+
+    # Add assets as nodes and link them
+    # A more advanced version would link assets to the target that found them
+    for asset in scan.assets:
+        # Sanitize value for mermaid id
+        safe_value = ''.join(e for e in asset.value if e.isalnum())
+        asset_node = f'asset{asset.id}{safe_value}("{asset.value} ({asset.type})")'
+        graph_definition += f'    {asset_node}\n'
+        # For now, link all assets back to the main scan node
+        graph_definition += f'    {scan_node} --> {asset_node}\n'
+
+    return jsonify({'graph_definition': graph_definition})

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="auth-container">
   <h2>Register New User</h2>
   <form method="post">
     <label for="username">Username</label>
@@ -9,4 +10,5 @@
     <button type="submit" class="button">Register</button>
   </form>
   <p>Already have an account? <a href="{{ url_for('login') }}">Log In</a></p>
+</div>
 {% endblock %}

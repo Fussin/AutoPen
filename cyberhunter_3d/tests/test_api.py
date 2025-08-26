@@ -99,5 +99,25 @@ class APITestCase(unittest.TestCase):
         self.assertEqual(len(response_data['assets']), 2)
         self.assertEqual(response_data['assets'][0]['value'], 'test.example.com')
 
+    def test_get_scan_graph_api(self):
+        """Test getting scan graph data via the API."""
+        with app.app_context():
+            scan = Scan(user_id=self.test_user.id, status='COMPLETED')
+            db.session.add(scan)
+            db.session.flush()
+            t1 = Target(scan_id=scan.id, type='domain', value='example.com')
+            a1 = Asset(scan_id=scan.id, type='subdomain', value='test.example.com')
+            db.session.add_all([t1, a1])
+            db.session.commit()
+            scan_id = scan.id
+
+        response = self.client.get(f'/api/v1/scans/{scan_id}/graph', headers={'X-API-Key': self.api_key})
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.data)
+        self.assertIn('graph_definition', response_data)
+        self.assertIn('graph TD', response_data['graph_definition'])
+        self.assertIn('target1("example.com (domain)")', response_data['graph_definition'])
+        self.assertIn('asset1testexamplecom("test.example.com (subdomain)")', response_data['graph_definition'])
+
 if __name__ == '__main__':
     unittest.main()
