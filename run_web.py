@@ -157,6 +157,7 @@ from cyberhunter_3d.core.target_parser import parse_targets
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_execution_phase
+from cyberhunter_3d.core.feeds.hackerone_client import get_hackerone_scopes
 
 # --- Background Task Executor ---
 # Using a simple thread pool for background tasks.
@@ -247,9 +248,16 @@ def logout():
 @login_required
 def profile():
     if request.method == 'POST':
-        current_user.regenerate_api_key()
-        db.session.commit()
-        flash('API Key has been regenerated!', 'success')
+        if request.form.get('form_name') == 'h1_key':
+            h1_key = request.form.get('h1_key')
+            current_user.hackerone_api_key = h1_key
+            db.session.commit()
+            flash('HackerOne API Key updated!', 'success')
+        else:
+            # This is the form for regenerating the main API key
+            current_user.regenerate_api_key()
+            db.session.commit()
+            flash('API Key has been regenerated!', 'success')
         return redirect(url_for('profile'))
     return render_template('profile.html')
 
@@ -319,6 +327,52 @@ def launch_scan(scan_id):
     else:
         flash('This scan cannot be launched.', 'danger')
 
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/sync/hackerone', methods=['POST'])
+@login_required
+def sync_hackerone():
+    h1_key = current_user.hackerone_api_key
+    if not h1_key:
+        flash('HackerOne API key is not set. Please set it in your profile.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # The H1 API requires a username (email) and token for auth
+    # We will assume the user's username for this app is their H1 username
+    h1_user = current_user.username
+
+    scopes = get_hackerone_scopes(h1_user, h1_key)
+
+    if not scopes:
+        flash('Could not find any programs on HackerOne or an error occurred.', 'info')
+        return redirect(url_for('dashboard'))
+
+    # For each program, create a new scan
+    for program_scope in scopes:
+        parsed_targets = parse_targets(program_scope['targets'])
+        if not parsed_targets:
+            continue
+
+        new_scan = Scan(
+            user_id=current_user.id,
+            status='QUEUED',
+            in_scope_rules=program_scope['in_scope_rules'],
+            out_of_scope_rules=program_scope['out_of_scope_rules']
+        )
+        db.session.add(new_scan)
+        db.session.flush()
+
+        # Add a special target to name the scan after the program
+        db.session.add(Target(value=program_scope['name'], type='program_name', scan_id=new_scan.id))
+
+        for value, type in parsed_targets:
+            db.session.add(Target(value=value, type=type, scan_id=new_scan.id))
+
+        db.session.commit()
+        executor.submit(run_discovery_phase, new_scan.id, app)
+
+    flash(f'Successfully synced {len(scopes)} programs from HackerOne and started discovery.', 'success')
     return redirect(url_for('dashboard'))
 
 
