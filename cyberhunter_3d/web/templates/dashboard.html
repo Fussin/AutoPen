@@ -42,6 +42,16 @@
 
   <hr style="border-color: #444; margin: 2em 0;">
 
+  <h3>Automated Feeds</h3>
+  <form method="post" action="{{ url_for('sync_hackerone') }}">
+      <button type="submit" class="button">Sync Programs from HackerOne</button>
+  </form>
+  <small style="color: #bbb; display: block; margin-top: 0.5em;">
+    This will create a new scan for each of your programs on HackerOne. Requires a valid H1 API Key to be set in your profile.
+  </small>
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
   <h3>Your Scans</h3>
   {% if scans %}
     <table style="width: 100%; border-collapse: collapse;">

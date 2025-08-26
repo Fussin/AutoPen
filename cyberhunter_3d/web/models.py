@@ -15,6 +15,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     otp_secret = db.Column(db.String(16), nullable=False)
     api_key = db.Column(db.String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
+    hackerone_api_key = db.Column(db.String(255), nullable=True)
     scans = db.relationship('Scan', backref='user', lazy=True)
 
     def __repr__(self):

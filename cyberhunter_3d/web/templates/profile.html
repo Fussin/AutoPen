@@ -21,4 +21,15 @@
     Warning: Regenerating your API key will invalidate the old one immediately.
   </small>
 
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>HackerOne Integration</h3>
+  <p>Add your HackerOne API key to automatically sync your program scopes.</p>
+  <form method="post" action="{{ url_for('profile') }}">
+    <input type="hidden" name="form_name" value="h1_key">
+    <label for="h1_key">HackerOne API Key</label>
+    <input type="password" id="h1_key" name="h1_key" value="{{ current_user.hackerone_api_key or '' }}">
+    <button type="submit" class="button">Save HackerOne Key</button>
+  </form>
+
 {% endblock %}
