@@ -1,14 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
-  <div style="display: flex; justify-content: space-between; align-items: center;">
-    <h2>Welcome, {{ current_user.username }}!</h2>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2em;">
+    <h2>Dashboard</h2>
     <div>
+      <span style="margin-right: 1em;">Welcome, {{ current_user.username }}!</span>
       <a href="{{ url_for('profile') }}" class="button">Profile</a>
       <a href="{{ url_for('logout') }}" class="button" style="background-color: #d9534f; margin-left: 1em;">Logout</a>
     </div>
   </div>
-
-  <hr style="border-color: #444; margin: 2em 0;">
 
   <h3>Submit New Scan</h3>
   <form method="post" action="{{ url_for('submit_targets') }}" enctype="multipart/form-data">
