@@ -47,3 +47,4 @@ def test_final_recon_data_has_correct_structure():
     assert 'screenshots' in data
     assert 'technology_and_ports' in data
     assert 'js_findings' in data
+    assert 'cloud_assets' in data
