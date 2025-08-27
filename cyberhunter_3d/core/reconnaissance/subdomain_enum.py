@@ -8,7 +8,7 @@ import os
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
-from .js_engine import run_js_enumeration
+from .js_engine import run_js_enumeration, run_github_dorking
 from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
@@ -67,7 +67,10 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     # Step 5: Cloud Asset Identification
     cloud_assets = find_cloud_assets(master_subdomains)
 
-    # Step 6: Consolidate all information into the final JSON structure
+    # Step 6: GitHub Dorking
+    github_findings = run_github_dorking(master_subdomains)
+
+    # Step 7: Consolidate all information into the final JSON structure
     final_recon_data = {
         'domain': domain,
         'master_subdomains': list(master_subdomains),
@@ -76,6 +79,7 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
         'technology_and_ports': tech_results,
         'js_findings': list(js_findings),
         'cloud_assets': cloud_assets,
+        'github_findings': github_findings,
     }
 
     with open('final_recon_data.json', 'w') as f_out:

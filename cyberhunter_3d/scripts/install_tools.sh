@@ -114,6 +114,15 @@ rm "geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz"
 pip3 install pipx
 pipx install wappalyzer
 
+# GitHub Dorking
+echo "Installing gh-dork..."
+git clone https://github.com/molly/gh-dork.git
+cd gh-dork
+pip3 install -r requirements.txt
+cd ..
+# We will leave the gh-dork directory in the root for now
+echo "gh-dork installed successfully."
+
 # Other tools from previous version
 apt-get install -y sublist3r
 

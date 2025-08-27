@@ -89,3 +89,58 @@ def run_js_enumeration(live_hosts: Set[str]) -> Set[str]:
 
     print(f"Total unique findings from JS/Code analysis: {len(all_results)}")
     return all_results
+
+def run_github_dorking(subdomains: Set[str]) -> List[str]:
+    """
+    Performs GitHub dorking to find sensitive information.
+    """
+    print(f"Starting GitHub dorking for {len(subdomains)} subdomains...")
+
+    if not subdomains:
+        print("No subdomains to dork. Skipping GitHub dorking.")
+        return []
+
+    # We need a file with dorks. I'll assume a common one exists.
+    dorks_file = "gh-dork/dorks.txt"
+    if not os.path.exists(dorks_file):
+        print(f"Dorks file not found at {dorks_file}. Skipping GitHub dorking.")
+        return []
+
+    # Create a temporary file with the subdomains to use as orgs
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as tmp_file:
+        orgs_filename = tmp_file.name
+        for sub in subdomains:
+            # We can treat each subdomain as a potential organization name
+            if '.' in sub:
+                org = sub.split('.')[-2] # a.b.c -> b
+                tmp_file.write(f"{org}\n")
+
+    findings = []
+    try:
+        gh_dork_command = [
+            'python3', 'gh-dork/gh-dork.py',
+            '-d', dorks_file,
+            '-of', orgs_filename,
+            '-o', 'gh_dork_results'
+        ]
+        subprocess.run(gh_dork_command)
+
+        # The results are saved to files in the 'gh_dork_results' directory.
+        # We can parse these files to get the findings.
+        if os.path.exists('gh_dork_results'):
+            for filename in os.listdir('gh_dork_results'):
+                with open(os.path.join('gh_dork_results', filename), 'r') as f:
+                    findings.extend(f.readlines())
+
+    except FileNotFoundError:
+        print("Error: 'gh-dork.py' not found. Please ensure it is installed.")
+    except Exception as e:
+        print(f"An error occurred during GitHub dorking: {e}")
+    finally:
+        os.remove(orgs_filename)
+        if os.path.exists('gh_dork_results'):
+            import shutil
+            shutil.rmtree('gh_dork_results')
+
+    print(f"Found {len(findings)} potential findings from GitHub dorking.")
+    return findings
