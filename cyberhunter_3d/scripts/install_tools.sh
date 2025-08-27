@@ -9,17 +9,13 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "Starting installation of CyberHunter 3D reconnaissance tools..."
+echo "Starting installation of CyberHunter 3D V2 reconnaissance tools..."
 
 # --- System package installation (apt) ---
-echo "Installing system packages (nmap)..."
-if ! [ -x "$(command -v nmap)" ]; then
-  apt-get update
-  apt-get install -y nmap
-else
-  echo "nmap is already installed."
-fi
-echo "nmap installed successfully."
+echo "Installing system packages..."
+apt-get update
+apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip seclists
+echo "System packages installed successfully."
 
 # --- Go tools installation ---
 echo "Checking for Go installation..."
@@ -34,41 +30,49 @@ echo "Installing Go-based tools... This may take a few minutes."
 # Add go bin to path for this session
 export PATH=$PATH:$(go env GOPATH)/bin
 
-# Install subfinder
-echo "Installing subfinder..."
+# Passive Engine
 go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-
-# Install amass
-echo "Installing amass..."
 go install -v github.com/owasp-amass/amass/v3/cmd/amass@latest
-
-# Install assetfinder
-echo "Installing assetfinder..."
 go install -v github.com/tomnomnom/assetfinder@latest
 
-# Install httpx
-echo "Installing httpx..."
-go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+# Active Engine
+# massdns is a dependency for puredns
+echo "Installing massdns..."
+git clone https://github.com/blechschmidt/massdns.git
+cd massdns
+make
+make install
+cd ..
+rm -rf massdns
+echo "massdns installed successfully."
+go install -v github.com/d3mondev/puredns/v2@latest
 
-# Install subzy
-echo "Installing subzy..."
-go install -v github.com/PentestPad/subzy@latest
+# Permutation Engine
+go install -v github.com/Josue87/gotator@latest
 
-# Install nuclei
-echo "Installing nuclei..."
+# JS/Code Analysis Engine
 go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
 
-# Install dnsx
-echo "Installing dnsx..."
+# Live Host Detection / Visual Recon
+go install -v github.com/sensepost/gowitness@latest
+echo "Installing Aquatone..."
+AQUATONE_VERSION="1.7.0"
+wget "https://github.com/michenriksen/aquatone/releases/download/v${AQUATONE_VERSION}/aquatone_linux_amd64_${AQUATONE_VERSION}.zip"
+unzip "aquatone_linux_amd64_${AQUATONE_VERSION}.zip"
+mv aquatone /usr/local/bin/
+rm "aquatone_linux_amd64_${AQUATONE_VERSION}.zip"
+echo "Aquatone installed successfully."
+
+# Technology Fingerprinting & Port Scanning
+go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+
+# Other tools from previous version
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install -v github.com/PentestPad/subzy@latest
 go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest
-
-# Install gospider
-echo "Installing gospider..."
 go install -v github.com/jaeles-project/gospider@latest
-
-# Install gau
-echo "Installing gau..."
 go install -v github.com/lc/gau/v2/cmd/gau@latest
+
 
 echo "Go-based tools installed successfully."
 
@@ -81,10 +85,35 @@ fi
 
 echo "Python and pip are installed."
 
-# Install Sublist3r
-echo "Installing Sublist3r..."
-apt-get install -y sublist3r
-echo "Sublist3r installed successfully."
+# Permutation Engine
+pip3 install dnsgen
 
-echo "All reconnaissance tools have been installed."
+# JS/Code Analysis
+echo "Installing LinkFinder..."
+git clone https://github.com/GerbenJavado/LinkFinder.git
+cd LinkFinder
+pip3 install -r requirements.txt
+python3 setup.py install
+cd ..
+rm -rf LinkFinder
+echo "LinkFinder installed successfully."
+
+# Technology Fingerprinting
+echo "Installing Wappalyzer dependencies..."
+# geckodriver installation
+GECKODRIVER_VERSION="v0.34.0" # Check for latest version
+wget "https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz"
+tar -xvzf "geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz"
+chmod +x geckodriver
+mv geckodriver /usr/local/bin/
+rm "geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz"
+pip3 install pipx
+pipx install wappalyzer
+
+# Other tools from previous version
+apt-get install -y sublist3r
+
+echo "Python tools installed successfully."
+
+echo "All V2 reconnaissance tools have been installed."
 echo "Make sure to add '$(go env GOPATH)/bin' to your system's PATH environment variable."
