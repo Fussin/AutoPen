@@ -49,3 +49,22 @@ def test_final_recon_data_has_correct_structure():
     assert 'js_findings' in data
     assert 'cloud_assets' in data
     assert 'github_findings' in data
+
+def test_custom_wordlist_generation():
+    """
+    Tests the custom wordlist generation logic.
+    """
+    from cyberhunter_3d.core.reconnaissance.permutation_engine import generate_custom_wordlist
+    subdomains = {"dev-api.example.com", "staging-api.example.com", "prod-db-1.example.com"}
+    wordlist_file = generate_custom_wordlist(subdomains)
+    with open(wordlist_file, 'r') as f:
+        words = {line.strip() for line in f}
+
+    assert "dev" in words
+    assert "api" in words
+    assert "staging" in words
+    assert "prod" in words
+    assert "db" in words
+    assert "1" not in words # Should not extract numbers
+
+    os.remove(wordlist_file)
