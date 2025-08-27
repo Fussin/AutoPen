@@ -66,6 +66,10 @@ echo "Aquatone installed successfully."
 # Technology Fingerprinting & Port Scanning
 go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
 
+# Cloud Asset Identification
+go install -v github.com/Macmod/goblob@latest
+go install -v github.com/sa7mon/s3scanner@latest
+
 # Other tools from previous version
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 go install -v github.com/PentestPad/subzy@latest

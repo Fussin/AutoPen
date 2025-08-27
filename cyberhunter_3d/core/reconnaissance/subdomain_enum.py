@@ -11,6 +11,7 @@ from .permutation_engine import run_permutation_enumeration
 from .js_engine import run_js_enumeration
 from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
+from .cloud_asset_enum import find_cloud_assets
 
 def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     """
@@ -63,7 +64,10 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     # Step 4: Technology Fingerprinting and Port Scanning
     tech_results = run_tech_fingerprinting(live_hosts)
 
-    # Step 5: Consolidate all information into the final JSON structure
+    # Step 5: Cloud Asset Identification
+    cloud_assets = find_cloud_assets(master_subdomains)
+
+    # Step 6: Consolidate all information into the final JSON structure
     final_recon_data = {
         'domain': domain,
         'master_subdomains': list(master_subdomains),
@@ -71,6 +75,7 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
         'screenshots': screenshots,
         'technology_and_ports': tech_results,
         'js_findings': list(js_findings),
+        'cloud_assets': cloud_assets,
     }
 
     with open('final_recon_data.json', 'w') as f_out:
