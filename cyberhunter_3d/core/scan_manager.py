@@ -1,5 +1,5 @@
 from cyberhunter_3d.web.models import db, Scan, Target, Asset
-from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains
+from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
@@ -50,7 +50,7 @@ def run_discovery_phase(scan_id, app):
 
                 elif target.type in ['domain', 'wildcard_domain']:
                     print(f"Finding subdomains for '{target.value}'...")
-                    assets = enumerate_subdomains(target.value)
+                    assets = enumerate_subdomains_v2(target.value)
                     discovered_assets.extend(assets)
 
                 elif target.type in ['ip_address', 'cidr']:
