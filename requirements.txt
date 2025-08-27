@@ -6,3 +6,4 @@ pyotp
 qrcode[pil]
 requests
 PyYAML
+pytest
