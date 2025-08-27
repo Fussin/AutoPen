@@ -162,6 +162,7 @@ from cyberhunter_3d.core.scan_manager import run_discovery_phase
 # Using a simple thread pool for background tasks.
 # For a production app, a more robust solution like Celery would be better.
 executor = ThreadPoolExecutor(max_workers=2)
+app.executor = executor
 
 # Register the API blueprint
 app.register_blueprint(api_bp)

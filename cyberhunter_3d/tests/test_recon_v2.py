@@ -45,22 +45,16 @@ def test_full_recon_pipeline_mocked(
 
     # 2. Execute the function
     domain = "example.com"
-    assets = enumerate_subdomains_v2(domain)
+    recon_data = enumerate_subdomains_v2(domain)
 
     # 3. Assertions
-    # Check that the final asset list is correct
-    assert len(assets) == 3
-    assert {'type': 'subdomain', 'value': 'active.example.com'} in assets
+    # Check the returned dictionary
+    assert recon_data['domain'] == domain
+    assert 'master_subdomains' in recon_data
+    assert len(recon_data['subdomain_takeover_vulnerabilities']) == 1
 
-    # Check that the final JSON report was created and has the correct data
-    output_dir = config['recon_output_dir']
-    final_recon_file = os.path.join(output_dir, config['final_recon_file'])
-    assert os.path.exists(final_recon_file)
-
-    with open(final_recon_file, 'r') as f:
-        data = json.load(f)
-
-    assert data['domain'] == domain
+    # The function no longer saves the file, so we just check the returned dict.
+    data = recon_data
     assert set(data['master_subdomains']) == resolved_domains
     assert set(data['live_hosts']) == set(live_hosts)
     assert len(data['subdomain_takeover_vulnerabilities']) == 1
@@ -74,11 +68,12 @@ def test_full_recon_pipeline_mocked(
     mock_passive.assert_called_once_with(domain)
     mock_active.assert_called_once_with(domain)
     mock_permute.assert_called_once_with(domain, {'passive.example.com', 'active.example.com'})
-    mock_resolve.assert_called_once() # Called with the set of all raw domains
+    mock_resolve.assert_called_once()
     mock_visual.assert_called_once_with(resolved_domains)
     mock_takeover.assert_called_once_with(live_hosts)
 
-    # Teardown
+    # Teardown any directories that might have been created by mocked functions
+    output_dir = config['recon_output_dir']
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
 

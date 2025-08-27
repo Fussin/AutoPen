@@ -110,14 +110,9 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
         'github_findings': github_findings,
     }
 
-    final_recon_file = os.path.join(output_dir, config['final_recon_file'])
-    with open(final_recon_file, 'w') as f_out:
-        json.dump(final_recon_data, f_out, indent=4)
-
-    # For now, just return the valid subdomains as assets
-    assets = [{'type': 'subdomain', 'value': sub} for sub in master_subdomains]
-
-    return assets
+    # The caller is now responsible for saving the file if needed.
+    # We just return the consolidated data.
+    return final_recon_data
 
 
 def resolve_and_validate(subdomains: Set[str]) -> Set[str]:
