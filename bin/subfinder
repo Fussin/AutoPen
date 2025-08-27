@@ -1,0 +1,17 @@
+#!/bin/bash
+# Simulated subfinder tool
+
+# Parse arguments to find the output file path
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -o) output_file="$2"; shift ;;
+        *) ;;
+    esac
+    shift
+done
+
+# Write fake data to the output file if the path is provided
+if [ -n "$output_file" ]; then
+    echo "subfinder.example.com" > "$output_file"
+    echo "api.subfinder.example.com" >> "$output_file"
+fi

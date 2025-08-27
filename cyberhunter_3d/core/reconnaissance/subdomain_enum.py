@@ -135,9 +135,11 @@ def resolve_and_validate(subdomains: Set[str]) -> Set[str]:
     resolved_subdomains = set()
     try:
         # Use puredns to resolve and validate the subdomains
+        puredns_path = config['tools']['puredns']
+        resolvers_list = config['wordlists']['resolvers']
         puredns_command = [
-            'puredns', 'resolve', input_filename,
-            '-r', '/usr/share/seclists/Discovery/DNS/resolvers.txt',
+            puredns_path, 'resolve', input_filename,
+            '-r', resolvers_list,
             '--quiet'
         ]
         result = subprocess.run(puredns_command, capture_output=True, text=True, check=True)

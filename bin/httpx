@@ -1,0 +1,6 @@
+#!/bin/bash
+# Simulated httpx tool
+
+# Prints a few "live" hosts to stdout
+echo "http://passive.example.com"
+echo "https://active.example.com"

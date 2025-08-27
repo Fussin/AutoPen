@@ -1,0 +1,26 @@
+#!/bin/bash
+# Simulated puredns tool
+
+# Check the command (bruteforce or resolve)
+COMMAND=$1
+shift
+
+if [ "$COMMAND" == "bruteforce" ]; then
+    # Bruteforce command writes to a file specified with -w
+    while [[ "$#" -gt 0 ]]; do
+        case $1 in
+            -w) output_file="$2"; shift ;;
+            *) ;;
+        esac
+        shift
+    done
+    if [ -n "$output_file" ]; then
+        echo "brute.puredns.example.com" > "$output_file"
+    fi
+elif [ "$COMMAND" == "resolve" ]; then
+    # Resolve command reads an input file and prints to stdout
+    # We can just print some domains. The input file is not needed for the simulation.
+    echo "passive.example.com"
+    echo "active.example.com"
+    echo "permute.example.com"
+fi

@@ -4,28 +4,30 @@
 # If the tool is in the system's PATH, you can just use the tool name.
 # Otherwise, provide the full path.
 tools:
-  gobuster: /usr/bin/gobuster
-  massdns: /usr/local/bin/massdns
-  puredns: /root/go/bin/puredns
-  dnsgen: /usr/local/bin/dnsgen
-  gotator: /root/go/bin/gotator
-  linkfinder: /usr/local/bin/linkfinder.py # This will be installed via setup.py, so it should be in the path
-  gowitness: /root/go/bin/gowitness
-  aquatone: /usr/local/bin/aquatone
-  wappalyzer: /root/.local/bin/wappalyzer # pipx path
-  naabu: /root/go/bin/naabu
-  nmap: /usr/bin/nmap
-  httpx: /root/go/bin/httpx
-  subfinder: /root/go/bin/subfinder
-  amass: /root/go/bin/amass
-  assetfinder: /root/go/bin/assetfinder
-  subzy: /root/go/bin/subzy
-  nuclei: /root/go/bin/nuclei
-  dnsx: /root/go/bin/dnsx
-  gospider: /root/go/bin/gospider
-  gau: /root/go/bin/gau
-  sublist3r: /usr/bin/sublist3r
-  gh_dork: gh-dork/gh-dork.py # Relative path to the cloned repo
+  gobuster: bin/gobuster
+  massdns: bin/massdns # Not implemented yet
+  puredns: bin/puredns
+  dnsgen: bin/dnsgen # Not implemented yet
+  gotator: bin/gotator # Not implemented yet
+  linkfinder: bin/linkfinder # Not implemented yet
+  gowitness: bin/gowitness
+  aquatone: bin/aquatone
+  wappalyzer: bin/wappalyzer # Not implemented yet
+  naabu: bin/naabu # Not implemented yet
+  nmap: bin/nmap
+  httpx: bin/httpx
+  subfinder: bin/subfinder
+  amass: bin/amass
+  assetfinder: bin/assetfinder
+  subzy: bin/subzy # Not implemented yet
+  nuclei: bin/nuclei
+  goblob: bin/goblob
+  s3scanner: bin/s3scanner
+  dnsx: bin/dnsx # Not implemented yet
+  gospider: bin/gospider # Not implemented yet
+  gau: bin/gau # Not implemented yet
+  sublist3r: bin/sublist3r # Not implemented yet
+  gh_dork: bin/gh_dork # Not implemented yet
 
 # Paths to wordlists
 wordlists:

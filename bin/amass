@@ -1,0 +1,15 @@
+#!/bin/bash
+# Simulated amass tool
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -o) output_file="$2"; shift ;;
+        *) ;;
+    esac
+    shift
+done
+
+if [ -n "$output_file" ]; then
+    echo "amass.example.com" > "$output_file"
+    echo "api.amass.example.com" >> "$output_file"
+fi

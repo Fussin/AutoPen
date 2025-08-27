@@ -1,0 +1,3 @@
+#!/bin/bash
+# Simulated s3scanner tool
+echo "s3-bucket-name exists"
