@@ -5,7 +5,7 @@ from typing import Set, List, Dict
 import subprocess
 import tempfile
 import os
-from .utils import get_logger
+from .utils import get_logger, load_config
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
@@ -13,8 +13,10 @@ from .js_engine import run_js_enumeration, run_github_dorking
 from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
+from .subdomain_takeover import run_takeover_scan
 
 logger = get_logger(__name__)
+config = load_config()
 
 def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     """
@@ -61,28 +63,39 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
 
     # Step 2: Live Host Detection and Visual Recon
     live_hosts, screenshots = run_visual_recon(master_subdomains)
-    print(f"Found {len(live_hosts)} live hosts.")
-    print(f"Screenshots saved in: {screenshots}")
+    logger.info(f"Found {len(live_hosts)} live hosts.")
+    logger.info(f"Screenshots saved in: {screenshots}")
 
-    # Step 3: JS/Code Analysis
+    # Step 3: Subdomain Takeover Scan
+    logger.info("Starting subdomain takeover scan...")
+    takeover_findings = run_takeover_scan(live_hosts)
+    logger.info(f"Found {len(takeover_findings)} potential takeover vulnerabilities.")
+
+    # Step 4: JS/Code Analysis
+    logger.info("Starting JS/Code analysis...")
     js_findings = run_js_enumeration(live_hosts)
 
-    # Step 4: Technology Fingerprinting and Port Scanning
+    # Step 5: Technology Fingerprinting and Port Scanning
+    logger.info("Starting technology fingerprinting and port scanning...")
     tech_results = run_tech_fingerprinting(live_hosts)
 
-    # Step 5: Cloud Asset Identification
+    # Step 6: Cloud Asset Identification
+    logger.info("Starting cloud asset identification...")
     cloud_assets = find_cloud_assets(master_subdomains)
 
-    # Step 6: GitHub Dorking
+    # Step 7: GitHub Dorking
+    logger.info("Starting GitHub dorking...")
     github_findings = run_github_dorking(master_subdomains)
 
-    # Step 7: Consolidate all information into the final JSON structure
+    # Step 8: Consolidate all information into the final JSON structure
+    logger.info("Consolidating all findings...")
     final_recon_data = {
         'domain': domain,
         'master_subdomains': list(master_subdomains),
         'live_hosts': list(live_hosts),
         'screenshots': screenshots,
         'technology_and_ports': tech_results,
+        'subdomain_takeover_vulnerabilities': takeover_findings,
         'js_findings': list(js_findings),
         'cloud_assets': cloud_assets,
         'github_findings': github_findings,
