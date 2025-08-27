@@ -1,0 +1,16 @@
+#!/bin/bash
+# Simulated naabu tool
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -o) output_file="$2"; shift ;;
+        *) ;;
+    esac
+    shift
+done
+
+if [ -n "$output_file" ]; then
+    # Create a fake JSON output file. One JSON object per line.
+    echo '{"host": "passive.example.com", "port": 80, "protocol": "tcp"}' > "$output_file"
+    echo '{"host": "active.example.com", "port": 443, "protocol": "tcp"}' >> "$output_file"
+fi

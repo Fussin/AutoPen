@@ -1,0 +1,18 @@
+#!/bin/bash
+# Simulated gowitness tool
+
+# It's called with -P to specify the output directory.
+# We just need to create that directory to simulate success.
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -P) output_dir="$2"; shift ;;
+        *) ;;
+    esac
+    shift
+done
+
+if [ -n "$output_dir" ]; then
+    mkdir -p "$output_dir"
+    # Create a fake screenshot file
+    echo "fake screenshot" > "$output_dir/passive.example.com.png"
+fi

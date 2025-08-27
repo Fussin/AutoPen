@@ -53,7 +53,9 @@ def run_tech_fingerprinting(live_hosts: Set[str]) -> Dict[str, Dict]:
                         if 'ports' not in tech_results[host]:
                             tech_results[host]['ports'] = []
 
-                        nmap_output_file = os.path.join(config['nmap_output_dir'], f'nmap_{host}_{port}.txt')
+                        nmap_output_dir = os.path.join(config['recon_output_dir'], config['nmap_output_dir'])
+                        os.makedirs(nmap_output_dir, exist_ok=True)
+                        nmap_output_file = os.path.join(nmap_output_dir, f'nmap_{host}_{port}.txt')
                         nmap_command = [config['tools']['nmap'], '-sV', '-p', str(port), host, '-oN', nmap_output_file]
                         subprocess.run(nmap_command)
 

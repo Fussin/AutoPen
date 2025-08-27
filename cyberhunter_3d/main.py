@@ -21,9 +21,6 @@ def main():
     args = parser.parse_args()
     target_domain = args.domain
 
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(project_root)
-
     print(f"Starting V2 reconnaissance pipeline for {target_domain}...")
 
     # Run the full V2 enumeration pipeline

@@ -1,0 +1,21 @@
+#!/bin/bash
+# Simulated nmap tool
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -oN) output_file="$2"; shift ;;
+        *) ;;
+    esac
+    shift
+done
+
+if [ -n "$output_file" ]; then
+    # Simulate a successful zone transfer output
+    echo "Host is up (0.0021s latency)." > "$output_file"
+    echo "PORT   STATE SERVICE" >> "$output_file"
+    echo "53/tcp open  domain" >> "$output_file"
+    echo "| dns-zone-transfer:" >> "$output_file"
+    echo "| nmap.example.com." >> "$output_file"
+    echo "| api.nmap.example.com." >> "$output_file"
+    echo "|_END" >> "$output_file"
+fi
