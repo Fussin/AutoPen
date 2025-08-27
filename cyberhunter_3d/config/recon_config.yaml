@@ -1,0 +1,41 @@
+# Configuration for the V2 Reconnaissance Phase
+
+# Paths to tools
+# If the tool is in the system's PATH, you can just use the tool name.
+# Otherwise, provide the full path.
+tools:
+  gobuster: /usr/bin/gobuster
+  massdns: /usr/local/bin/massdns
+  puredns: /root/go/bin/puredns
+  dnsgen: /usr/local/bin/dnsgen
+  gotator: /root/go/bin/gotator
+  linkfinder: /usr/local/bin/linkfinder.py # This will be installed via setup.py, so it should be in the path
+  gowitness: /root/go/bin/gowitness
+  aquatone: /usr/local/bin/aquatone
+  wappalyzer: /root/.local/bin/wappalyzer # pipx path
+  naabu: /root/go/bin/naabu
+  nmap: /usr/bin/nmap
+  httpx: /root/go/bin/httpx
+  subfinder: /root/go/bin/subfinder
+  amass: /root/go/bin/amass
+  assetfinder: /root/go/bin/assetfinder
+  subzy: /root/go/bin/subzy
+  nuclei: /root/go/bin/nuclei
+  dnsx: /root/go/bin/dnsx
+  gospider: /root/go/bin/gospider
+  gau: /root/go/bin/gau
+  sublist3r: /usr/bin/sublist3r
+  gh_dork: gh-dork/gh-dork.py # Relative path to the cloned repo
+
+# Paths to wordlists
+wordlists:
+  dns_bruteforce: /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+  resolvers: /usr/share/seclists/Discovery/DNS/resolvers.txt
+  github_dorks: gh-dork/dorks.txt
+
+# Other settings
+recon_output_dir: recon_results
+screenshot_dir: recon_results/screenshots
+nmap_output_dir: recon_results/nmap
+final_recon_file: recon_results/final_recon_data.json
+master_subdomains_file: recon_results/master_subdomains.txt

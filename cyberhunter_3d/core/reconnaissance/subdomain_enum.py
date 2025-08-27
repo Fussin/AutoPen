@@ -5,6 +5,7 @@ from typing import Set, List, Dict
 import subprocess
 import tempfile
 import os
+from .utils import get_logger
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
@@ -13,11 +14,13 @@ from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
 
+logger = get_logger(__name__)
+
 def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     """
     Runs the full V2 reconnaissance pipeline.
     """
-    print(f"Starting V2 reconnaissance for: {domain}")
+    logger.info(f"Starting V2 reconnaissance for: {domain}")
 
     raw_subdomains = set()
 
@@ -39,17 +42,20 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
         permutation_results = run_permutation_enumeration(domain, passive_results)
         raw_subdomains.update(permutation_results)
 
-    print(f"Total raw subdomains found from all engines: {len(raw_subdomains)}")
-
-    print(f"Total raw subdomains found from all engines: {len(raw_subdomains)}")
+    logger.info(f"Total raw subdomains found from all engines: {len(raw_subdomains)}")
 
     # Step 1: DNS Resolution and Validation
-    print("Starting DNS resolution and validation...")
+    logger.info("Starting DNS resolution and validation...")
     master_subdomains = resolve_and_validate(raw_subdomains)
-    print(f"Found {len(master_subdomains)} valid subdomains after resolution.")
+    logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
+
+    # Create output directory if it doesn't exist
+    output_dir = config['recon_output_dir']
+    os.makedirs(output_dir, exist_ok=True)
 
     # Save to master_subdomains.txt
-    with open('master_subdomains.txt', 'w') as f:
+    master_subdomains_file = os.path.join(output_dir, config['master_subdomains_file'])
+    with open(master_subdomains_file, 'w') as f:
         for sub in master_subdomains:
             f.write(f"{sub}\n")
 
@@ -82,7 +88,8 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
         'github_findings': github_findings,
     }
 
-    with open('final_recon_data.json', 'w') as f_out:
+    final_recon_file = os.path.join(output_dir, config['final_recon_file'])
+    with open(final_recon_file, 'w') as f_out:
         json.dump(final_recon_data, f_out, indent=4)
 
     # For now, just return the valid subdomains as assets
