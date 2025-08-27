@@ -152,18 +152,15 @@ def verify_2fa():
 
 from flask_login import logout_user
 
-from cyberhunter_3d.web.models import Scan, Target, Asset
-from cyberhunter_3d.core.target_parser import parse_targets
+from cyberhunter_3d.web.models import Scan, Target
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
-from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_execution_phase
-from cyberhunter_3d.core.feeds.hackerone_client import get_hackerone_scopes
+from cyberhunter_3d.core.scan_manager import run_scan
 
 # --- Background Task Executor ---
 # Using a simple thread pool for background tasks.
 # For a production app, a more robust solution like Celery would be better.
 executor = ThreadPoolExecutor(max_workers=2)
-app.executor = executor
 
 
 @app.route('/submit-targets', methods=['POST'])
@@ -190,43 +187,30 @@ def submit_targets():
                 flash(f"Error reading file: {e}", 'danger')
                 return redirect(url_for('dashboard'))
 
-    # 3. Parse, normalize, and validate targets using the new parser
-    parsed_targets = parse_targets(raw_targets)
+    # 3. Clean and validate targets
+    targets = {line.strip() for line in raw_targets if line.strip()}
 
-    if not parsed_targets:
-        flash('No valid targets could be parsed. Please check your input.', 'danger')
+    if not targets:
+        flash('No valid targets submitted.', 'danger')
         return redirect(url_for('dashboard'))
 
-    # 4. Get scope rules from form
-    in_scope_rules = request.form.get('in_scope_rules', '')
-    out_of_scope_rules = request.form.get('out_of_scope_rules', '')
-
-    # 5. Create Scan and Target objects in DB
-    new_scan = Scan(
-        user_id=current_user.id,
-        status='QUEUED',
-        in_scope_rules=in_scope_rules,
-        out_of_scope_rules=out_of_scope_rules
-    )
+    # 4. Create Scan and Target objects in DB
+    new_scan = Scan(user_id=current_user.id, status='QUEUED')
     db.session.add(new_scan)
 
     # We need to flush to get the new_scan.id before creating targets
     db.session.flush()
 
-    for target_value, target_type in parsed_targets:
-        new_target = Target(
-            value=target_value,
-            type=target_type,
-            scan_id=new_scan.id
-        )
+    for target_value in targets:
+        new_target = Target(value=target_value, scan_id=new_scan.id)
         db.session.add(new_target)
 
     db.session.commit()
 
-    # Trigger the discovery phase in the background
-    executor.submit(run_discovery_phase, new_scan.id, app)
+    # Trigger the scan in the background
+    executor.submit(run_scan, new_scan.id, app)
 
-    flash(f'{len(parsed_targets)} targets have been queued for discovery.', 'success')
+    flash(f'{len(targets)} targets have been queued for scanning.', 'success')
     return redirect(url_for('dashboard'))
 
 
@@ -244,24 +228,6 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
-@app.route('/profile', methods=['GET', 'POST'])
-@login_required
-def profile():
-    if request.method == 'POST':
-        if request.form.get('form_name') == 'h1_key':
-            h1_key = request.form.get('h1_key')
-            current_user.hackerone_api_key = h1_key
-            db.session.commit()
-            flash('HackerOne API Key updated!', 'success')
-        else:
-            # This is the form for regenerating the main API key
-            current_user.regenerate_api_key()
-            db.session.commit()
-            flash('API Key has been regenerated!', 'success')
-        return redirect(url_for('profile'))
-    return render_template('profile.html')
-
-
 @app.route('/scan/<int:scan_id>')
 @login_required
 def scan_results(scan_id):
@@ -272,113 +238,6 @@ def scan_results(scan_id):
         return redirect(url_for('dashboard'))
 
     return render_template('scan_results.html', scan=scan)
-
-
-@app.route('/graph/<int:scan_id>')
-@login_required
-def graph_view(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    if scan.user_id != current_user.id:
-        flash('You are not authorized to view this graph.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    return render_template('graph_view.html', scan=scan)
-
-
-@app.route('/review/<int:scan_id>')
-@login_required
-def review_scan(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    if scan.user_id != current_user.id:
-        flash('You are not authorized to review this scan.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    # Only allow review if the scan is in the correct state
-    if scan.status != 'PENDING_REVIEW':
-        flash('This scan is not awaiting review.', 'info')
-        return redirect(url_for('dashboard'))
-
-    return render_template('review_scan.html', scan=scan)
-
-
-@app.route('/launch/<int:scan_id>', methods=['POST'])
-@login_required
-def launch_scan(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    if scan.user_id != current_user.id:
-        flash('You are not authorized to launch this scan.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    if scan.status == 'PENDING_REVIEW':
-        # Get the list of approved asset IDs from the form
-        approved_asset_ids = request.form.getlist('approved_assets', type=int)
-        approved_set = set(approved_asset_ids)
-
-        # Update the approval status for all assets in this scan
-        for asset in scan.assets:
-            if asset.id not in approved_set:
-                asset.is_approved_for_scan = False
-
-        db.session.commit()
-
-        # Trigger the execution phase in the background
-        executor.submit(run_execution_phase, scan.id, app)
-        flash(f'Intensive scan launched on {len(approved_set)} assets!', 'success')
-    else:
-        flash('This scan cannot be launched.', 'danger')
-
-    return redirect(url_for('dashboard'))
-
-
-@app.route('/sync/hackerone', methods=['POST'])
-@login_required
-def sync_hackerone():
-    h1_key = current_user.hackerone_api_key
-    if not h1_key:
-        flash('HackerOne API key is not set. Please set it in your profile.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    # The H1 API requires a username (email) and token for auth
-    # We will assume the user's username for this app is their H1 username
-    h1_user = current_user.username
-
-    scopes = get_hackerone_scopes(h1_user, h1_key)
-
-    if not scopes:
-        flash('Could not find any programs on HackerOne or an error occurred.', 'info')
-        return redirect(url_for('dashboard'))
-
-    # For each program, create a new scan
-    for program_scope in scopes:
-        parsed_targets = parse_targets(program_scope['targets'])
-        if not parsed_targets:
-            continue
-
-        new_scan = Scan(
-            user_id=current_user.id,
-            status='QUEUED',
-            in_scope_rules=program_scope['in_scope_rules'],
-            out_of_scope_rules=program_scope['out_of_scope_rules']
-        )
-        db.session.add(new_scan)
-        db.session.flush()
-
-        # Add a special target to name the scan after the program
-        db.session.add(Target(value=program_scope['name'], type='program_name', scan_id=new_scan.id))
-
-        for value, type in parsed_targets:
-            db.session.add(Target(value=value, type=type, scan_id=new_scan.id))
-
-        db.session.commit()
-        executor.submit(run_discovery_phase, new_scan.id, app)
-
-    flash(f'Successfully synced {len(scopes)} programs from HackerOne and started discovery.', 'success')
-    return redirect(url_for('dashboard'))
-
-
-# --- API Blueprint Registration ---
-from cyberhunter_3d.web.api import api_bp
-app.register_blueprint(api_bp)
 
 # --- Main Execution ---
 if __name__ == '__main__':
