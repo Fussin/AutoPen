@@ -1,8 +1,12 @@
 import os
+import logging
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
-from cyberhunter_3d.web.models import db, User
+from cyberhunter_3d.web.models import db, User, Scan, Asset
+
+# --- Logging Configuration ---
+logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # --- App Initialization ---
 app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
@@ -39,7 +43,7 @@ def init_database():
 
 # --- Routes ---
 from cyberhunter_3d.web.api import api_bp
-from flask import render_template, request, redirect, url_for, flash, session
+from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, current_user, login_required
 import pyotp
 import qrcode
@@ -167,6 +171,13 @@ app.executor = executor
 # Register the API blueprint
 app.register_blueprint(api_bp)
 
+@app.route('/sync-hackerone', methods=['POST'])
+@login_required
+def sync_hackerone():
+    # Placeholder for a real implementation
+    flash('HackerOne sync is not implemented yet.', 'info')
+    return redirect(url_for('dashboard'))
+
 @app.route('/submit-targets', methods=['POST'])
 @login_required
 def submit_targets():
@@ -218,6 +229,12 @@ def submit_targets():
     return redirect(url_for('dashboard'))
 
 
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html')
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -232,6 +249,17 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
+from collections import defaultdict
+
+@app.route('/scan/<int:scan_id>/graph')
+@login_required
+def graph_view(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to view this scan.', 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('graph_view.html', scan=scan)
+
 @app.route('/scan/<int:scan_id>')
 @login_required
 def scan_results(scan_id):
@@ -241,7 +269,12 @@ def scan_results(scan_id):
         flash('You are not authorized to view this scan.', 'danger')
         return redirect(url_for('dashboard'))
 
-    return render_template('scan_results.html', scan=scan)
+    # Group assets by type for organized display
+    grouped_assets = defaultdict(list)
+    for asset in scan.assets:
+        grouped_assets[asset.type].append(asset)
+
+    return render_template('scan_results.html', scan=scan, grouped_assets=grouped_assets)
 
 # --- Main Execution ---
 if __name__ == '__main__':
