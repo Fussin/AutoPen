@@ -1,5 +1,0 @@
-#!/bin/bash
-# Simulated assetfinder tool
-
-echo "assetfinder.example.com"
-echo "api.assetfinder.example.com"

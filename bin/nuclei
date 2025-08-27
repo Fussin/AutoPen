@@ -1,7 +1,0 @@
-#!/bin/bash
-# Simulated nuclei tool
-
-# This simulation doesn't need to read the input file (-l)
-# It just prints some representative JSON output to stdout.
-echo '{"template-id":"fake-takeover-1","info":{"name":"Fake Takeover 1","author":"Jules","severity":"high"},"host":"subfinder.example.com","matched-at":"subfinder.example.com"}'
-echo '{"template-id":"fake-takeover-2","info":{"name":"Fake Takeover 2","author":"Jules","severity":"critical"},"host":"brute.puredns.example.com","matched-at":"brute.puredns.example.com"}'

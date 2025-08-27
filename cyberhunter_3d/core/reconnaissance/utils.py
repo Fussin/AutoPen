@@ -4,25 +4,10 @@ import logging
 
 def get_logger(name: str):
     """
-    Returns a configured logger.
+    Returns a logger instance.
+    Configuration is handled by the application's entry point.
     """
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        logger.setLevel(logging.INFO)
-        # Create console handler
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        # Create file handler
-        fh = logging.FileHandler('recon.log')
-        fh.setLevel(logging.DEBUG)
-        # Create formatter and add it to the handlers
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        ch.setFormatter(formatter)
-        fh.setFormatter(formatter)
-        # Add the handlers to the logger
-        logger.addHandler(ch)
-        logger.addHandler(fh)
-    return logger
+    return logging.getLogger(name)
 
 import re
 import subprocess
