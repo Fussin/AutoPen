@@ -25,24 +25,33 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     logger.info(f"Starting V2 reconnaissance for: {domain}")
 
     raw_subdomains = set()
+    initial_subdomains = set()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        # Submit each engine to the executor
-        passive_future = executor.submit(run_passive_enumeration, domain)
-        # active_future = executor.submit(run_active_enumeration, domain)
-        # permutation_future = executor.submit(run_permutation_enumeration, domain)
-        # js_future = executor.submit(run_js_enumeration, domain)
+    logger.info("Running passive and active enumeration engines in parallel...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit passive and active engines
+        future_to_engine = {
+            executor.submit(run_passive_enumeration, domain): "Passive",
+            executor.submit(run_active_enumeration, domain): "Active"
+        }
 
-        # Gather results as they complete
-        passive_results = passive_future.result()
-        raw_subdomains.update(passive_results)
+        for future in concurrent.futures.as_completed(future_to_engine):
+            engine_name = future_to_engine[future]
+            try:
+                results = future.result()
+                logger.info(f"{engine_name} engine found {len(results)} subdomains.")
+                initial_subdomains.update(results)
+            except Exception as exc:
+                logger.error(f"{engine_name} engine generated an exception: {exc}")
 
-        # For now, we will run the other engines sequentially on the results of the passive scan
-        active_results = run_active_enumeration(domain)
-        raw_subdomains.update(active_results)
+    raw_subdomains.update(initial_subdomains)
+    logger.info(f"Found {len(initial_subdomains)} subdomains from passive and active scans.")
 
-        permutation_results = run_permutation_enumeration(domain, passive_results)
-        raw_subdomains.update(permutation_results)
+    # Now, run the permutation engine with the results from the initial scans
+    logger.info("Running permutation engine...")
+    permutation_results = run_permutation_enumeration(domain, initial_subdomains)
+    raw_subdomains.update(permutation_results)
+    logger.info(f"Found {len(permutation_results)} new subdomains from permutation engine.")
 
     logger.info(f"Total raw subdomains found from all engines: {len(raw_subdomains)}")
 
