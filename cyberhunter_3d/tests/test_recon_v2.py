@@ -1,30 +1,86 @@
 import pytest
 import os
 import json
-from unittest.mock import patch
+import shutil
+from unittest.mock import patch, MagicMock
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
-
 from cyberhunter_3d.core.reconnaissance.utils import load_config
 
 config = load_config()
 
-@pytest.mark.slow
-def test_full_recon_pipeline():
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_github_dorking')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.find_cloud_assets')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_tech_fingerprinting')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_js_enumeration')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_takeover_scan')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_visual_recon')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.resolve_and_validate')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_permutation_enumeration')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_active_enumeration')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_passive_enumeration')
+def test_full_recon_pipeline_mocked(
+    mock_passive, mock_active, mock_permute, mock_resolve,
+    mock_visual, mock_takeover, mock_js, mock_tech, mock_cloud, mock_github
+):
     """
-    Slow integration test that runs the full V2 recon pipeline.
+    Fast, mocked integration test that runs the full V2 recon pipeline logic.
     """
+    # 1. Setup Mock Return Values
+    mock_passive.return_value = {'passive.example.com'}
+    mock_active.return_value = {'active.example.com'}
+    # Permutation depends on the results of passive and active
+    mock_permute.return_value = {'permute.example.com'}
+    # Resolve should return a consolidated set of valid domains
+    resolved_domains = {'passive.example.com', 'active.example.com', 'permute.example.com'}
+    mock_resolve.return_value = resolved_domains
+    # Visual recon returns live hosts and a path to screenshots
+    live_hosts = ['http://active.example.com', 'http://passive.example.com']
+    mock_visual.return_value = (live_hosts, 'recon_results/screenshots')
+    # Other scans return their specific findings
+    mock_takeover.return_value = [{'template-id': 'test-takeover', 'host': 'active.example.com'}]
+    mock_js.return_value = [{'source': 'test_js', 'url': 'http://passive.example.com'}]
+    mock_tech.return_value = {'http://active.example.com': {'tech': 'nginx'}}
+    mock_cloud.return_value = [{'asset_type': 's3', 'bucket': 'test-bucket.s3.amazonaws.com'}]
+    mock_github.return_value = [{'url': 'https://github.com/test/test/blob/main/key.pem'}]
+
+    # 2. Execute the function
     domain = "example.com"
     assets = enumerate_subdomains_v2(domain)
-    assert assets is not None
-    assert os.path.exists(config['final_recon_file'])
-    with open(config['final_recon_file'], 'r') as f:
+
+    # 3. Assertions
+    # Check that the final asset list is correct
+    assert len(assets) == 3
+    assert {'type': 'subdomain', 'value': 'active.example.com'} in assets
+
+    # Check that the final JSON report was created and has the correct data
+    output_dir = config['recon_output_dir']
+    final_recon_file = os.path.join(output_dir, config['final_recon_file'])
+    assert os.path.exists(final_recon_file)
+
+    with open(final_recon_file, 'r') as f:
         data = json.load(f)
-    assert 'domain' in data
+
+    assert data['domain'] == domain
+    assert set(data['master_subdomains']) == resolved_domains
+    assert set(data['live_hosts']) == set(live_hosts)
+    assert len(data['subdomain_takeover_vulnerabilities']) == 1
+    assert data['subdomain_takeover_vulnerabilities'][0]['host'] == 'active.example.com'
+    assert len(data['technology_and_ports']) == 1
+    assert data['technology_and_ports']['http://active.example.com']['tech'] == 'nginx'
+    assert len(data['cloud_assets']) == 1
+    assert data['cloud_assets'][0]['asset_type'] == 's3'
+
+    # Check that the mocked functions were called correctly
+    mock_passive.assert_called_once_with(domain)
+    mock_active.assert_called_once_with(domain)
+    mock_permute.assert_called_once_with(domain, {'passive.example.com', 'active.example.com'})
+    mock_resolve.assert_called_once() # Called with the set of all raw domains
+    mock_visual.assert_called_once_with(resolved_domains)
+    mock_takeover.assert_called_once_with(live_hosts)
 
     # Teardown
-    if os.path.exists(config['recon_output_dir']):
-        import shutil
-        shutil.rmtree(config['recon_output_dir'])
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
 
 @patch('subprocess.run')
 def test_passive_engine_runs(mock_run):

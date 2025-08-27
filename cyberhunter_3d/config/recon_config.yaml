@@ -35,7 +35,7 @@ wordlists:
 
 # Other settings
 recon_output_dir: recon_results
-screenshot_dir: recon_results/screenshots
-nmap_output_dir: recon_results/nmap
-final_recon_file: recon_results/final_recon_data.json
-master_subdomains_file: recon_results/master_subdomains.txt
+screenshot_dir: screenshots
+nmap_output_dir: nmap
+final_recon_file: final_recon_data.json
+master_subdomains_file: master_subdomains.txt
