@@ -40,11 +40,23 @@ go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
 
 # Install amass
 echo "Installing amass..."
-go install -v github.com/OWASP/Amass/v3/cmd/amass@latest
+go install -v github.com/owasp-amass/amass/v3/cmd/amass@latest
 
 # Install assetfinder
 echo "Installing assetfinder..."
 go install -v github.com/tomnomnom/assetfinder@latest
+
+# Install httpx
+echo "Installing httpx..."
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+
+# Install subzy
+echo "Installing subzy..."
+go install -v github.com/PentestPad/subzy@latest
+
+# Install nuclei
+echo "Installing nuclei..."
+go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
 
 # Install dnsx
 echo "Installing dnsx..."
@@ -71,13 +83,7 @@ echo "Python and pip are installed."
 
 # Install Sublist3r
 echo "Installing Sublist3r..."
-if [ -d "Sublist3r" ]; then
-  echo "Sublist3r directory already exists. Skipping clone."
-else
-  git clone https://github.com/aboul3la/Sublist3r.git
-fi
-pip3 install -r Sublist3r/requirements.txt
-
+apt-get install -y sublist3r
 echo "Sublist3r installed successfully."
 
 echo "All reconnaissance tools have been installed."

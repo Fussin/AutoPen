@@ -38,6 +38,7 @@ def init_database():
         print("Database already exists.")
 
 # --- Routes ---
+from cyberhunter_3d.web.api import api_bp
 from flask import render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, current_user, login_required
 import pyotp
@@ -155,13 +156,15 @@ from flask_login import logout_user
 from cyberhunter_3d.web.models import Scan, Target
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
-from cyberhunter_3d.core.scan_manager import run_scan
+from cyberhunter_3d.core.scan_manager import run_discovery_phase
 
 # --- Background Task Executor ---
 # Using a simple thread pool for background tasks.
 # For a production app, a more robust solution like Celery would be better.
 executor = ThreadPoolExecutor(max_workers=2)
 
+# Register the API blueprint
+app.register_blueprint(api_bp)
 
 @app.route('/submit-targets', methods=['POST'])
 @login_required
@@ -208,7 +211,7 @@ def submit_targets():
     db.session.commit()
 
     # Trigger the scan in the background
-    executor.submit(run_scan, new_scan.id, app)
+    executor.submit(run_discovery_phase, new_scan.id, app)
 
     flash(f'{len(targets)} targets have been queued for scanning.', 'success')
     return redirect(url_for('dashboard'))
