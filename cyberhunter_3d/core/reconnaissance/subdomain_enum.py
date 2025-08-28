@@ -19,14 +19,18 @@ from .subdomain_takeover import run_takeover_scan
 from .analytics_correlation import correlate_tech_stack
 from .asn_lookup import get_asn_for_ips
 from .utils import resolve_subdomains_to_ips
+from .ai.noise_filter import filter_false_positives
+from .ai.ocr_tagger import generate_ocr_tags
 from .threat_intel import enrich_ips_with_shodan, enrich_ips_with_censys, enrich_ips_with_fofa, enrich_ips_with_greynoise
 from .passive_dns import get_passive_dns_for_domain
 from cyberhunter_3d.reporting.reporting import generate_html_report
 from flask import Flask
 from cyberhunter_3d.web.models import db, Scan, Asset
-
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
+def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
+    """
+    Runs the full V3 reconnaissance pipeline.
 
 def save_results_to_db(domain: str, results: Dict[str, any]):
     """
@@ -78,8 +82,11 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
 def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
     """
     Runs the full V2 reconnaissance pipeline and performs delta detection if a previous scan is provided.
+
     """
-    logger.info(f"Starting V2 reconnaissance for: {domain}")
+    logger.info(f"Starting V3 reconnaissance for: {domain}")
+
+    # TODO: Implement delta scan logic using previous_scan_dir
 
     # Load previous scan's subdomains for delta detection
     previous_subdomains = set()
@@ -130,6 +137,11 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     master_subdomains = resolve_and_validate(raw_subdomains, wildcard_ips, logger)
     logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
 
+    # AI-Powered Noise Reduction
+    logger.info("Applying AI noise reduction to filter false positives...")
+    master_subdomains = filter_false_positives(master_subdomains, logger)
+    logger.info(f"{len(master_subdomains)} subdomains remain after AI noise filtering.")
+
     # Create output directory if it doesn't exist
     output_dir = config['recon_output_dir']
     os.makedirs(output_dir, exist_ok=True)
@@ -141,9 +153,14 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
             f.write(f"{sub}\n")
 
     # Step 2: Live Host Detection and Visual Recon
-    live_hosts, screenshots = run_visual_recon(master_subdomains)
+    live_hosts, screenshots_dir = run_visual_recon(master_subdomains)
     logger.info(f"Found {len(live_hosts)} live hosts.")
-    logger.info(f"Screenshots saved in: {screenshots}")
+    logger.info(f"Screenshots saved in: {screenshots_dir}")
+
+    # AI-Powered Screenshot Analysis
+    logger.info("Starting AI-powered screenshot analysis (OCR)...")
+    ocr_results = generate_ocr_tags(screenshots_dir, logger)
+    logger.info(f"Generated OCR tags for {len(ocr_results)} screenshots.")
 
     # Step 3: Subdomain Takeover Scan
     logger.info("Starting subdomain takeover scan...")
@@ -203,6 +220,17 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
 
     # Define datasets
     datasets = {
+
+        "master_subdomains.json": master_subdomains,
+        "subdomain_ip_mapping.json": subdomain_ip_mapping,
+        "asn_details.json": asn_details,
+        "live_hosts.json": live_hosts,
+        "technology_and_ports.json": tech_results,
+        "takeover_vulnerabilities.json": takeover_findings,
+        "code_analysis_subdomains.json": code_analysis_subdomains,
+        "cloud_assets.json": cloud_assets,
+        "ocr_results.json": ocr_results,
+
         "subdomains_verified": list(master_subdomains),
         "subdomain_ip_mapping": subdomain_ip_mapping,
         "asn_details": asn_details,
@@ -219,6 +247,7 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
         "fofa_enrichment": fofa_data,
         "greynoise_enrichment": greynoise_data,
         "passive_dns": passive_dns_data,
+
     }
 
     if save_to_db:
@@ -231,7 +260,9 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
                     output_file_paths[filename] = path
 
     # Also include the path to the screenshots directory
-    output_file_paths['screenshots'] = screenshots
+    output_file_paths['screenshots'] = screenshots_dir
+
+    # TODO: Implement database saving logic if save_to_db is True
 
     # Delta Detection
     if previous_subdomains:
@@ -282,7 +313,7 @@ def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -
             '-r', resolvers_list,
             '--quiet'
         ]
-        result = subprocess.run(puredns_command, capture_output=True, text=True, check=True)
+        result = subprocess.run(puredns_command, capture_output=_True, text=True, check=True)
 
         for line in result.stdout.strip().split('\n'):
             if line:

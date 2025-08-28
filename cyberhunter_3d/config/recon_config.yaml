@@ -1,41 +1,41 @@
-# Configuration for the V2 Reconnaissance Phase
+# Configuration for the V3 Reconnaissance Phase
 
 # Paths to tools
-# If the tool is in the system's PATH, you can just use the tool name.
-# Otherwise, provide the full path.
+# Tools are expected to be in the system's PATH.
 tools:
-  gobuster: /usr/bin/gobuster
-  massdns: /usr/local/bin/massdns
-  puredns: /root/go/bin/puredns
-  dnsgen: /usr/local/bin/dnsgen
-  gotator: /root/go/bin/gotator
-  linkfinder: /usr/local/bin/linkfinder.py
-  gowitness: /root/go/bin/gowitness
-  aquatone: /usr/local/bin/aquatone
-  wappalyzer: /root/.local/bin/wappalyzer
-  naabu: /root/go/bin/naabu
-  nmap: /usr/bin/nmap
-  httpx: /root/go/bin/httpx
-  subfinder: /root/go/bin/subfinder
-  amass: /root/go/bin/amass
-  assetfinder: /root/go/bin/assetfinder
-  waybackurls: /root/go/bin/waybackurls
-  katana: /root/go/bin/katana
-  subzy: /root/go/bin/subzy
-  nuclei: /root/go/bin/nuclei
-  dnsx: /root/go/bin/dnsx
-  gospider: /root/go/bin/gospider
-  gau: /root/go/bin/gau
-  sublist3r: /usr/bin/sublist3r
-  gh_dork: gh-dork/gh-dork.py
-  s3scanner: /usr/bin/s3scanner
-  goblob: /usr/bin/goblob
+  gobuster: gobuster
+  massdns: massdns
+  puredns: puredns
+  dnsgen: dnsgen
+  gotator: gotator
+  linkfinder: linkfinder
+  gowitness: gowitness
+  aquatone: aquatone
+  wappalyzer: wappalyzer
+  naabu: naabu
+  nmap: nmap
+  httpx: httpx
+  subfinder: subfinder
+  amass: amass
+  assetfinder: assetfinder
+  waybackurls: waybackurls
+  katana: katana
+  subzy: subzy
+  nuclei: nuclei
+  dnsx: dnsx
+  gospider: gospider
+  gau: gau
+  sublist3r: sublist3r
+  gh_dork: gh-dork.py # Assumes gh-dork repo is cloned and script is in PATH
+  s3scanner: s3scanner
 
 # Paths to wordlists
+# These paths need to be updated for the Docker container.
+# I will handle this in the Dockerfile by placing the wordlists in a known location.
 wordlists:
-  dns_bruteforce: /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
-  resolvers: /usr/share/seclists/Discovery/DNS/resolvers.txt
-  github_dorks: gh-dork/dorks.txt
+  dns_bruteforce: /wordlists/subdomains-top1million-5000.txt
+  resolvers: /wordlists/resolvers.txt
+  github_dorks: /app/gh-dork/dorks.txt
 
 # API Keys
 api_keys:
