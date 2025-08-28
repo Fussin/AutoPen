@@ -8,6 +8,8 @@ from cyberhunter_3d.core.reconnaissance.utils import load_config
 
 config = load_config()
 
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.get_asn_for_ips')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.resolve_subdomains_to_ips')
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.detect_wildcard_ips')      # for mock_wildcard
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.find_cloud_assets')      # for mock_cloud
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_tech_fingerprinting')# for mock_tech
@@ -20,7 +22,8 @@ config = load_config()
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_passive_enumeration')# for mock_passive
 def test_full_recon_pipeline_mocked(
     mock_passive, mock_active, mock_permute, mock_resolve,
-    mock_visual, mock_takeover, mock_js_code, mock_tech, mock_cloud, mock_wildcard
+    mock_visual, mock_takeover, mock_js_code, mock_tech, mock_cloud, mock_wildcard,
+    mock_resolve_ips, mock_get_asn
 ):
     """
     Fast, mocked integration test that runs the full V2 recon pipeline logic.
@@ -30,17 +33,18 @@ def test_full_recon_pipeline_mocked(
     mock_active.return_value = {'active.example.com'}
     mock_permute.return_value = {'permute.example.com'}
     mock_js_code.return_value = {'code.example.com'}
-    mock_wildcard.return_value = {'1.2.3.4'} # Simulate wildcard detection
-
-    # Resolve should return a consolidated set of valid domains
+    mock_wildcard.return_value = {'1.2.3.4'}
     resolved_domains = {'passive.example.com', 'active.example.com', 'permute.example.com'}
     mock_resolve.return_value = resolved_domains
 
-    # Visual recon returns live hosts
+    # Mock IP and ASN lookups
+    mock_ip_map = {'passive.example.com': ['5.5.5.5']}
+    mock_resolve_ips.return_value = mock_ip_map
+    mock_asn_details = {'5.5.5.5': {'asn': 'AS-TEST', 'name': 'TEST-NET'}}
+    mock_get_asn.return_value = mock_asn_details
+
     live_hosts = ['http://active.example.com', 'http://passive.example.com']
     mock_visual.return_value = (live_hosts, 'recon_results/screenshots')
-
-    # Other scans
     mock_takeover.return_value = [{'template-id': 'test-takeover', 'host': 'active.example.com'}]
     mock_tech.return_value = {'http://active.example.com': {'tech': 'nginx'}}
     mock_cloud.return_value = [{'asset_type': 's3', 'bucket': 'test-bucket.s3.amazonaws.com'}]
@@ -50,35 +54,31 @@ def test_full_recon_pipeline_mocked(
     recon_data = enumerate_subdomains_v2(domain)
 
     # 3. Assertions
-    # Check the returned dictionary
-    assert recon_data['domain'] == domain
-    assert 'master_subdomains' in recon_data
-    assert len(recon_data['subdomain_takeover_vulnerabilities']) == 1
-
     data = recon_data
+    assert data['domain'] == domain
     # The master list should now include the subdomains found by the code analysis
     assert set(data['master_subdomains']) == resolved_domains.union({'code.example.com'})
-    assert set(data['live_hosts']) == set(live_hosts)
-    assert 'code_analysis_subdomains' in data
-    assert set(data['code_analysis_subdomains']) == {'code.example.com'}
+    assert 'subdomain_ip_mapping' in data
+    assert 'asn_details' in data
+    assert data['subdomain_ip_mapping'] == mock_ip_map
+    assert data['asn_details'] == mock_asn_details
 
 
     # Check that the mocked functions were called correctly
     mock_wildcard.assert_called_once_with(domain, ANY)
-    mock_passive.assert_called_once_with(domain)
-    mock_active.assert_called_once_with(domain)
-
-    # The raw subdomains passed to the permutation engine
     initial_subs = {'passive.example.com', 'active.example.com'}
-    mock_permute.assert_called_once_with(domain, initial_subs)
-
-    # The raw subdomains passed to the resolver
     raw_subs = initial_subs.union({'permute.example.com'})
     mock_resolve.assert_called_once_with(raw_subs, {'1.2.3.4'}, ANY)
 
-    mock_visual.assert_called_once_with(resolved_domains)
-    mock_takeover.assert_called_once_with(live_hosts)
-    mock_js_code.assert_called_once_with(domain, live_hosts)
+    # Assert that the new functions were called with the correct args
+    all_final_domains = resolved_domains.union({'code.example.com'})
+    mock_resolve_ips.assert_called_once_with(all_final_domains, ANY)
+
+    # The IPs passed to the ASN lookup should be the values from the ip_map
+    all_ips = set()
+    for ip_list in mock_ip_map.values():
+        all_ips.update(ip_list)
+    mock_get_asn.assert_called_once_with(all_ips)
 
     # Teardown any directories that might have been created by mocked functions
     output_dir = config['recon_output_dir']

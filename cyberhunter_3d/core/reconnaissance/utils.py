@@ -55,6 +55,7 @@ def run_command(command: List[str], domain: str, logger, wordlist: str = None) -
     return results
 
 import uuid
+import json
 
 def detect_wildcard_ips(domain: str, logger, num_tests: int = 5) -> Set[str]:
     """
@@ -107,3 +108,47 @@ def detect_wildcard_ips(domain: str, logger, num_tests: int = 5) -> Set[str]:
         logger.info(f"No wildcard DNS detected for {domain}.")
 
     return wildcard_ips
+
+from typing import Dict
+
+def resolve_subdomains_to_ips(subdomains: Set[str], logger) -> Dict[str, List[str]]:
+    """
+    Resolves a set of subdomains to their corresponding IP addresses.
+    """
+    if not subdomains:
+        return {}
+
+    logger.info(f"Resolving {len(subdomains)} subdomains to IP addresses...")
+    ip_mapping = {}
+
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as subs_file:
+        subs_filename = subs_file.name
+        for sub in subdomains:
+            subs_file.write(f"{sub}\n")
+
+    try:
+        config = load_config()
+        dnsx_path = config['tools']['dnsx']
+        command = [dnsx_path, '-l', subs_filename, '-a', '-json', '-silent']
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+
+        for line in result.stdout.strip().split('\n'):
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                host = data.get('host')
+                if host and 'a' in data:
+                    ip_mapping[host] = data['a']
+            except (json.JSONDecodeError, KeyError):
+                logger.warning(f"Could not parse dnsx A record output line: {line}")
+
+    except FileNotFoundError:
+        logger.error(f"Error: '{dnsx_path}' not found. Skipping subdomain to IP resolution.")
+    except Exception as e:
+        logger.error(f"An error occurred during subdomain to IP resolution with dnsx: {e}")
+    finally:
+        os.remove(subs_filename)
+
+    logger.info(f"Successfully resolved {len(ip_mapping)} subdomains to IPs.")
+    return ip_mapping

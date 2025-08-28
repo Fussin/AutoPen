@@ -16,6 +16,8 @@ from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
 from .subdomain_takeover import run_takeover_scan
+from .asn_lookup import get_asn_for_ips
+from .utils import resolve_subdomains_to_ips
 
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
@@ -102,11 +104,25 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     logger.info("Starting cloud asset identification...")
     cloud_assets = find_cloud_assets(master_subdomains)
 
-    # Step 7: Consolidate all information into the final JSON structure
+    # Step 7: IP and ASN Enrichment
+    logger.info("Starting IP and ASN enrichment...")
+    subdomain_ip_mapping = resolve_subdomains_to_ips(master_subdomains, logger)
+
+    # Collect all unique IPs from the mapping
+    all_ips = set()
+    for ip_list in subdomain_ip_mapping.values():
+        all_ips.update(ip_list)
+
+    asn_details = get_asn_for_ips(all_ips)
+    logger.info(f"Completed IP and ASN enrichment for {len(all_ips)} unique IPs.")
+
+    # Step 8: Consolidate all information into the final JSON structure
     logger.info("Consolidating all findings...")
     final_recon_data = {
         'domain': domain,
         'master_subdomains': list(master_subdomains),
+        'subdomain_ip_mapping': subdomain_ip_mapping,
+        'asn_details': asn_details,
         'live_hosts': list(live_hosts),
         'screenshots': screenshots,
         'technology_and_ports': tech_results,
