@@ -9,9 +9,10 @@ from .utils import load_config
 config = load_config()
 logger = setup_logger('VisualReconEngine', 'visual.log')
 
-def run_visual_recon(subdomains: Set[str]) -> Tuple[Set[str], List[str]]:
+def run_visual_recon(subdomains: Set[str]) -> Tuple[Set[str], str]:
     """
     Performs live host detection and visual reconnaissance.
+    Returns a tuple of live hosts and the main screenshot directory path.
     """
     logger.info(f"Starting visual reconnaissance for {len(subdomains)} subdomains...")
 
@@ -43,12 +44,14 @@ def run_visual_recon(subdomains: Set[str]) -> Tuple[Set[str], List[str]]:
 
     if not live_hosts:
         logger.warning("No live hosts found for visual recon.")
-        return set(), []
+        return set(), ""
 
     logger.info(f"Found {len(live_hosts)} live hosts. Now taking screenshots...")
 
     # Step 2: Take screenshots with gowitness and aquatone
-    screenshots = []
+    screenshot_dir = config['screenshot_dir']
+    os.makedirs(screenshot_dir, exist_ok=True)
+
     with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as live_hosts_file:
         live_hosts_filename = live_hosts_file.name
         for host in live_hosts:
@@ -56,24 +59,26 @@ def run_visual_recon(subdomains: Set[str]) -> Tuple[Set[str], List[str]]:
 
     try:
         # gowitness
-        gowitness_command = [config['tools']['gowitness'], 'file', '-f', live_hosts_filename, '-P', config['screenshot_dir'] + '/gowitness']
-        subprocess.run(gowitness_command)
+        gowitness_dir = os.path.join(screenshot_dir, 'gowitness')
+        os.makedirs(gowitness_dir, exist_ok=True)
+        gowitness_command = [config['tools']['gowitness'], 'file', '-f', live_hosts_filename, '-P', gowitness_dir]
+        subprocess.run(gowitness_command, check=True, capture_output=True, text=True)
 
         # aquatone
-        aquatone_command = [config['tools']['aquatone'], '-out', config['screenshot_dir'] + '/aquatone']
+        aquatone_dir = os.path.join(screenshot_dir, 'aquatone')
+        os.makedirs(aquatone_dir, exist_ok=True)
+        aquatone_command = [config['tools']['aquatone'], '-out', aquatone_dir]
         with open(live_hosts_filename, 'r') as f_in:
-            subprocess.run(aquatone_command, stdin=f_in)
-
-        # For now, just return the paths to the screenshot directories
-        screenshots.append('screenshots/gowitness')
-        screenshots.append('screenshots/aquatone')
+            subprocess.run(aquatone_command, stdin=f_in, check=True, capture_output=True, text=True)
 
     except FileNotFoundError as e:
         tool_name = str(e).split("'")[1]
         logger.error(f"Error: Tool '{tool_name}' not found.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error running visual recon tool: {e}\nOutput: {e.stderr}")
     except Exception as e:
         logger.error(f"An error occurred during visual recon: {e}")
     finally:
         os.remove(live_hosts_filename)
 
-    return live_hosts, screenshots
+    return live_hosts, screenshot_dir

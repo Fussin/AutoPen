@@ -18,6 +18,8 @@ from .cloud_asset_enum import find_cloud_assets
 from .subdomain_takeover import run_takeover_scan
 from .asn_lookup import get_asn_for_ips
 from .utils import resolve_subdomains_to_ips
+from .ai.noise_filter import filter_false_positives
+from .ai.ocr_tagger import generate_ocr_tags
 
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
@@ -68,6 +70,11 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     master_subdomains = resolve_and_validate(raw_subdomains, wildcard_ips, logger)
     logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
 
+    # AI-Powered Noise Reduction
+    logger.info("Applying AI noise reduction to filter false positives...")
+    master_subdomains = filter_false_positives(master_subdomains, logger)
+    logger.info(f"{len(master_subdomains)} subdomains remain after AI noise filtering.")
+
     # Create output directory if it doesn't exist
     output_dir = config['recon_output_dir']
     os.makedirs(output_dir, exist_ok=True)
@@ -79,9 +86,14 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
             f.write(f"{sub}\n")
 
     # Step 2: Live Host Detection and Visual Recon
-    live_hosts, screenshots = run_visual_recon(master_subdomains)
+    live_hosts, screenshots_dir = run_visual_recon(master_subdomains)
     logger.info(f"Found {len(live_hosts)} live hosts.")
-    logger.info(f"Screenshots saved in: {screenshots}")
+    logger.info(f"Screenshots saved in: {screenshots_dir}")
+
+    # AI-Powered Screenshot Analysis
+    logger.info("Starting AI-powered screenshot analysis (OCR)...")
+    ocr_results = generate_ocr_tags(screenshots_dir, logger)
+    logger.info(f"Generated OCR tags for {len(ocr_results)} screenshots.")
 
     # Step 3: Subdomain Takeover Scan
     logger.info("Starting subdomain takeover scan...")
@@ -130,6 +142,7 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
         "takeover_vulnerabilities.json": takeover_findings,
         "code_analysis_subdomains.json": code_analysis_subdomains,
         "cloud_assets.json": cloud_assets,
+        "ocr_results.json": ocr_results,
     }
 
     for filename, data in datasets.items():
@@ -139,7 +152,7 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
                 output_file_paths[filename.split('.')[0]] = path
 
     # Also include the path to the screenshots directory
-    output_file_paths['screenshots'] = screenshots
+    output_file_paths['screenshots'] = screenshots_dir
 
     logger.info("Reconnaissance pipeline complete. Output files generated.")
     return output_file_paths

@@ -7,6 +7,7 @@ from typing import Set, List
 
 from cyberhunter_3d.utils.logger import setup_logger
 from .utils import load_config, run_command
+from .ai.wordlist_generator import generate_ai_wordlist
 
 config = load_config()
 logger = setup_logger('PermutationEngine', 'permutation.log')
@@ -25,6 +26,12 @@ def generate_custom_wordlist(subdomains: Set[str]) -> str:
             for word in subdomain_part.replace('-', '.').split('.'):
                 if word and not word.isnumeric():
                     custom_words.add(word)
+
+    # Add AI-generated words to the custom wordlist
+    logger.info("Generating AI-based wordlist for permutations...")
+    ai_words = generate_ai_wordlist(custom_words)
+    logger.info(f"Generated {len(ai_words)} additional keywords from AI wordlist generator.")
+    custom_words.update(ai_words)
 
     with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as tmp_file:
         wordlist_filename = tmp_file.name
