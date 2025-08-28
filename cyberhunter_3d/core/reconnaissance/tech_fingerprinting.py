@@ -22,13 +22,33 @@ def run_tech_fingerprinting(live_hosts: Set[str]) -> Dict[str, Dict]:
     tech_results = {}
 
     # Step 1: Technology fingerprinting with Wappalyzer
-    # Wappalyzer can be used as a library, which is better than shelling out.
-    # For simplicity in this script, I'll use the command line, but a real implementation
-    # would use the Python library.
-    # Step 1: Technology fingerprinting with Wappalyzer is tricky because it's installed with pipx.
-    # For now, we'll skip the wappalyzer part and focus on port scanning.
+    logger.info("Running Wappalyzer for technology fingerprinting...")
+    for host in live_hosts:
+        try:
+            # Ensure the host has a scheme for wappalyzer
+            target_url = host if host.startswith(('http://', 'https://')) else f"http://{host}"
+
+            wappalyzer_command = [config['tools']['wappalyzer'], target_url, '--pretty']
+            result = subprocess.run(wappalyzer_command, capture_output=True, text=True, check=True)
+
+            # The output of wappalyzer --pretty is a JSON object
+            wappalyzer_data = json.loads(result.stdout)
+
+            if host not in tech_results:
+                tech_results[host] = {}
+
+            tech_results[host]['technologies'] = wappalyzer_data.get('technologies', [])
+            logger.info(f"Found {len(tech_results[host]['technologies'])} technologies on {host}")
+
+        except FileNotFoundError:
+            logger.error(f"Error: '{config['tools']['wappalyzer']}' not found. Skipping technology fingerprinting for {host}.")
+            continue
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+            logger.error(f"Wappalyzer failed for {host}: {e}")
+            continue
 
     # Step 2: Port scanning with Naabu and Nmap
+    logger.info("Running Naabu for port scanning...")
     with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as live_hosts_file:
         live_hosts_filename = live_hosts_file.name
         for host in live_hosts:
