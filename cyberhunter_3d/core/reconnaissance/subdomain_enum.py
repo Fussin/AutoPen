@@ -19,7 +19,8 @@ from .subdomain_takeover import run_takeover_scan
 from .analytics_correlation import correlate_tech_stack
 from .asn_lookup import get_asn_for_ips
 from .utils import resolve_subdomains_to_ips
-from .threat_intel import enrich_ips_with_shodan, enrich_ips_with_censys
+from .threat_intel import enrich_ips_with_shodan, enrich_ips_with_censys, enrich_ips_with_fofa, enrich_ips_with_greynoise
+from .passive_dns import get_passive_dns_for_domain
 from cyberhunter_3d.reporting.reporting import generate_html_report
 from flask import Flask
 from cyberhunter_3d.web.models import db, Scan, Asset
@@ -187,6 +188,9 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     logger.info("Starting Threat Intelligence enrichment...")
     shodan_data = enrich_ips_with_shodan(all_ips)
     censys_data = enrich_ips_with_censys(all_ips)
+    fofa_data = enrich_ips_with_fofa(all_ips)
+    greynoise_data = enrich_ips_with_greynoise(all_ips)
+    passive_dns_data = get_passive_dns_for_domain(domain)
     logger.info("Threat Intelligence enrichment complete.")
 
     # Step 8: Save all datasets to structured files
@@ -212,6 +216,9 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
         "tech_clusters": tech_clusters,
         "shodan_enrichment": shodan_data,
         "censys_enrichment": censys_data,
+        "fofa_enrichment": fofa_data,
+        "greynoise_enrichment": greynoise_data,
+        "passive_dns": passive_dns_data,
     }
 
     if save_to_db:
