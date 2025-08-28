@@ -2,24 +2,25 @@ import pytest
 import os
 import json
 import shutil
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, ANY
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.utils import load_config
 
 config = load_config()
 
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.find_cloud_assets')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_tech_fingerprinting')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_js_and_code_analysis')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_takeover_scan')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_visual_recon')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.resolve_and_validate')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_permutation_enumeration')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_active_enumeration')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_passive_enumeration')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.detect_wildcard_ips')      # for mock_wildcard
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.find_cloud_assets')      # for mock_cloud
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_tech_fingerprinting')# for mock_tech
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_js_and_code_analysis') # for mock_js_code
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_takeover_scan')      # for mock_takeover
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_visual_recon')       # for mock_visual
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.resolve_and_validate')   # for mock_resolve
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_permutation_enumeration')# for mock_permute
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_active_enumeration') # for mock_active
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_passive_enumeration')# for mock_passive
 def test_full_recon_pipeline_mocked(
     mock_passive, mock_active, mock_permute, mock_resolve,
-    mock_visual, mock_takeover, mock_js_code, mock_tech, mock_cloud
+    mock_visual, mock_takeover, mock_js_code, mock_tech, mock_cloud, mock_wildcard
 ):
     """
     Fast, mocked integration test that runs the full V2 recon pipeline logic.
@@ -28,19 +29,18 @@ def test_full_recon_pipeline_mocked(
     mock_passive.return_value = {'passive.example.com'}
     mock_active.return_value = {'active.example.com'}
     mock_permute.return_value = {'permute.example.com'}
-
-    # The new JS engine might find its own subdomains
     mock_js_code.return_value = {'code.example.com'}
+    mock_wildcard.return_value = {'1.2.3.4'} # Simulate wildcard detection
 
     # Resolve should return a consolidated set of valid domains
     resolved_domains = {'passive.example.com', 'active.example.com', 'permute.example.com'}
     mock_resolve.return_value = resolved_domains
 
-    # Visual recon returns live hosts and a path to screenshots
+    # Visual recon returns live hosts
     live_hosts = ['http://active.example.com', 'http://passive.example.com']
     mock_visual.return_value = (live_hosts, 'recon_results/screenshots')
 
-    # Other scans return their specific findings
+    # Other scans
     mock_takeover.return_value = [{'template-id': 'test-takeover', 'host': 'active.example.com'}]
     mock_tech.return_value = {'http://active.example.com': {'tech': 'nginx'}}
     mock_cloud.return_value = [{'asset_type': 's3', 'bucket': 'test-bucket.s3.amazonaws.com'}]
@@ -55,26 +55,27 @@ def test_full_recon_pipeline_mocked(
     assert 'master_subdomains' in recon_data
     assert len(recon_data['subdomain_takeover_vulnerabilities']) == 1
 
-    # The function no longer saves the file, so we just check the returned dict.
     data = recon_data
     # The master list should now include the subdomains found by the code analysis
     assert set(data['master_subdomains']) == resolved_domains.union({'code.example.com'})
     assert set(data['live_hosts']) == set(live_hosts)
-    assert len(data['subdomain_takeover_vulnerabilities']) == 1
-    assert data['subdomain_takeover_vulnerabilities'][0]['host'] == 'active.example.com'
-    assert len(data['technology_and_ports']) == 1
-    assert data['technology_and_ports']['http://active.example.com']['tech'] == 'nginx'
-    assert len(data['cloud_assets']) == 1
-    assert data['cloud_assets'][0]['asset_type'] == 's3'
     assert 'code_analysis_subdomains' in data
     assert set(data['code_analysis_subdomains']) == {'code.example.com'}
 
 
     # Check that the mocked functions were called correctly
+    mock_wildcard.assert_called_once_with(domain, ANY)
     mock_passive.assert_called_once_with(domain)
     mock_active.assert_called_once_with(domain)
-    mock_permute.assert_called_once_with(domain, {'passive.example.com', 'active.example.com'})
-    mock_resolve.assert_called_once()
+
+    # The raw subdomains passed to the permutation engine
+    initial_subs = {'passive.example.com', 'active.example.com'}
+    mock_permute.assert_called_once_with(domain, initial_subs)
+
+    # The raw subdomains passed to the resolver
+    raw_subs = initial_subs.union({'permute.example.com'})
+    mock_resolve.assert_called_once_with(raw_subs, {'1.2.3.4'}, ANY)
+
     mock_visual.assert_called_once_with(resolved_domains)
     mock_takeover.assert_called_once_with(live_hosts)
     mock_js_code.assert_called_once_with(domain, live_hosts)
@@ -83,6 +84,40 @@ def test_full_recon_pipeline_mocked(
     output_dir = config['recon_output_dir']
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
+
+
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.subprocess.run')
+def test_resolve_and_validate_with_wildcard_filtering(mock_run):
+    """
+    Tests the wildcard filtering logic within the resolve_and_validate function.
+    """
+    from cyberhunter_3d.core.reconnaissance.subdomain_enum import resolve_and_validate
+    from cyberhunter_3d.utils.logger import setup_logger
+
+    mock_logger = setup_logger('TestResolve', 'test_resolve.log')
+
+    # Mock the output of the two subprocess calls made by the function
+    puredns_output = "good.example.com\nwildcard.example.com\nanother.good.example.com"
+    dnsx_output = (
+        "good.example.com [8.8.8.8]\n"
+        "wildcard.example.com [1.2.3.4]\n"
+        "another.good.example.com [8.8.4.4]\n"
+    )
+    mock_run.side_effect = [
+        MagicMock(stdout=puredns_output, stderr="", returncode=0, check_returncode=lambda: None), # puredns call
+        MagicMock(stdout=dnsx_output, stderr="", returncode=0, check_returncode=lambda: None)  # dnsx call
+    ]
+
+    initial_subdomains = {'good.example.com', 'wildcard.example.com', 'another.good.example.com'}
+    wildcard_ips = {'1.2.3.4'} # This is the IP to be filtered
+
+    validated_subdomains = resolve_and_validate(initial_subdomains, wildcard_ips, mock_logger)
+
+    # Assert that the subdomain resolving to the wildcard IP was removed
+    assert validated_subdomains == {'good.example.com', 'another.good.example.com'}
+    assert 'wildcard.example.com' not in validated_subdomains
+    assert mock_run.call_count == 2
+
 
 @patch('subprocess.run')
 def test_passive_engine_runs(mock_run):

@@ -5,8 +5,9 @@ from typing import Set, List, Dict
 import subprocess
 import tempfile
 import os
+import re
 from cyberhunter_3d.utils.logger import setup_logger
-from .utils import load_config
+from .utils import load_config, detect_wildcard_ips
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
@@ -24,6 +25,10 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     Runs the full V2 reconnaissance pipeline.
     """
     logger.info(f"Starting V2 reconnaissance for: {domain}")
+
+    # Step 0: Wildcard Detection
+    # Run this first to avoid polluting results from active and permutation engines.
+    wildcard_ips = detect_wildcard_ips(domain, logger)
 
     raw_subdomains = set()
     initial_subdomains = set()
@@ -58,7 +63,7 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
 
     # Step 1: DNS Resolution and Validation
     logger.info("Starting DNS resolution and validation...")
-    master_subdomains = resolve_and_validate(raw_subdomains)
+    master_subdomains = resolve_and_validate(raw_subdomains, wildcard_ips, logger)
     logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
 
     # Create output directory if it doesn't exist
@@ -115,9 +120,9 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     return final_recon_data
 
 
-def resolve_and_validate(subdomains: Set[str]) -> Set[str]:
+def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -> Set[str]:
     """
-    Resolves a set of subdomains and filters out non-resolving ones.
+    Resolves a set of subdomains and filters out non-resolving and wildcard ones.
     """
     if not subdomains:
         return set()
@@ -144,10 +149,54 @@ def resolve_and_validate(subdomains: Set[str]) -> Set[str]:
                 resolved_subdomains.add(line)
 
     except FileNotFoundError:
-        print("Error: 'puredns' not found. Please ensure it is installed and in your PATH.")
+        logger.error("Error: 'puredns' not found. Please ensure it is installed and in your PATH.")
     except subprocess.CalledProcessError as e:
-        print(f"Error running puredns for resolution: {e}\nOutput: {e.stderr}")
+        logger.error(f"Error running puredns for resolution: {e}\nOutput: {e.stderr}")
     finally:
         os.remove(input_filename)
 
-    return resolved_subdomains
+    if not wildcard_ips or not resolved_subdomains:
+        return resolved_subdomains
+
+    # Step 2: Filter out any subdomains that resolve to the wildcard IPs
+    logger.info(f"Filtering {len(resolved_subdomains)} resolved subdomains against {len(wildcard_ips)} wildcard IPs...")
+
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as subs_to_filter_file:
+        subs_to_filter_filename = subs_to_filter_file.name
+        for sub in resolved_subdomains:
+            subs_to_filter_file.write(f"{sub}\n")
+
+    final_subdomains = set()
+    try:
+        dnsx_path = config['tools']['dnsx']
+        # Get A records for all resolved subdomains
+        dnsx_command = [dnsx_path, '-l', subs_to_filter_filename, '-a', '-resp', '-silent']
+        result = subprocess.run(dnsx_command, capture_output=True, text=True, check=True)
+
+        ip_regex = re.compile(r'\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]')
+        for line in result.stdout.strip().split('\n'):
+            if not line:
+                continue
+
+            # Line is like "sub.example.com [1.2.3.4]"
+            subdomain = line.split()[0]
+            ip_match = ip_regex.search(line)
+
+            if ip_match:
+                ip = ip_match.group(1)
+                if ip not in wildcard_ips:
+                    final_subdomains.add(subdomain)
+
+        filtered_count = len(resolved_subdomains) - len(final_subdomains)
+        logger.info(f"Filtered out {filtered_count} wildcard subdomains.")
+
+    except FileNotFoundError:
+        logger.error(f"Error: '{dnsx_path}' not found. Skipping wildcard filtering.")
+        return resolved_subdomains # Return unfiltered list if dnsx is missing
+    except Exception as e:
+        logger.error(f"An error occurred during wildcard filtering with dnsx: {e}")
+        return resolved_subdomains # Return unfiltered list on error
+    finally:
+        os.remove(subs_to_filter_filename)
+
+    return final_subdomains
