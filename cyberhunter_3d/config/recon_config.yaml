@@ -41,6 +41,9 @@ wordlists:
 api_keys:
   shodan: null
   censys_personal_access_token: null
+  fofa_api_key: null
+  greynoise_api_key: null
+  securitytrails_api_key: null
 
 # Cloud Provider Credentials
 cloud:

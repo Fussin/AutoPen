@@ -10,3 +10,5 @@ pytest
 playwright
 shodan
 censys-platform
+fofa-py
+greynoise
