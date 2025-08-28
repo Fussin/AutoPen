@@ -3,10 +3,11 @@ import tempfile
 import os
 from typing import Set, List, Tuple
 
-from .utils import load_config, get_logger
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config
 
 config = load_config()
-logger = get_logger(__name__)
+logger = setup_logger('VisualReconEngine', 'visual.log')
 
 def run_visual_recon(subdomains: Set[str]) -> Tuple[Set[str], List[str]]:
     """

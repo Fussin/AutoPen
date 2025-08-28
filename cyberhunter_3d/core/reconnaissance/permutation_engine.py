@@ -5,10 +5,11 @@ import re
 import concurrent.futures
 from typing import Set, List
 
-from .utils import load_config, get_logger, run_command
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config, run_command
 
 config = load_config()
-logger = get_logger(__name__)
+logger = setup_logger('PermutationEngine', 'permutation.log')
 
 def generate_custom_wordlist(subdomains: Set[str]) -> str:
     """
@@ -70,7 +71,7 @@ def run_permutation_enumeration(domain: str, known_subdomains: Set[str]) -> Set[
 
     all_subdomains = set()
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(commands)) as executor:
-        future_to_command = {executor.submit(run_command, cmd, domain, combined_wordlist_filename): cmd for cmd in commands}
+        future_to_command = {executor.submit(run_command, cmd, domain, logger, combined_wordlist_filename): cmd for cmd in commands}
         for future in concurrent.futures.as_completed(future_to_command):
             command = future_to_command[future]
             try:

@@ -5,7 +5,8 @@ from typing import Set, List, Dict
 import subprocess
 import tempfile
 import os
-from .utils import get_logger, load_config
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
@@ -15,7 +16,7 @@ from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
 from .subdomain_takeover import run_takeover_scan
 
-logger = get_logger(__name__)
+logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
 
 def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:

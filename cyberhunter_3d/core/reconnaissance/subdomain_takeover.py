@@ -3,9 +3,10 @@ import tempfile
 import os
 import json
 from typing import List, Dict
-from .utils import get_logger, load_config
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config
 
-logger = get_logger(__name__)
+logger = setup_logger('TakeoverEngine', 'takeover.log')
 config = load_config()
 
 def run_takeover_scan(subdomains: List[str]) -> List[Dict]:

@@ -2,10 +2,11 @@ import subprocess
 import tempfile
 import os
 from typing import Set, List, Dict
-from .utils import load_config, get_logger
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config
 
 config = load_config()
-logger = get_logger(__name__)
+logger = setup_logger('CloudAssetEngine', 'cloud_asset.log')
 
 def find_cloud_assets(subdomains: Set[str]) -> List[Dict[str, str]]:
     """

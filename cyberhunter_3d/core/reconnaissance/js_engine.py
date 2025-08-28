@@ -6,10 +6,11 @@ import concurrent.futures
 from typing import Set, List
 import shutil
 
-from .utils import load_config, get_logger
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config
 
 config = load_config()
-logger = get_logger(__name__)
+logger = setup_logger('JSEngine', 'js_code.log')
 
 def extract_subdomains_from_text(text: str, domain: str) -> Set[str]:
     """

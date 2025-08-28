@@ -4,10 +4,11 @@ import os
 import json
 from typing import Set, List, Dict
 
-from .utils import load_config, get_logger
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config
 
 config = load_config()
-logger = get_logger(__name__)
+logger = setup_logger('TechEngine', 'tech.log')
 
 def run_tech_fingerprinting(live_hosts: Set[str]) -> Dict[str, Dict]:
     """

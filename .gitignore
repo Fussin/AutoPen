@@ -133,3 +133,4 @@ cyberhunter.db
 subdomains_alive.txt
 subdomains_dead.txt
 *.log
+logs/
