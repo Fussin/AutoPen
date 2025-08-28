@@ -53,3 +53,57 @@ def run_command(command: List[str], domain: str, logger, wordlist: str = None) -
         os.remove(output_filename)
 
     return results
+
+import uuid
+
+def detect_wildcard_ips(domain: str, logger, num_tests: int = 5) -> Set[str]:
+    """
+    Detects if a domain has a wildcard DNS record by resolving random subdomains.
+    Returns a set of IP addresses that the wildcard record resolves to.
+    """
+    logger.info(f"Starting wildcard detection for {domain}...")
+    wildcard_ips = set()
+
+    config = load_config()
+    dnsx_path = config['tools'].get('dnsx')
+    if not dnsx_path:
+        logger.error("dnsx tool not configured. Skipping wildcard detection.")
+        return wildcard_ips
+
+    # Generate a list of random, non-existent subdomains
+    random_subdomains = [
+        f"{uuid.uuid4().hex[:12]}.{domain}" for _ in range(num_tests)
+    ]
+
+    try:
+        # Use dnsx to resolve these domains
+        # The '-resp' flag includes the IP in the output, e.g., "random.domain.com [1.2.3.4]"
+        process = subprocess.run(
+            [dnsx_path, '-resp', '-silent'],
+            input="\n".join(random_subdomains),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        # Regex to extract the IP address from the output
+        ip_regex = re.compile(r'\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]')
+
+        for line in process.stdout.strip().split('\n'):
+            if not line:
+                continue
+            match = ip_regex.search(line)
+            if match:
+                wildcard_ips.add(match.group(1))
+
+    except FileNotFoundError:
+        logger.error(f"Error: '{dnsx_path}' not found. Skipping wildcard detection.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"dnsx failed during wildcard check: {e}")
+
+    if wildcard_ips:
+        logger.warning(f"Wildcard DNS detected for {domain}. IPs: {wildcard_ips}")
+    else:
+        logger.info(f"No wildcard DNS detected for {domain}.")
+
+    return wildcard_ips
