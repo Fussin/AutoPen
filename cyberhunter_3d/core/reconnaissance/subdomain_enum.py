@@ -7,7 +7,7 @@ import tempfile
 import os
 import re
 from cyberhunter_3d.utils.logger import setup_logger
-from .utils import load_config, detect_wildcard_ips
+from .utils import load_config, detect_wildcard_ips, save_to_json
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
@@ -116,24 +116,33 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     asn_details = get_asn_for_ips(all_ips)
     logger.info(f"Completed IP and ASN enrichment for {len(all_ips)} unique IPs.")
 
-    # Step 8: Consolidate all information into the final JSON structure
-    logger.info("Consolidating all findings...")
-    final_recon_data = {
-        'domain': domain,
-        'master_subdomains': list(master_subdomains),
-        'subdomain_ip_mapping': subdomain_ip_mapping,
-        'asn_details': asn_details,
-        'live_hosts': list(live_hosts),
-        'screenshots': screenshots,
-        'technology_and_ports': tech_results,
-        'subdomain_takeover_vulnerabilities': takeover_findings,
-        'code_analysis_subdomains': list(code_analysis_subdomains),
-        'cloud_assets': cloud_assets,
+    # Step 8: Save all datasets to structured files
+    logger.info("Saving all datasets to structured output files...")
+    output_file_paths = {}
+
+    # Define datasets to be saved
+    datasets = {
+        "master_subdomains.json": master_subdomains,
+        "subdomain_ip_mapping.json": subdomain_ip_mapping,
+        "asn_details.json": asn_details,
+        "live_hosts.json": live_hosts,
+        "technology_and_ports.json": tech_results,
+        "takeover_vulnerabilities.json": takeover_findings,
+        "code_analysis_subdomains.json": code_analysis_subdomains,
+        "cloud_assets.json": cloud_assets,
     }
 
-    # The caller is now responsible for saving the file if needed.
-    # We just return the consolidated data.
-    return final_recon_data
+    for filename, data in datasets.items():
+        if data: # Only save if there is data
+            path = save_to_json(data, filename, logger)
+            if path:
+                output_file_paths[filename.split('.')[0]] = path
+
+    # Also include the path to the screenshots directory
+    output_file_paths['screenshots'] = screenshots
+
+    logger.info("Reconnaissance pipeline complete. Output files generated.")
+    return output_file_paths
 
 
 def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -> Set[str]:

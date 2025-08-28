@@ -152,3 +152,28 @@ def resolve_subdomains_to_ips(subdomains: Set[str], logger) -> Dict[str, List[st
 
     logger.info(f"Successfully resolved {len(ip_mapping)} subdomains to IPs.")
     return ip_mapping
+
+def save_to_json(data: any, filename: str, logger) -> str:
+    """
+    Saves a Python object to a JSON file in the configured output directory.
+    """
+    config = load_config()
+    output_dir = config.get('recon_output_dir', 'recon_results')
+    os.makedirs(output_dir, exist_ok=True)
+
+    file_path = os.path.join(output_dir, filename)
+
+    try:
+        with open(file_path, 'w') as f:
+            # Use a custom default handler for sets
+            def set_default(obj):
+                if isinstance(obj, set):
+                    return list(obj)
+                raise TypeError
+
+            json.dump(data, f, indent=4, default=set_default)
+        logger.info(f"Successfully saved data to {file_path}")
+        return file_path
+    except Exception as e:
+        logger.error(f"Failed to save data to {file_path}: {e}")
+        return None
