@@ -13,6 +13,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="A futuristic bug bounty automation platform.")
     parser.add_argument("-d", "--domain", required=True, help="The target domain to perform reconnaissance on.")
+    parser.add_argument("--save-to-db", action="store_true", help="Save the scan results to the database.")
+    parser.add_argument("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
@@ -24,13 +26,19 @@ def main():
     print(f"Starting V2 reconnaissance pipeline for {target_domain}...")
 
     # Run the full V2 enumeration pipeline
-    enumerate_subdomains_v2(target_domain)
+    output_files = enumerate_subdomains_v2(
+        target_domain,
+        previous_scan_dir=args.previous_scan_dir,
+        save_to_db=args.save_to_db
+    )
 
-    config = load_config()
-    output_file = os.path.join(config['recon_output_dir'], config['final_recon_file'])
-
-    print(f"\nReconnaissance complete for {target_domain}.")
-    print(f"Detailed results have been saved to {output_file}")
+    if not args.save_to_db:
+        print("\nReconnaissance complete.")
+        print("Output files generated:")
+        for name, path in output_files.items():
+            print(f"- {name.replace('_', ' ').title()}: {path}")
+    else:
+        print("\nReconnaissance complete and results saved to the database.")
 
 if __name__ == "__main__":
     main()

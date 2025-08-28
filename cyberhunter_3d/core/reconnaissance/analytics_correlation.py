@@ -91,6 +91,52 @@ def find_related_domains_by_analytics(domains: List[str]) -> Set[str]:
     print(f"Analytics expansion finished. Found {len(final_domains)} new related domains.")
     return final_domains
 
+def correlate_tech_stack(tech_results: List[Dict[str, any]], similarity_threshold: float = 0.8) -> Dict[str, List[str]]:
+    """
+    Correlates technology stacks across subdomains to identify clusters of similar infrastructure.
+
+    :param tech_results: A list of dictionaries, where each dictionary represents the tech stack of a host.
+    :param similarity_threshold: The Jaccard similarity score required to consider two stacks similar.
+    :return: A dictionary where keys are cluster IDs and values are lists of hosts in that cluster.
+    """
+    if not tech_results:
+        return {}
+
+    # Convert tech results into a more usable format: {host: {tech1, tech2, ...}}
+    host_tech_sets = {item['host']: set(item['tech']) for item in tech_results if 'tech' in item}
+
+    clusters = []
+    hosts = list(host_tech_sets.keys())
+
+    for i in range(len(hosts)):
+        host1 = hosts[i]
+        if any(host1 in cluster for cluster in clusters):
+            continue  # Already clustered
+
+        new_cluster = {host1}
+        for j in range(i + 1, len(hosts)):
+            host2 = hosts[j]
+            if any(host2 in cluster for cluster in clusters):
+                continue
+
+            tech1 = host_tech_sets[host1]
+            tech2 = host_tech_sets[host2]
+
+            # Jaccard similarity
+            intersection = len(tech1.intersection(tech2))
+            union = len(tech1.union(tech2))
+            similarity = intersection / union if union > 0 else 0
+
+            if similarity >= similarity_threshold:
+                new_cluster.add(host2)
+
+        if len(new_cluster) > 1:
+            clusters.append(list(new_cluster))
+
+    # Format for JSON output
+    output_clusters = {f"cluster_{i+1}": cluster for i, cluster in enumerate(clusters)}
+    return output_clusters
+
 if __name__ == '__main__':
     # For direct testing of this module
     test_domains = ["example.com"] # Replace with a domain known to have GA IDs for live testing

@@ -7,3 +7,6 @@ qrcode[pil]
 requests
 PyYAML
 pytest
+playwright
+shodan
+censys-platform
