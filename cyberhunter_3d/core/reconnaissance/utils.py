@@ -35,12 +35,13 @@ def run_command(command: List[str], domain: str, wordlist: str = None) -> Set[st
         # Format the command with the domain and output file path
         formatted_command = [part.format(domain=domain, output_file=output_filename, wordlist=wordlist) for part in command]
 
-        # assetfinder is a special case that only prints to stdout
-        if 'assetfinder' in formatted_command[0]:
+        # If the command doesn't use a placeholder for an output file,
+        # we assume it prints to stdout and redirect it to our temp file.
+        if '{output_file}' not in ' '.join(command):
             with open(output_filename, 'w') as f_out:
-                 subprocess.run(formatted_command, stdout=f_out, stderr=subprocess.DEVNULL)
+                subprocess.run(formatted_command, stdout=f_out, stderr=subprocess.DEVNULL)
         else:
-            # Other tools take an output file argument
+            # Other tools take an output file argument, so we run them as is.
             subprocess.run(formatted_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Read the output from the temporary file

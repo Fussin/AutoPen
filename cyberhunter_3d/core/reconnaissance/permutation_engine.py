@@ -80,8 +80,54 @@ def run_permutation_enumeration(domain: str, known_subdomains: Set[str]) -> Set[
             except Exception as exc:
                 logger.error(f"'{' '.join(command)}' generated an exception: {exc}")
 
+    # Clean up the temporary wordlists and subdomain lists
     os.remove(subdomain_filename)
     os.remove(custom_wordlist_filename)
     os.remove(combined_wordlist_filename)
-    logger.info(f"Total unique permuted subdomains found: {len(all_subdomains)}")
-    return all_subdomains
+
+    logger.info(f"Generated {len(all_subdomains)} potential subdomains from permutations.")
+
+    if not all_subdomains:
+        return set()
+
+    # Step 2: Validate all generated permutations with a mass DNS resolver
+    logger.info("Starting mass DNS resolution to validate permuted subdomains...")
+    validated_subdomains = set()
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as potential_subs_file:
+        potential_subs_filename = potential_subs_file.name
+        for sub in all_subdomains:
+            potential_subs_file.write(f"{sub}\n")
+
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as validated_subs_file:
+        validated_subs_filename = validated_subs_file.name
+
+    try:
+        resolvers = config['wordlists']['resolvers']
+        puredns_resolve_cmd = [
+            config['tools']['puredns'],
+            'resolve',
+            potential_subs_filename,
+            '-r',
+            resolvers,
+            '-w',
+            validated_subs_filename
+        ]
+        subprocess.run(puredns_resolve_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        with open(validated_subs_filename, 'r') as f:
+            for line in f:
+                validated_subdomains.add(line.strip())
+        logger.info(f"Validated {len(validated_subdomains)} live subdomains from permutations.")
+
+    except FileNotFoundError:
+        logger.error(f"Error: '{config['tools']['puredns']}' not found. Please ensure it is installed.")
+        return set() # Return empty set as permutations are unvalidated
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error during puredns validation for permutations: {e}")
+        return set() # Return empty set as permutations are unvalidated
+    finally:
+        os.remove(potential_subs_filename)
+        os.remove(validated_subs_filename)
+
+    logger.info(f"Total unique validated permuted subdomains found: {len(validated_subdomains)}")
+    return validated_subdomains

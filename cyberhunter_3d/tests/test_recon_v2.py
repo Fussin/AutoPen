@@ -8,10 +8,9 @@ from cyberhunter_3d.core.reconnaissance.utils import load_config
 
 config = load_config()
 
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_github_dorking')
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.find_cloud_assets')
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_tech_fingerprinting')
-@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_js_enumeration')
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_js_and_code_analysis')
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_takeover_scan')
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_visual_recon')
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.resolve_and_validate')
@@ -20,7 +19,7 @@ config = load_config()
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_passive_enumeration')
 def test_full_recon_pipeline_mocked(
     mock_passive, mock_active, mock_permute, mock_resolve,
-    mock_visual, mock_takeover, mock_js, mock_tech, mock_cloud, mock_github
+    mock_visual, mock_takeover, mock_js_code, mock_tech, mock_cloud
 ):
     """
     Fast, mocked integration test that runs the full V2 recon pipeline logic.
@@ -28,20 +27,23 @@ def test_full_recon_pipeline_mocked(
     # 1. Setup Mock Return Values
     mock_passive.return_value = {'passive.example.com'}
     mock_active.return_value = {'active.example.com'}
-    # Permutation depends on the results of passive and active
     mock_permute.return_value = {'permute.example.com'}
+
+    # The new JS engine might find its own subdomains
+    mock_js_code.return_value = {'code.example.com'}
+
     # Resolve should return a consolidated set of valid domains
     resolved_domains = {'passive.example.com', 'active.example.com', 'permute.example.com'}
     mock_resolve.return_value = resolved_domains
+
     # Visual recon returns live hosts and a path to screenshots
     live_hosts = ['http://active.example.com', 'http://passive.example.com']
     mock_visual.return_value = (live_hosts, 'recon_results/screenshots')
+
     # Other scans return their specific findings
     mock_takeover.return_value = [{'template-id': 'test-takeover', 'host': 'active.example.com'}]
-    mock_js.return_value = [{'source': 'test_js', 'url': 'http://passive.example.com'}]
     mock_tech.return_value = {'http://active.example.com': {'tech': 'nginx'}}
     mock_cloud.return_value = [{'asset_type': 's3', 'bucket': 'test-bucket.s3.amazonaws.com'}]
-    mock_github.return_value = [{'url': 'https://github.com/test/test/blob/main/key.pem'}]
 
     # 2. Execute the function
     domain = "example.com"
@@ -55,7 +57,8 @@ def test_full_recon_pipeline_mocked(
 
     # The function no longer saves the file, so we just check the returned dict.
     data = recon_data
-    assert set(data['master_subdomains']) == resolved_domains
+    # The master list should now include the subdomains found by the code analysis
+    assert set(data['master_subdomains']) == resolved_domains.union({'code.example.com'})
     assert set(data['live_hosts']) == set(live_hosts)
     assert len(data['subdomain_takeover_vulnerabilities']) == 1
     assert data['subdomain_takeover_vulnerabilities'][0]['host'] == 'active.example.com'
@@ -63,6 +66,9 @@ def test_full_recon_pipeline_mocked(
     assert data['technology_and_ports']['http://active.example.com']['tech'] == 'nginx'
     assert len(data['cloud_assets']) == 1
     assert data['cloud_assets'][0]['asset_type'] == 's3'
+    assert 'code_analysis_subdomains' in data
+    assert set(data['code_analysis_subdomains']) == {'code.example.com'}
+
 
     # Check that the mocked functions were called correctly
     mock_passive.assert_called_once_with(domain)
@@ -71,6 +77,7 @@ def test_full_recon_pipeline_mocked(
     mock_resolve.assert_called_once()
     mock_visual.assert_called_once_with(resolved_domains)
     mock_takeover.assert_called_once_with(live_hosts)
+    mock_js_code.assert_called_once_with(domain, live_hosts)
 
     # Teardown any directories that might have been created by mocked functions
     output_dir = config['recon_output_dir']

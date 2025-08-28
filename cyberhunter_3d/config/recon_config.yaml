@@ -19,6 +19,8 @@ tools:
   subfinder: /root/go/bin/subfinder
   amass: /root/go/bin/amass
   assetfinder: /root/go/bin/assetfinder
+  waybackurls: /root/go/bin/waybackurls
+  katana: /root/go/bin/katana
   subzy: /root/go/bin/subzy
   nuclei: /root/go/bin/nuclei
   dnsx: /root/go/bin/dnsx
