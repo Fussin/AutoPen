@@ -9,7 +9,7 @@ from .utils import get_logger, load_config
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
-from .js_engine import run_js_enumeration, run_github_dorking
+from .js_engine import run_js_and_code_analysis
 from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
@@ -80,9 +80,13 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     takeover_findings = run_takeover_scan(live_hosts)
     logger.info(f"Found {len(takeover_findings)} potential takeover vulnerabilities.")
 
-    # Step 4: JS/Code Analysis
-    logger.info("Starting JS/Code analysis...")
-    js_findings = run_js_enumeration(live_hosts)
+    # Step 4: JS & Code Analysis Engine
+    logger.info("Starting JS & Code analysis...")
+    code_analysis_subdomains = run_js_and_code_analysis(domain, live_hosts)
+    logger.info(f"Found {len(code_analysis_subdomains)} subdomains from code analysis.")
+    # Add these to the master list, as they might be new
+    master_subdomains.update(code_analysis_subdomains)
+
 
     # Step 5: Technology Fingerprinting and Port Scanning
     logger.info("Starting technology fingerprinting and port scanning...")
@@ -92,11 +96,7 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     logger.info("Starting cloud asset identification...")
     cloud_assets = find_cloud_assets(master_subdomains)
 
-    # Step 7: GitHub Dorking
-    logger.info("Starting GitHub dorking...")
-    github_findings = run_github_dorking(master_subdomains)
-
-    # Step 8: Consolidate all information into the final JSON structure
+    # Step 7: Consolidate all information into the final JSON structure
     logger.info("Consolidating all findings...")
     final_recon_data = {
         'domain': domain,
@@ -105,9 +105,8 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
         'screenshots': screenshots,
         'technology_and_ports': tech_results,
         'subdomain_takeover_vulnerabilities': takeover_findings,
-        'js_findings': list(js_findings),
+        'code_analysis_subdomains': list(code_analysis_subdomains),
         'cloud_assets': cloud_assets,
-        'github_findings': github_findings,
     }
 
     # The caller is now responsible for saving the file if needed.

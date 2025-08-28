@@ -18,8 +18,9 @@ def run_passive_enumeration(domain: str) -> Set[str]:
 
     commands = [
         [config['tools']['subfinder'], '-d', '{domain}', '-o', '{output_file}', '-silent'],
-        [config['tools']['amass'], 'enum', '-passive', '-d', '{domain}', '-o', '{output_file}'], # Using passive mode for amass
-        [config['tools']['assetfinder'], '--subs-only', '{domain}'], # This one prints to stdout
+        [config['tools']['amass'], 'enum', '-passive', '-d', '{domain}', '-o', '{output_file}'],
+        [config['tools']['assetfinder'], '--subs-only', '{domain}'],
+        [config['tools']['waybackurls'], '{domain}'], # This one prints to stdout
     ]
 
     all_subdomains = set()
