@@ -10,7 +10,7 @@ logger = setup_logger('CloudAssetEngine', 'cloud_asset.log')
 
 def find_cloud_assets(subdomains: Set[str]) -> List[Dict[str, str]]:
     """
-    Finds cloud assets (S3 buckets, Azure blobs, GCP buckets) for a list of subdomains.
+    Finds cloud assets (S3 buckets, Azure blobs, GCP buckets, etc.) for a list of subdomains.
     """
     logger.info(f"Starting cloud asset identification for {len(subdomains)} subdomains...")
 
@@ -20,10 +20,17 @@ def find_cloud_assets(subdomains: Set[str]) -> List[Dict[str, str]]:
 
     cloud_assets = []
 
+    # S3-compatible endpoints
+    s3_endpoints = {
+        "DigitalOcean": ["nyc3.digitaloceanspaces.com", "sfo2.digitaloceanspaces.com", "ams3.digitaloceanspaces.com"],
+        "Wasabi": ["s3.wasabisys.com", "s3.us-east-2.wasabisys.com", "s3.us-west-1.wasabisys.com"],
+        "Backblaze": ["s3.us-west-000.backblazeb2.com", "s3.us-west-001.backblazeb2.com", "s3.eu-central-003.backblazeb2.com"],
+        "Cloudflare R2": ["<account_id>.r2.cloudflarestorage.com"] # Placeholder
+    }
+
     # Generate potential bucket names from subdomains
     potential_bucket_names = set()
     for sub in subdomains:
-        # A simple strategy: use the full subdomain and the first part of the subdomain
         potential_bucket_names.add(sub)
         if '.' in sub:
             potential_bucket_names.add(sub.split('.')[0])
@@ -42,13 +49,13 @@ def find_cloud_assets(subdomains: Set[str]) -> List[Dict[str, str]]:
             if line:
                 cloud_assets.append({'type': 'azure_blob', 'value': line})
 
-        # S3 Buckets with S3Scanner
-        logger.info("Checking for S3 buckets...")
+        # AWS S3 Buckets with S3Scanner
+        logger.info("Checking for AWS S3 buckets...")
         s3_command = [config['tools']['s3scanner'], '-provider', 'aws', '-bucket-file', bucket_filename]
         result = subprocess.run(s3_command, capture_output=True, text=True)
         for line in result.stdout.strip().split('\n'):
             if "is readable" in line or "exists" in line:
-                cloud_assets.append({'type': 's3_bucket', 'value': line.split()[0]})
+                cloud_assets.append({'type': 's3_bucket_aws', 'value': line.split()[0]})
 
         # GCP Buckets with S3Scanner
         logger.info("Checking for GCP buckets...")
@@ -57,6 +64,26 @@ def find_cloud_assets(subdomains: Set[str]) -> List[Dict[str, str]]:
         for line in result.stdout.strip().split('\n'):
             if "is readable" in line or "exists" in line:
                 cloud_assets.append({'type': 'gcp_bucket', 'value': line.split()[0]})
+
+        # Other S3-compatible providers
+        for provider, endpoints in s3_endpoints.items():
+            for endpoint in endpoints:
+                if "<account_id>" in endpoint:
+                    logger.warning(f"Skipping {provider} scan for endpoint {endpoint}. Please replace '<account_id>' with your actual account ID in the script.")
+                    continue
+
+                logger.info(f"Checking for {provider} buckets at {endpoint}...")
+                s3_command = [
+                    config['tools']['s3scanner'],
+                    '--endpoint-url', f'https://{endpoint}',
+                    'scan',
+                    '--buckets-file', bucket_filename
+                ]
+                result = subprocess.run(s3_command, capture_output=True, text=True)
+                for line in result.stdout.strip().split('\n'):
+                    if "is readable" in line or "exists" in line:
+                        cloud_assets.append({'type': f's3_bucket_{provider.lower()}', 'value': line.split()[0], 'endpoint': endpoint})
+
 
     except FileNotFoundError as e:
         tool_name = str(e).split("'")[1]

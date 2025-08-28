@@ -16,17 +16,66 @@ from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
 from .subdomain_takeover import run_takeover_scan
+from .analytics_correlation import correlate_tech_stack
 from .asn_lookup import get_asn_for_ips
 from .utils import resolve_subdomains_to_ips
+from .threat_intel import enrich_ips_with_shodan, enrich_ips_with_censys
+from cyberhunter_3d.reporting.reporting import generate_html_report
+from flask import Flask
+from cyberhunter_3d.web.models import db, Scan, Asset
 
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
 
-def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
+def save_results_to_db(domain: str, results: Dict[str, any]):
     """
-    Runs the full V2 reconnaissance pipeline.
+    Saves the reconnaissance results to the database.
+    """
+    app = Flask(__name__)
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'cyberhunter.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    db.init_app(app)
+
+    with app.app_context():
+        # Create a new scan object
+        scan = Scan(user_id=1, in_scope_rules=domain) # Assuming user_id 1 for CLI scans
+        db.session.add(scan)
+        db.session.flush()
+
+        for asset_type, data in results.items():
+            if not data:
+                continue
+
+            if isinstance(data, list):
+                for item in data:
+                    value = item.get('value') if isinstance(item, dict) else item
+                    details = item if isinstance(item, dict) else None
+                    asset = Asset(scan_id=scan.id, type=asset_type, value=str(value), details=details)
+                    db.session.add(asset)
+            elif isinstance(data, dict):
+                for key, value in data.items():
+                    asset = Asset(scan_id=scan.id, type=asset_type, value=str(key), details=value)
+                    db.session.add(asset)
+
+        db.session.commit()
+        logger.info(f"Results for domain {domain} saved to database with scan_id {scan.id}")
+
+
+def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
+    """
+    Runs the full V2 reconnaissance pipeline and performs delta detection if a previous scan is provided.
     """
     logger.info(f"Starting V2 reconnaissance for: {domain}")
+
+    # Load previous scan's subdomains for delta detection
+    previous_subdomains = set()
+    if previous_scan_dir:
+        previous_subdomains_file = os.path.join(previous_scan_dir, "subdomains_verified.json")
+        if os.path.exists(previous_subdomains_file):
+            with open(previous_subdomains_file, 'r') as f:
+                previous_subdomains = set(json.load(f))
+            logger.info(f"Loaded {len(previous_subdomains)} subdomains from previous scan for delta detection.")
 
     # Step 0: Wildcard Detection
     # Run this first to avoid polluting results from active and permutation engines.
@@ -90,7 +139,7 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
 
     # Step 4: JS & Code Analysis Engine
     logger.info("Starting JS & Code analysis...")
-    code_analysis_subdomains = run_js_and_code_analysis(domain, live_hosts)
+    code_analysis_subdomains, secrets_and_endpoints = run_js_and_code_analysis(domain, live_hosts)
     logger.info(f"Found {len(code_analysis_subdomains)} subdomains from code analysis.")
     # Add these to the master list, as they might be new
     master_subdomains.update(code_analysis_subdomains)
@@ -99,6 +148,12 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     # Step 5: Technology Fingerprinting and Port Scanning
     logger.info("Starting technology fingerprinting and port scanning...")
     tech_results = run_tech_fingerprinting(live_hosts)
+
+    # Correlate technology stacks
+    logger.info("Correlating technology stacks...")
+    tech_clusters = correlate_tech_stack(tech_results)
+    if tech_clusters:
+        logger.info(f"Found {len(tech_clusters)} technology clusters.")
 
     # Step 6: Cloud Asset Identification
     logger.info("Starting cloud asset identification...")
@@ -116,32 +171,73 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     asn_details = get_asn_for_ips(all_ips)
     logger.info(f"Completed IP and ASN enrichment for {len(all_ips)} unique IPs.")
 
+    # Threat Intel Enrichment
+    logger.info("Starting Threat Intelligence enrichment...")
+    shodan_data = enrich_ips_with_shodan(all_ips)
+    censys_data = enrich_ips_with_censys(all_ips)
+    logger.info("Threat Intelligence enrichment complete.")
+
     # Step 8: Save all datasets to structured files
     logger.info("Saving all datasets to structured output files...")
     output_file_paths = {}
 
-    # Define datasets to be saved
+    # Prepare structured data
+    tech_fingerprinting = {host: data.get('technologies', []) for host, data in tech_results.items()}
+    ports_services = {host: data.get('ports', []) for host, data in tech_results.items()}
+
+    # Define datasets
     datasets = {
-        "master_subdomains.json": master_subdomains,
-        "subdomain_ip_mapping.json": subdomain_ip_mapping,
-        "asn_details.json": asn_details,
-        "live_hosts.json": live_hosts,
-        "technology_and_ports.json": tech_results,
-        "takeover_vulnerabilities.json": takeover_findings,
-        "code_analysis_subdomains.json": code_analysis_subdomains,
-        "cloud_assets.json": cloud_assets,
+        "subdomains_verified": list(master_subdomains),
+        "subdomain_ip_mapping": subdomain_ip_mapping,
+        "asn_details": asn_details,
+        "live_hosts": list(live_hosts),
+        "tech_fingerprinting": tech_fingerprinting,
+        "ports_services": ports_services,
+        "takeover_vulnerabilities": takeover_findings,
+        "code_analysis_subdomains": list(code_analysis_subdomains),
+        "cloud_assets": cloud_assets,
+        "secrets_and_endpoints": secrets_and_endpoints,
+        "tech_clusters": tech_clusters,
+        "shodan_enrichment": shodan_data,
+        "censys_enrichment": censys_data,
     }
 
-    for filename, data in datasets.items():
-        if data: # Only save if there is data
-            path = save_to_json(data, filename, logger)
-            if path:
-                output_file_paths[filename.split('.')[0]] = path
+    if save_to_db:
+        save_results_to_db(domain, datasets)
+    else:
+        for filename, data in datasets.items():
+            if data: # Only save if there is data
+                path = save_to_json(data, f"{filename}.json", logger)
+                if path:
+                    output_file_paths[filename] = path
 
     # Also include the path to the screenshots directory
     output_file_paths['screenshots'] = screenshots
 
-    logger.info("Reconnaissance pipeline complete. Output files generated.")
+    # Delta Detection
+    if previous_subdomains:
+        new_subdomains = master_subdomains - previous_subdomains
+        removed_subdomains = previous_subdomains - master_subdomains
+
+        if new_subdomains:
+            path = save_to_json(list(new_subdomains), "new_subdomains.json", logger)
+            if path: output_file_paths['new_subdomains'] = path
+
+        if removed_subdomains:
+            path = save_to_json(list(removed_subdomains), "removed_subdomains.json", logger)
+            if path: output_file_paths['removed_subdomains'] = path
+
+        logger.info(f"Delta detection complete. Found {len(new_subdomains)} new and {len(removed_subdomains)} removed subdomains.")
+
+    # Generate HTML report
+    if not save_to_db:
+        logger.info("Generating HTML report...")
+        report_path = os.path.join(output_dir, "recon_report.html")
+        generate_html_report(output_dir, report_path)
+        output_file_paths['html_report'] = report_path
+        logger.info(f"HTML report generated at {report_path}")
+
+    logger.info("Reconnaissance pipeline complete.")
     return output_file_paths
 
 
