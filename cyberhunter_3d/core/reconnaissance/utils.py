@@ -153,9 +153,9 @@ def resolve_subdomains_to_ips(subdomains: Set[str], logger) -> Dict[str, List[st
     logger.info(f"Successfully resolved {len(ip_mapping)} subdomains to IPs.")
     return ip_mapping
 
-def save_to_json(data: any, filename: str, logger) -> str:
+def save_to_json(data: any, filename: str, logger, deduplication_key: str = None) -> str:
     """
-    Saves a Python object to a JSON file in the configured output directory.
+    Saves a Python object to a JSON file, with deduplication.
     """
     config = load_config()
     output_dir = config.get('recon_output_dir', 'recon_results')
@@ -163,14 +163,32 @@ def save_to_json(data: any, filename: str, logger) -> str:
 
     file_path = os.path.join(output_dir, filename)
 
+    # Deduplication logic
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                existing_data = json.load(f)
+
+            if isinstance(existing_data, list) and isinstance(data, list):
+                if deduplication_key:
+                    existing_items = {item[deduplication_key]: item for item in existing_data}
+                    for item in data:
+                        existing_items[item[deduplication_key]] = item
+                    data = list(existing_items.values())
+                else:
+                    data = list(set(existing_data + data))
+            elif isinstance(existing_data, dict) and isinstance(data, dict):
+                data = {**existing_data, **data}
+
+    except (json.JSONDecodeError, IOError):
+        logger.warning(f"Could not read existing data from {file_path}. Overwriting.")
+
     try:
         with open(file_path, 'w') as f:
-            # Use a custom default handler for sets
             def set_default(obj):
                 if isinstance(obj, set):
                     return list(obj)
                 raise TypeError
-
             json.dump(data, f, indent=4, default=set_default)
         logger.info(f"Successfully saved data to {file_path}")
         return file_path

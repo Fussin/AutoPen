@@ -51,12 +51,24 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
                 for item in data:
                     value = item.get('value') if isinstance(item, dict) else item
                     details = item if isinstance(item, dict) else None
-                    asset = Asset(scan_id=scan.id, type=asset_type, value=str(value), details=details)
-                    db.session.add(asset)
+
+                    existing_asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(value)).first()
+                    if existing_asset:
+                        existing_asset.details = details
+                        existing_asset.last_seen = db.func.now()
+                    else:
+                        asset = Asset(scan_id=scan.id, type=asset_type, value=str(value), details=details)
+                        db.session.add(asset)
+
             elif isinstance(data, dict):
                 for key, value in data.items():
-                    asset = Asset(scan_id=scan.id, type=asset_type, value=str(key), details=value)
-                    db.session.add(asset)
+                    existing_asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(key)).first()
+                    if existing_asset:
+                        existing_asset.details = value
+                        existing_asset.last_seen = db.func.now()
+                    else:
+                        asset = Asset(scan_id=scan.id, type=asset_type, value=str(key), details=value)
+                        db.session.add(asset)
 
         db.session.commit()
         logger.info(f"Results for domain {domain} saved to database with scan_id {scan.id}")
