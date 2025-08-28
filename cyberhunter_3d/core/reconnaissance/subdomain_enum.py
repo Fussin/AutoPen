@@ -24,11 +24,13 @@ from .ai.ocr_tagger import generate_ocr_tags
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
 
-def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
+def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
     """
-    Runs the full V2 reconnaissance pipeline.
+    Runs the full V3 reconnaissance pipeline.
     """
-    logger.info(f"Starting V2 reconnaissance for: {domain}")
+    logger.info(f"Starting V3 reconnaissance for: {domain}")
+
+    # TODO: Implement delta scan logic using previous_scan_dir
 
     # Step 0: Wildcard Detection
     # Run this first to avoid polluting results from active and permutation engines.
@@ -154,6 +156,8 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     # Also include the path to the screenshots directory
     output_file_paths['screenshots'] = screenshots_dir
 
+    # TODO: Implement database saving logic if save_to_db is True
+
     logger.info("Reconnaissance pipeline complete. Output files generated.")
     return output_file_paths
 
@@ -180,7 +184,7 @@ def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -
             '-r', resolvers_list,
             '--quiet'
         ]
-        result = subprocess.run(puredns_command, capture_output=True, text=True, check=True)
+        result = subprocess.run(puredns_command, capture_output=_True, text=True, check=True)
 
         for line in result.stdout.strip().split('\n'):
             if line:

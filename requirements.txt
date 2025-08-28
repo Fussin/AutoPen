@@ -8,3 +8,8 @@ requests
 PyYAML
 pytest
 boto3
+playwright
+shodan
+censys-platform
+fofa-py
+greynoise
