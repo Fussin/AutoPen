@@ -5,10 +5,11 @@ import re
 import concurrent.futures
 from typing import Set, List
 
-from .utils import load_config, get_logger, run_command
+from cyberhunter_3d.utils.logger import setup_logger
+from .utils import load_config, run_command
 
 config = load_config()
-logger = get_logger(__name__)
+logger = setup_logger('ActiveEngine', 'active.log')
 
 def run_active_enumeration(domain: str) -> Set[str]:
     """
@@ -27,7 +28,7 @@ def run_active_enumeration(domain: str) -> Set[str]:
 
     all_subdomains = set()
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(commands)) as executor:
-        future_to_command = {executor.submit(run_command, cmd, domain, wordlist): cmd for cmd in commands}
+        future_to_command = {executor.submit(run_command, cmd, domain, logger, wordlist): cmd for cmd in commands}
         for future in concurrent.futures.as_completed(future_to_command):
             command = future_to_command[future]
             try:

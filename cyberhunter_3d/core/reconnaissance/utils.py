@@ -1,14 +1,5 @@
 import yaml
 import os
-import logging
-
-def get_logger(name: str):
-    """
-    Returns a logger instance.
-    Configuration is handled by the application's entry point.
-    """
-    return logging.getLogger(name)
-
 import re
 import subprocess
 import tempfile
@@ -22,7 +13,7 @@ def load_config():
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
-def run_command(command: List[str], domain: str, wordlist: str = None) -> Set[str]:
+def run_command(command: List[str], domain: str, logger, wordlist: str = None) -> Set[str]:
     """
     Runs a command, captures its output, and returns a set of subdomains.
     """
@@ -54,11 +45,10 @@ def run_command(command: List[str], domain: str, wordlist: str = None) -> Set[st
 
     except FileNotFoundError as e:
         tool_name = command[0]
-        # Assuming get_logger is available in this scope
-        get_logger(__name__).error(f"Error: Tool '{tool_name}' not found. Please ensure it is installed and in your PATH. Details: {e}")
+        logger.error(f"Error: Tool '{tool_name}' not found. Please ensure it is installed and in your PATH. Details: {e}")
     except subprocess.CalledProcessError as e:
         tool_name = command[0]
-        get_logger(__name__).error(f"Error running tool '{tool_name}': {e}")
+        logger.error(f"Error running tool '{tool_name}': {e}")
     finally:
         os.remove(output_filename)
 
