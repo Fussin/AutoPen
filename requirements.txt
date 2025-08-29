@@ -13,3 +13,5 @@ shodan
 censys-platform
 fofa-py
 greynoise
+Pillow
+pytesseract

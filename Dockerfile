@@ -51,8 +51,8 @@ RUN git clone https://github.com/KathanP19/gh-dork.git /gh-dork
 # Stage 2: Final image
 FROM python:3.10-slim-bullseye
 
-# Install sudo
-RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*
+# Install sudo and tesseract
+RUN apt-get update && apt-get install -y sudo tesseract-ocr && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
