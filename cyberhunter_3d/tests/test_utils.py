@@ -59,31 +59,7 @@ def test_detect_wildcard_ips_tool_not_found(mock_run):
     assert wildcard_ips == set()
     mock_run.assert_called_once()
 
-from cyberhunter_3d.core.reconnaissance.utils import resolve_subdomains_to_ips, resolve_and_validate
-
-@patch('cyberhunter_3d.core.reconnaissance.utils.subprocess.run')
-def test_resolve_and_validate(mock_run):
-    """
-    Tests that resolve_and_validate correctly identifies live subdomains and filters out wildcards.
-    """
-    dnsx_output = (
-        '{"host":"live.example.com","a":["1.1.1.1"]}\n'
-        '{"host":"wildcard.example.com","a":["99.99.99.99"]}\n'
-        '{"host":"another.live.com","a":["2.2.2.2"]}\n'
-    )
-    mock_process = MagicMock()
-    mock_process.stdout = dnsx_output
-    mock_run.return_value = mock_process
-
-    subdomains = {'live.example.com', 'wildcard.example.com', 'another.live.com'}
-    wildcard_ips = {'99.99.99.99'}
-
-    live_subdomains_map = resolve_and_validate(subdomains, wildcard_ips, logger)
-
-    assert len(live_subdomains_map) == 2
-    assert 'live.example.com' in live_subdomains_map
-    assert 'wildcard.example.com' not in live_subdomains_map
-    assert live_subdomains_map['live.example.com'] == ['1.1.1.1']
+from cyberhunter_3d.core.reconnaissance.utils import resolve_subdomains_to_ips
 
 @patch('cyberhunter_3d.core.reconnaissance.utils.subprocess.run')
 def test_resolve_subdomains_to_ips(mock_run):

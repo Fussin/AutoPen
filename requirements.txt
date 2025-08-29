@@ -7,7 +7,6 @@ qrcode[pil]
 requests
 PyYAML
 pytest
-jsonschema
 boto3
 playwright
 shodan

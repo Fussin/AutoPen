@@ -64,24 +64,35 @@ def run_discovery_phase(scan_id, app):
 
                 elif target.type in ['domain', 'wildcard_domain']:
                     print(f"Finding subdomains for '{target.value}'...")
-                    output_paths = enumerate_subdomains_v2(target.value)
+                    recon_data = enumerate_subdomains_v2(target.value)
 
-                    if output_paths:
-                        import json
-                        # We assume the first path is the main JSON output
-                        json_path = output_paths[0]
-                        with open(json_path, 'r') as f:
-                            recon_data = json.load(f)
+                    # Persist assets directly from the recon data dictionary
+                    for sub in recon_data.get('master_subdomains', []):
+                        created, status = _create_asset_if_new(scan.id, 'subdomain', sub, validator)
+                        if created: in_scope_count += 1
+                        elif status == 'out_of_scope': out_of_scope_count += 1
 
-                        # Persist assets from the new standardized schema
-                        for asset_data in recon_data.get('assets', []):
-                            asset_type = asset_data.get('asset_type')
-                            value = asset_data.get('value')
-                            details = asset_data # Store the whole asset object in details
+                    for host in recon_data.get('live_hosts', []):
+                        created, status = _create_asset_if_new(scan.id, 'live_host', host, validator)
+                        if created: in_scope_count += 1
+                        elif status == 'out_of_scope': out_of_scope_count += 1
 
-                            created, status = _create_asset_if_new(scan.id, asset_type, value, validator, details=details)
-                            if created: in_scope_count += 1
-                            elif status == 'out_of_scope': out_of_scope_count += 1
+                    for vuln in recon_data.get('subdomain_takeover_vulnerabilities', []):
+                        host = vuln.get('host', 'unknown_host')
+                        created, status = _create_asset_if_new(scan.id, 'vulnerability', host, validator, details=vuln)
+                        if created: in_scope_count += 1
+                        elif status == 'out_of_scope': out_of_scope_count += 1
+
+                    for tech, details in recon_data.get('technology_and_ports', {}).items():
+                        created, status = _create_asset_if_new(scan.id, 'technology', tech, validator, details=details)
+                        if created: in_scope_count += 1
+                        elif status == 'out_of_scope': out_of_scope_count += 1
+
+                    for asset in recon_data.get('cloud_assets', []):
+                        value = asset.get('value', 'unknown_asset')
+                        created, status = _create_asset_if_new(scan.id, 'cloud_asset', value, validator, details=asset)
+                        if created: in_scope_count += 1
+                        elif status == 'out_of_scope': out_of_scope_count += 1
 
                 elif target.type in ['ip_address', 'cidr']:
                     created, status = _create_asset_if_new(scan.id, target.type, target.value, validator)
