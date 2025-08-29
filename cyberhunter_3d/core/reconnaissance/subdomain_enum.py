@@ -47,29 +47,51 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
         db.session.add(scan)
         db.session.flush()
 
+        # Pre-process risk info for easy lookup
+        risk_info = results.get('risk_info', {})
+        host_risk_map = {host: data for host, data in risk_info.items()}
+
         for asset_type, data in results.items():
-            if not data:
+            if not data or asset_type == 'risk_info': # Skip risk_info as it's handled separately
                 continue
+
             if isinstance(data, list):
                 for item in data:
-                    value = item.get('value') if isinstance(item, dict) else item
+                    value = item.get('host') or item.get('value') if isinstance(item, dict) else item
                     details = item if isinstance(item, dict) else None
-                    existing_asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(value)).first()
-                    if existing_asset:
-                        existing_asset.details = details
-                        existing_asset.last_seen = db.func.now()
-                    else:
-                        asset = Asset(scan_id=scan.id, type=asset_type, value=str(value), details=details)
+
+                    asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(value)).first()
+                    if not asset:
+                        asset = Asset(scan_id=scan.id, type=asset_type, value=str(value))
                         db.session.add(asset)
+
+                    asset.details = details
+                    asset.last_seen = db.func.now()
+
+                    # Add risk info if this asset is a host with risk data
+                    if value in host_risk_map:
+                        risk_data = host_risk_map[value]
+                        asset.risk_level = risk_data.get('risk_level')
+                        asset.cvss_score = risk_data.get('cvss_score')
+                        asset.known_exploits = risk_data.get('known_exploits')
+
             elif isinstance(data, dict):
                 for key, value in data.items():
-                    existing_asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(key)).first()
-                    if existing_asset:
-                        existing_asset.details = value
-                        existing_asset.last_seen = db.func.now()
-                    else:
-                        asset = Asset(scan_id=scan.id, type=asset_type, value=str(key), details=value)
+                    asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(key)).first()
+                    if not asset:
+                        asset = Asset(scan_id=scan.id, type=asset_type, value=str(key))
                         db.session.add(asset)
+
+                    asset.details = value
+                    asset.last_seen = db.func.now()
+
+                    # Add risk info if this asset is a host with risk data
+                    if key in host_risk_map:
+                        risk_data = host_risk_map[key]
+                        asset.risk_level = risk_data.get('risk_level')
+                        asset.cvss_score = risk_data.get('cvss_score')
+                        asset.known_exploits = risk_data.get('known_exploits')
+
         db.session.commit()
         logger.info(f"Results for domain {domain} saved to database with scan_id {scan.id}")
 

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Scan {{ scan_id }} Details - CyberHunter 3D{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Scan #{{ scan_id }} Details</h2>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">Risk Level Distribution</div>
+                <div class="card-body">
+                    <canvas id="risk-pie-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">Top 10 Technologies</div>
+                <div class="card-body">
+                    <canvas id="tech-bar-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="risk-filter" class="form-label">Filter by Risk Level:</label>
+        <select id="risk-filter" class="form-select">
+            <option value="">All</option>
+            <option value="Critical">Critical</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Discovered Assets
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Asset Value</th>
+                        <th>Type</th>
+                        <th>Risk Level</th>
+                        <th>CVSS Score</th>
+                        <th>Known Exploits</th>
+                    </tr>
+                </thead>
+                <tbody id="assets-table-body">
+                    <!-- Assets will be loaded here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const riskFilter = document.getElementById('risk-filter');
+
+    function fetchAssets(riskLevel = '') {
+        let apiUrl = `/api/v1/scans/{{ scan_id }}/results`;
+        if (riskLevel) {
+            apiUrl += `?risk_level=${riskLevel}`;
+        }
+
+        fetch(apiUrl, {
+            headers: {
+                'X-API-Key': '{{ current_user.api_key }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.getElementById('assets-table-body');
+            tableBody.innerHTML = ''; // Clear existing rows
+            data.assets.forEach(asset => {
+                const row = `
+                    <tr>
+                        <td>${asset.value}</td>
+                        <td>${asset.type}</td>
+                        <td class="${asset.risk_level.toLowerCase()}">${asset.risk_level}</td>
+                        <td>${asset.cvss_score}</td>
+                        <td>${asset.known_exploits ? 'Yes' : 'No'}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+            renderCharts(data.assets);
+        })
+        .catch(error => console.error('Error fetching assets:', error));
+    }
+
+    // Initial load
+    fetchAssets();
+
+    // Add event listener for the filter
+    riskFilter.addEventListener('change', (event) => {
+        fetchAssets(event.target.value);
+    });
+
+    // --- Charting Logic ---
+    function renderCharts(assets) {
+        // 1. Risk Level Distribution
+        const riskCounts = { "Critical": 0, "High": 0, "Medium": 0, "Low": 0, "None": 0 };
+        assets.forEach(asset => {
+            if (asset.risk_level in riskCounts) {
+                riskCounts[asset.risk_level]++;
+            }
+        });
+
+        const riskCtx = document.getElementById('risk-pie-chart').getContext('2d');
+        new Chart(riskCtx, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(riskCounts),
+                datasets: [{
+                    data: Object.values(riskCounts),
+                    backgroundColor: ['red', 'orange', 'yellow', 'green', 'grey'],
+                }]
+            }
+        });
+
+        // 2. Top 10 Technologies
+        const techCounts = {};
+        assets.forEach(asset => {
+            if (asset.details && asset.details.technologies) {
+                asset.details.technologies.forEach(tech => {
+                    techCounts[tech] = (techCounts[tech] || 0) + 1;
+                });
+            }
+        });
+
+        const sortedTech = Object.entries(techCounts).sort(([,a],[,b]) => b-a).slice(0, 10);
+        const techLabels = sortedTech.map(item => item[0]);
+        const techData = sortedTech.map(item => item[1]);
+
+        const techCtx = document.getElementById('tech-bar-chart').getContext('2d');
+        new Chart(techCtx, {
+            type: 'bar',
+            data: {
+                labels: techLabels,
+                datasets: [{
+                    label: 'Technology Count',
+                    data: techData,
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+            }
+        });
+    }
+
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}

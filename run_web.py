@@ -168,8 +168,11 @@ from cyberhunter_3d.core.scan_manager import run_discovery_phase
 executor = ThreadPoolExecutor(max_workers=2)
 app.executor = executor
 
+from cyberhunter_3d.web.views.dashboard import dashboard_bp
+
 # Register the API blueprint
 app.register_blueprint(api_bp)
+app.register_blueprint(dashboard_bp)
 
 @app.route('/sync-hackerone', methods=['POST'])
 @login_required
