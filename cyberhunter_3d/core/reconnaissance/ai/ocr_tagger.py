@@ -5,9 +5,9 @@ from typing import Dict, List
 try:
     import pytesseract
     from PIL import Image
-except Exception:
-    pytesseract = None
-    Image = None
+except ImportError as e:
+    # Re-raise with a more informative message for debugging
+    raise ImportError(f"pytesseract or Pillow not installed. Please install them to use OCR features. Original error: {e}")
 
 def generate_ocr_tags(screenshots_root: str, logger=None) -> Dict[str, List[str]]:
     """
@@ -27,11 +27,15 @@ def generate_ocr_tags(screenshots_root: str, logger=None) -> Dict[str, List[str]
     for img_path in root.rglob("*"):
         if img_path.is_file() and img_path.suffix.lower() in image_exts:
             rel = str(img_path.relative_to(root))
+            if logger:
+                logger.debug(f"Processing image: {img_path}")
             tags: List[str] = []
             if pytesseract and Image:
                 try:
                     text = pytesseract.image_to_string(Image.open(img_path))
                     text = (text or "").strip()
+                    if logger:
+                        logger.debug(f"OCR text for {img_path}: {text}")
                     # Simple heuristics: find suspicious keywords
                     kws = ["staging", "internal", "debug", "admin", "login", "password", "username", "token"]
                     for kw in kws:
@@ -41,11 +45,12 @@ def generate_ocr_tags(screenshots_root: str, logger=None) -> Dict[str, List[str]
                     if len(text) > 0:
                         preview = " ".join(text.splitlines()[:2])[:200]
                         tags.append(f"title:{preview}")
-                except Exception:
+                    if logger:
+                        logger.debug(f"Tags for {img_path}: {tags}")
+                except Exception as e:
                     if logger:
                         logger.exception(f"OCR failed for {img_path}")
             else:
-                # Fallback: return empty list but include path
                 if logger:
                     logger.debug("pytesseract not installed; skipping OCR content.")
             results[rel] = tags
