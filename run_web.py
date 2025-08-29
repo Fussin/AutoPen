@@ -4,8 +4,6 @@ from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from cyberhunter_3d.web.models import db, User, Scan, Asset
-from cyberhunter_3d.core.intelligence.historical import get_subdomain_growth, get_live_host_growth, get_new_technologies_growth
-import json
 
 # --- Logging Configuration ---
 logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -45,7 +43,7 @@ def init_database():
 
 # --- Routes ---
 from cyberhunter_3d.web.api import api_bp
-from flask import render_template, request, redirect, url_for, flash, session, jsonify
+from flask import render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
 from flask_login import login_user, current_user, login_required
 import pyotp
 import qrcode
@@ -279,21 +277,23 @@ def scan_results(scan_id):
     for asset in scan.assets:
         grouped_assets[asset.type].append(asset)
 
-    return render_template('scan_results.html', scan=scan, grouped_assets=grouped_assets)
-
-@app.route('/historical-intelligence')
-@login_required
-def historical_intelligence():
-    subdomain_data = get_subdomain_growth(current_user.id)
-    live_host_data = get_live_host_growth(current_user.id)
-    tech_data = get_new_technologies_growth(current_user.id)
+    # Check if a delta report exists for this scan
+    delta_report_path = f"scan_{scan_id}/delta_report.html"
+    delta_report_exists = os.path.exists(os.path.join('recon_results', delta_report_path))
 
     return render_template(
-        'historical_intelligence.html',
-        subdomain_data=json.dumps(subdomain_data),
-        live_host_data=json.dumps(live_host_data),
-        tech_data=json.dumps(tech_data)
+        'scan_results.html',
+        scan=scan,
+        grouped_assets=grouped_assets,
+        delta_report_exists=delta_report_exists,
+        delta_report_path=delta_report_path
     )
+
+@app.route('/reports/<path:filename>')
+@login_required
+def serve_report(filename):
+    """Serves reports from the recon_results directory."""
+    return send_from_directory('recon_results', filename)
 
 # --- Main Execution ---
 if __name__ == '__main__':
