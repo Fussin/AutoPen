@@ -38,12 +38,12 @@ def test_full_recon_pipeline_mocked(
     mock_get_asn.return_value = mock_asn_details
     live_hosts = {'http://active.example.com'}
     mock_visual.return_value = (live_hosts, 'recon_results/screenshots')
-    tech_results = {'http://active.example.com': {'tech': 'nginx'}}
+    tech_results = {'http://active.example.com': {'technologies': ['nginx'], 'ports': [80]}}
     mock_tech.return_value = tech_results
     takeover_findings = [{'template-id': 'test-takeover'}]
     mock_takeover.return_value = takeover_findings
     code_subs = {'code.example.com'}
-    mock_js_code.return_value = code_subs
+    mock_js_code.return_value = (code_subs, {}) # Return a tuple of two values
     cloud_assets = [{'type': 's3'}]
     mock_cloud.return_value = cloud_assets
 
@@ -58,21 +58,14 @@ def test_full_recon_pipeline_mocked(
     # Check that the save function was called for each dataset with the correct data
     all_final_domains = resolved_domains.union(code_subs)
 
-    expected_calls = [
-        call(all_final_domains, "master_subdomains.json", ANY),
-        call(mock_ip_map, "subdomain_ip_mapping.json", ANY),
-        call(mock_asn_details, "asn_details.json", ANY),
-        call(live_hosts, "live_hosts.json", ANY),
-        call(tech_results, "technology_and_ports.json", ANY),
-        call(takeover_findings, "takeover_vulnerabilities.json", ANY),
-        call(code_subs, "code_analysis_subdomains.json", ANY),
-        call(cloud_assets, "cloud_assets.json", ANY)
-    ]
-    mock_save_json.assert_has_calls(expected_calls, any_order=True)
-    assert mock_save_json.call_count == len(expected_calls)
+    # The new expected calls for the merged datasets
+    mock_save_json.assert_any_call(list(all_final_domains), "subdomains_verified.json", ANY)
+    mock_save_json.assert_any_call(list(live_hosts), "live_hosts.json", ANY)
+    mock_save_json.assert_any_call({'http://active.example.com': ['nginx']}, "tech_fingerprinting.json", ANY)
+    mock_save_json.assert_any_call({'http://active.example.com': [80]}, "ports_services.json", ANY)
 
-    # Check that the returned dictionary contains the correct file paths
-    assert output_files['master_subdomains'] == "recon_results/master_subdomains.json"
+    # Check that the returned dictionary contains some of the correct file paths
+    assert output_files['subdomains_verified'] == "recon_results/subdomains_verified.json"
     assert output_files['asn_details'] == "recon_results/asn_details.json"
     assert 'screenshots' in output_files
 

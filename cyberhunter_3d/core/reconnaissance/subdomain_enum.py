@@ -16,7 +16,7 @@ from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
 from .subdomain_takeover import run_takeover_scan
-from .analytics_correlation import correlate_tech_stack
+from .tech_correlation import correlate_tech_stack
 from .asn_lookup import get_asn_for_ips
 from .utils import resolve_subdomains_to_ips
 from .ai.noise_filter import filter_false_positives
@@ -71,6 +71,22 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
         db.session.commit()
         logger.info(f"Results for domain {domain} saved to database with scan_id {scan.id}")
 
+def perform_delta_scan(master_subdomains: Set[str], previous_subdomains: Set[str], logger) -> Dict[str, str]:
+    """
+    Performs a delta scan to identify new and removed subdomains.
+    """
+    delta_paths = {}
+    if previous_subdomains:
+        new_subdomains = master_subdomains - previous_subdomains
+        removed_subdomains = previous_subdomains - master_subdomains
+        if new_subdomains:
+            path = save_to_json(list(new_subdomains), "new_subdomains.json", logger)
+            if path: delta_paths['new_subdomains'] = path
+        if removed_subdomains:
+            path = save_to_json(list(removed_subdomains), "removed_subdomains.json", logger)
+            if path: delta_paths['removed_subdomains'] = path
+        logger.info(f"Delta detection complete. Found {len(new_subdomains)} new and {len(removed_subdomains)} removed subdomains.")
+    return delta_paths
 
 def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
     """
@@ -121,7 +137,6 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     try:
         master_subdomains = set(filter_false_positives(master_subdomains))
     except TypeError:
-        # older signature had (items, logger)
         master_subdomains = set(filter_false_positives(master_subdomains, logger))
     logger.info(f"{len(master_subdomains)} subdomains remain after AI noise filtering.")
 
@@ -203,15 +218,8 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     output_file_paths['screenshots'] = screenshots_dir
 
     if previous_subdomains:
-        new_subdomains = master_subdomains - previous_subdomains
-        removed_subdomains = previous_subdomains - master_subdomains
-        if new_subdomains:
-            path = save_to_json(list(new_subdomains), "new_subdomains.json", logger)
-            if path: output_file_paths['new_subdomains'] = path
-        if removed_subdomains:
-            path = save_to_json(list(removed_subdomains), "removed_subdomains.json", logger)
-            if path: output_file_paths['removed_subdomains'] = path
-        logger.info(f"Delta detection complete. Found {len(new_subdomains)} new and {len(removed_subdomains)} removed subdomains.")
+        delta_paths = perform_delta_scan(master_subdomains, previous_subdomains, logger)
+        output_file_paths.update(delta_paths)
 
     if not save_to_db:
         logger.info("Generating HTML report...")
