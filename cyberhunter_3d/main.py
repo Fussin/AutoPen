@@ -106,7 +106,6 @@ def aggregate_results(output_paths: dict, domain: str, logger):
                 host_map[host]['screenshot_tags'] = tags
 
 
-
     final_data["hosts"] = list(host_map.values())
 
     # Save the final aggregated file
@@ -128,10 +127,6 @@ def main():
     parser.add_argument("-d", "--domain", required=True, help="The target domain for reconnaissance.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
     parser.add_argument("--upload-to-r2", action="store_true", help="Upload results to Cloudflare R2.")
-
-    parser = argparse.ArgumentParser(description="A futuristic bug bounty automation platform.")
-    parser.add_argument("-d", "--domain", required=True, help="The target domain to perform reconnaissance on.")
-
     parser.add_argument("--save-to-db", action="store_true", help="Save the scan results to the database.")
     parser.add_argument("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 
@@ -146,21 +141,15 @@ def main():
     # Setup logger
     logger = setup_logger('Main', 'main.log', level=log_level)
 
-
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
     logger.info(f"Starting V3 reconnaissance pipeline for: {target_domain}")
 
     # Run the full enumeration pipeline
     output_paths = enumerate_subdomains_v2(
-
-    # Run the full V2 enumeration pipeline
-    output_files = enumerate_subdomains_v2(
-
         target_domain,
         previous_scan_dir=args.previous_scan_dir,
         save_to_db=args.save_to_db
     )
-
 
     if not output_paths:
         logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
@@ -190,15 +179,6 @@ def main():
         logger.info("Results saved to the database.")
 
     logger.info("--- Pipeline Finished ---")
-
-
-    if not args.save_to_db:
-        print("\nReconnaissance complete.")
-        print("Output files generated:")
-        for name, path in output_files.items():
-            print(f"- {name.replace('_', ' ').title()}: {path}")
-    else:
-        print("\nReconnaissance complete and results saved to the database.")
 
 
 if __name__ == "__main__":

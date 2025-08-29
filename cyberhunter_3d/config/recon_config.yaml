@@ -37,26 +37,6 @@ wordlists:
   resolvers: /wordlists/resolvers.txt
   github_dorks: /app/gh-dork/dorks.txt
 
-# API Keys
-api_keys:
-  shodan: null
-  censys_personal_access_token: null
-  fofa_api_key: null
-  greynoise_api_key: null
-  securitytrails_api_key: null
-
-# Cloud Provider Credentials
-cloud:
-  aws:
-    access_key: null
-    secret_key: null
-  gcp:
-    api_key: null
-  r2:
-    account_id: null
-    access_key: null
-    secret_key: null
-
 # Other settings
 recon_output_dir: recon_results
 screenshot_dir: screenshots
