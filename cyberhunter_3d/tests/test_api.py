@@ -1,6 +1,7 @@
 import unittest
 import json
 import time
+import os
 from unittest.mock import patch, MagicMock
 from run_web import app, db
 from cyberhunter_3d.web.models import User, Scan, Target, Asset
@@ -88,7 +89,8 @@ class APITestCase(unittest.TestCase):
             scan = Scan(user_id=self.test_user.id, status='COMPLETED')
             db.session.add(scan)
             db.session.flush()
-            asset1 = Asset(scan_id=scan.id, type='subdomain', value='test.example.com')
+            asset_details = {"asset_type": "domain", "value": "test.example.com", "ip_addresses": ["1.2.3.4"]}
+            asset1 = Asset(scan_id=scan.id, type='domain', value='test.example.com', details=asset_details)
             asset2 = Asset(scan_id=scan.id, type='ip_address', value='1.2.3.4')
             db.session.add_all([asset1, asset2])
             db.session.commit()
@@ -99,6 +101,7 @@ class APITestCase(unittest.TestCase):
         response_data = json.loads(response.data)
         self.assertEqual(len(response_data['assets']), 2)
         self.assertEqual(response_data['assets'][0]['value'], 'test.example.com')
+        self.assertEqual(response_data['assets'][0]['details']['ip_addresses'][0], '1.2.3.4')
 
     def test_get_scan_graph_api(self):
         """Test getting scan graph data via the API."""
@@ -125,15 +128,27 @@ class APITestCase(unittest.TestCase):
         """
         Test creating a scan and check if detailed assets are persisted to the DB.
         """
+        import tempfile
         # 1. Setup Mock
         mock_recon_data = {
-            'master_subdomains': {'test.example.com'},
-            'live_hosts': ['http://test.example.com'],
-            'subdomain_takeover_vulnerabilities': [{'host': 'test.example.com', 'type': 'aws-s3', 'template-id': 'test'}],
-            'technology_and_ports': {'http://test.example.com': {'tech': 'react'}},
-            'cloud_assets': [{'type': 's3', 'value': 'test-bucket'}]
+            "metadata": {"target": "example.com"},
+            "assets": [
+                {
+                    "asset_type": "domain",
+                    "value": "test.example.com",
+                    "ip_addresses": ["1.2.3.4"],
+                    "technologies": [{"name": "nginx"}],
+                    "vulnerabilities": [{"cve_id": "CVE-2021-1234"}],
+                    "takeover_risk": True
+                }
+            ]
         }
-        mock_enumerate.return_value = mock_recon_data
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".json") as tmp:
+            json.dump(mock_recon_data, tmp)
+            tmp_path = tmp.name
+
+        mock_enumerate.return_value = [tmp_path]
 
         # 2. Create a scan via the API
         response = self.client.post('/api/v1/scans', json={
@@ -152,16 +167,14 @@ class APITestCase(unittest.TestCase):
             self.assertEqual(scan.status, 'PENDING_REVIEW')
 
             # Check for specific assets
-            subdomain_asset = Asset.query.filter_by(scan_id=scan_id, type='subdomain', value='test.example.com').first()
-            self.assertIsNotNone(subdomain_asset)
+            asset = Asset.query.filter_by(scan_id=scan_id, type='domain', value='test.example.com').first()
+            self.assertIsNotNone(asset)
+            self.assertEqual(asset.details['ip_addresses'][0], '1.2.3.4')
+            self.assertEqual(asset.details['technologies'][0]['name'], 'nginx')
+            self.assertEqual(asset.details['vulnerabilities'][0]['cve_id'], 'CVE-2021-1234')
+            self.assertTrue(asset.details['takeover_risk'])
 
-            vuln_asset = Asset.query.filter_by(scan_id=scan_id, type='vulnerability', value='test.example.com').first()
-            self.assertIsNotNone(vuln_asset)
-            self.assertEqual(vuln_asset.details['type'], 'aws-s3')
-
-            tech_asset = Asset.query.filter_by(scan_id=scan_id, type='technology', value='http://test.example.com').first()
-            self.assertIsNotNone(tech_asset)
-            self.assertEqual(tech_asset.details['tech'], 'react')
+        os.remove(tmp_path)
 
 if __name__ == '__main__':
     unittest.main()

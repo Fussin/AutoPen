@@ -50,22 +50,53 @@ Then, run the scan with the `--upload-to-r2` flag:
 docker-compose run --rm cyberhunter -d example.com --upload-to-r2
 ```
 
-## `final_recon_data.json` Structure
-The final output file has the following structure:
+## Standardized Output Schema (`final_recon_data.json`)
+To improve interoperability with other security tools and platforms (e.g., SIEMs), CyberHunter 3D is adopting a more structured and detailed JSON output format.
+
+### Schema Overview
 ```json
 {
-  "domain": "example.com",
-  "hosts": [
+  "metadata": {
+    "target": "example.com",
+    "scan_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    "timestamp_utc": "2023-10-27T10:00:00Z"
+  },
+  "assets": [
     {
-      "host": "sub.example.com",
-      "alive": true,
-      "ips": ["1.2.3.4"],
-      "asn_details": ["AS15169 - GOOGLE"],
-      "open_ports": [80, 443],
-      "technologies": ["nginx", "React"],
+      "asset_type": "domain",
+      "value": "sub.example.com",
+      "ip_addresses": ["1.2.3.4"],
+      "asn": {
+        "id": "AS15169",
+        "description": "GOOGLE"
+      },
+      "ports": [
+        {"port": 80, "service_name": "http", "transport_protocol": "tcp"},
+        {"port": 443, "service_name": "https", "transport_protocol": "tcp"}
+      ],
+      "technologies": [
+        {"name": "nginx", "version": "1.18.0", "confidence": 100},
+        {"name": "React", "version": null, "confidence": 100}
+      ],
+      "vulnerabilities": [
+        {
+          "cve_id": "CVE-2021-1234",
+          "cvss_score": 7.5,
+          "summary": "A brief summary of the vulnerability.",
+          "source": "NVD"
+        }
+      ],
+      "risk_info": {
+          "total_risk_score": 28,
+          "risk_level": "High",
+          "contributing_factors": [
+              {"factor": "Critical CVE", "details": "CVE-2022-CRITICAL", "score": 10}
+          ]
+      },
       "takeover_risk": false,
-      "cloud_asset": false,
-      "screenshot_tags": ["webpage", "screenshot"]
+      "is_cloud_asset": false,
+      "screenshot_path": "screenshots/sub.example.com.png",
+      "tags": ["webpage", "screenshot", "login-page"]
     }
   ]
 }
