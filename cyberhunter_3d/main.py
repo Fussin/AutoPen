@@ -37,6 +37,7 @@ def aggregate_results(output_paths: dict, domain: str, logger):
     takeover_findings = load_json_data('takeover_vulnerabilities')
     cloud_assets = load_json_data('cloud_assets')
     ocr_results = load_json_data('ocr_results')
+    risk_info = load_json_data('risk_info')
 
     if not master_subdomains:
         logger.error("Master subdomains list is empty. Cannot aggregate results.")
@@ -53,7 +54,11 @@ def aggregate_results(output_paths: dict, domain: str, logger):
             "technologies": [],
             "takeover_risk": False,
             "cloud_asset": False,
-            "screenshot_tags": [], # Placeholder for AI OCR tagger
+            "screenshot_tags": [],
+            "cve_ids": [],
+            "cvss_score": 0.0,
+            "risk_level": "None",
+            "known_exploits": False,
         }
 
     # Enrich with live status
@@ -104,6 +109,15 @@ def aggregate_results(output_paths: dict, domain: str, logger):
         for host, tags in ocr_results.items():
             if host in host_map:
                 host_map[host]['screenshot_tags'] = tags
+
+    # Enrich with risk info
+    if risk_info:
+        for host, risk_data in risk_info.items():
+            if host in host_map:
+                host_map[host]['cve_ids'] = risk_data.get('cve_ids', [])
+                host_map[host]['cvss_score'] = risk_data.get('cvss_score', 0.0)
+                host_map[host]['risk_level'] = risk_data.get('risk_level', 'None')
+                host_map[host]['known_exploits'] = risk_data.get('known_exploits', False)
 
 
     final_data["hosts"] = list(host_map.values())

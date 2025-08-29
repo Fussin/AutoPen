@@ -23,6 +23,8 @@ from .ai.noise_filter import filter_false_positives
 from .ai.ocr_tagger import generate_ocr_tags
 from .threat_intel import enrich_ips_with_shodan, enrich_ips_with_censys, enrich_ips_with_fofa, enrich_ips_with_greynoise
 from .passive_dns import get_passive_dns_for_domain
+from .enrichment.cve_mapper import map_tech_to_cves
+from ..scoring.risk_scorer import calculate_risk
 from cyberhunter_3d.reporting.reporting import generate_html_report
 from flask import Flask
 from cyberhunter_3d.web.models import db, Scan, Asset
@@ -181,8 +183,19 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     passive_dns_data = get_passive_dns_for_domain(domain)
     logger.info("Threat Intelligence enrichment complete.")
 
-    logger.info("Saving all datasets to structured output files...")
+    logger.info("Starting CVE mapping and risk scoring...")
+    risk_info = {}
     tech_fingerprinting = {host: data.get('technologies', []) for host, data in tech_results.items()}
+    for host, techs in tech_fingerprinting.items():
+        if techs:
+            cve_results = map_tech_to_cves(techs, logger)
+            if cve_results:
+                # cve_results is a dict of {tech: [cve_list]}, we need to flatten the list of cves
+                all_cves_for_host = [cve for cve_list in cve_results.values() for cve in cve_list]
+                risk_info[host] = calculate_risk(all_cves_for_host)
+    logger.info("CVE mapping and risk scoring complete.")
+
+    logger.info("Saving all datasets to structured output files...")
     ports_services = {host: data.get('ports', []) for host, data in tech_results.items()}
 
     datasets = {
@@ -203,6 +216,7 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
         "greynoise_enrichment": greynoise_data,
         "passive_dns": passive_dns_data,
         "ocr_results": ocr_results,
+        "risk_info": risk_info,
     }
 
     output_file_paths = {}
