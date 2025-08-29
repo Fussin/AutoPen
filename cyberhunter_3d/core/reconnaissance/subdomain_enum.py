@@ -118,7 +118,11 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     master_subdomains = resolve_and_validate(raw_subdomains, wildcard_ips, logger)
     logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
 
-    master_subdomains = filter_false_positives(master_subdomains, logger)
+    try:
+        master_subdomains = set(filter_false_positives(master_subdomains))
+    except TypeError:
+        # older signature had (items, logger)
+        master_subdomains = set(filter_false_positives(master_subdomains, logger))
     logger.info(f"{len(master_subdomains)} subdomains remain after AI noise filtering.")
 
     output_dir = config['recon_output_dir']
