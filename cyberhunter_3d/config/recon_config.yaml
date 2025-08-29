@@ -43,3 +43,15 @@ screenshot_dir: screenshots
 nmap_output_dir: nmap
 final_recon_file: final_recon_data.json
 master_subdomains_file: master_subdomains.txt
+
+# Plugin settings
+plugins:
+  enabled:
+    - "Passive Enumeration"
+    - "Active Enumeration"
+    - "Permutation Enumeration"
+    - "JS and Code Analysis"
+    - "Technology Fingerprinting"
+    - "Subdomain Takeover"
+    - "Cloud Enumeration"
+    - "CVE Mapper"
