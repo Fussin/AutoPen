@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block content %}
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h2>Historical Intelligence</h2>
+    <a href="{{ url_for('dashboard') }}" class="button">Back to Dashboard</a>
+  </div>
+
+  <p>This page shows the evolution of your attack surface over time.</p>
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <!-- Chart Containers -->
+  <div style="margin-bottom: 3em;">
+    <h3>Subdomain Growth</h3>
+    <canvas id="subdomainChart"></canvas>
+  </div>
+
+  <div style="margin-bottom: 3em;">
+    <h3>Live Host Growth</h3>
+    <canvas id="liveHostChart"></canvas>
+  </div>
+
+  <div style="margin-bottom: 3em;">
+    <h3>New Technologies Discovered</h3>
+    <canvas id="techChart"></canvas>
+  </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Data from Flask
+    const subdomainData = {{ subdomain_data|safe }};
+    const liveHostData = {{ live_host_data|safe }};
+    const techData = {{ tech_data|safe }};
+
+    // Helper to format data for Chart.js
+    const formatData = (data) => {
+        const labels = data.map(d => d.date);
+        const counts = data.map(d => d.count);
+        return { labels, counts };
+    };
+
+    // Create Subdomain Chart
+    const subdomainCtx = document.getElementById('subdomainChart').getContext('2d');
+    new Chart(subdomainCtx, {
+        type: 'line',
+        data: {
+            labels: formatData(subdomainData).labels,
+            datasets: [{
+                label: 'Total Subdomains',
+                data: formatData(subdomainData).counts,
+                borderColor: '#00aaff',
+                backgroundColor: 'rgba(0, 170, 255, 0.1)',
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { ticks: { color: '#e0e0e0' } },
+                y: { ticks: { color: '#e0e0e0' }, beginAtZero: true }
+            }
+        }
+    });
+
+    // Create Live Host Chart
+    const liveHostCtx = document.getElementById('liveHostChart').getContext('2d');
+    new Chart(liveHostCtx, {
+        type: 'line',
+        data: {
+            labels: formatData(liveHostData).labels,
+            datasets: [{
+                label: 'Total Live Hosts',
+                data: formatData(liveHostData).counts,
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { ticks: { color: '#e0e0e0' } },
+                y: { ticks: { color: '#e0e0e0' }, beginAtZero: true }
+            }
+        }
+    });
+
+    // Create Technology Chart
+    const techCtx = document.getElementById('techChart').getContext('2d');
+    new Chart(techCtx, {
+        type: 'bar',
+        data: {
+            labels: formatData(techData).labels,
+            datasets: [{
+                label: 'New Technologies Discovered',
+                data: formatData(techData).counts,
+                backgroundColor: '#ffc107'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { ticks: { color: '#e0e0e0' } },
+                y: { ticks: { color: '#e0e0e0' }, beginAtZero: true }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
