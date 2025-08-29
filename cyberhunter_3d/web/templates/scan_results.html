@@ -43,18 +43,43 @@
       <h4>{{ asset_type.replace('_', ' ')|title }} ({{ assets|length }})</h4>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
         <thead>
-          <tr>
-            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Value</th>
-            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Details</th>
-          </tr>
+          <!-- Custom headers for specific asset types -->
+          {% if asset_type == 'vulnerability' %}
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Vulnerability Name</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Severity</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Template ID</th>
+            </tr>
+          {% elif asset_type == 'technology' %}
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Details</th>
+            </tr>
+          {% else %}
+            <!-- Default header for simple assets -->
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Value</th>
+            </tr>
+          {% endif %}
         </thead>
         <tbody>
           {% for asset in assets %}
             <tr>
-              <td style="padding: 8px; border-bottom: 1px solid #444; vertical-align: top;">{{ asset.value }}</td>
-              <td style="padding: 8px; border-bottom: 1px solid #444;">
-                <pre style="background: #2b2b2b; padding: 1em; border-radius: 4px; white-space: pre-wrap; word-break: break-all;"><code>{{ asset.details | tojson(indent=2) }}</code></pre>
-              </td>
+              <!-- Custom cells for specific asset types -->
+              {% if asset_type == 'vulnerability' %}
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.name }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.severity|title }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details['template-id'] }}</td>
+              {% elif asset_type == 'technology' %}
+                 <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+                 <td style="padding: 8px; border-bottom: 1px solid #444;">
+                    <pre style="background: #2b2b2b; padding: 1em; border-radius: 4px; white-space: pre-wrap;"><code>{{ asset.details | tojson(indent=2) }}</code></pre>
+                 </td>
+              {% else %}
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+              {% endif %}
             </tr>
           {% endfor %}
         </tbody>

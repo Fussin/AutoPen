@@ -178,55 +178,58 @@ def save_to_json(data: any, filename: str, logger) -> str:
         logger.error(f"Failed to save data to {file_path}: {e}")
         return None
 
-def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -> Dict[str, List[str]]:
+def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -> Set[str]:
     """
-    Resolves subdomains, validates them against known wildcard IPs, and returns a mapping of live subdomains to their IPs.
+    Resolves subdomains and validates them against known wildcard IPs.
     """
     if not subdomains:
-        return {}
+        return set()
 
     logger.info(f"Resolving and validating {len(subdomains)} subdomains...")
 
     config = load_config()
-    dnsx_path = config['tools'].get('dnsx')
-    if not dnsx_path:
-        logger.error("dnsx tool not configured. Skipping validation.")
-        return {sub: [] for sub in subdomains}
+    puredns_path = config['tools'].get('puredns')
+    resolvers_path = config['resolvers_path']
 
-    live_subdomains_map = {}
+    if not puredns_path or not resolvers_path:
+        logger.error("puredns or resolvers not configured. Skipping validation.")
+        return subdomains
+
+    live_subdomains = set()
 
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt") as subs_file:
         subs_filename = subs_file.name
         for sub in subdomains:
             subs_file.write(f"{sub}\n")
 
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as results_file:
+        results_filename = results_file.name
+
     try:
-        # Use dnsx to get A records in JSON format
-        command = [dnsx_path, '-l', subs_filename, '-a', '-json', '-silent']
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        command = [
+            puredns_path, 'resolve', subs_filename,
+            '--resolvers-file', resolvers_path,
+            '--write', results_filename,
+            '--quiet'
+        ]
+        subprocess.run(command, check=True, capture_output=True, text=True)
 
-        for line in result.stdout.strip().split('\n'):
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                host = data.get('host')
-                if host and 'a' in data:
-                    # Filter out wildcard IPs
-                    non_wildcard_ips = [ip for ip in data['a'] if ip not in wildcard_ips]
-                    if non_wildcard_ips:
-                        live_subdomains_map[host] = non_wildcard_ips
-            except (json.JSONDecodeError, KeyError):
-                logger.warning(f"Could not parse dnsx A record output line: {line}")
-
+        with open(results_filename, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 2:
+                    sub, ip = parts
+                    if ip not in wildcard_ips:
+                        live_subdomains.add(sub)
     except FileNotFoundError:
-        logger.error(f"Error: '{dnsx_path}' not found.")
+        logger.error(f"Error: '{puredns_path}' not found.")
     except subprocess.CalledProcessError as e:
-        logger.error(f"dnsx failed during validation: {e.stderr}")
+        logger.error(f"puredns failed during validation: {e.stderr}")
     except Exception as e:
-        logger.error(f"An error occurred during dnsx execution: {e}")
+        logger.error(f"An error occurred during puredns execution: {e}")
     finally:
         os.remove(subs_filename)
+        os.remove(results_filename)
 
-    logger.info(f"Found {len(live_subdomains_map)} live subdomains after validation.")
-    return live_subdomains_map
+    logger.info(f"Found {len(live_subdomains)} live subdomains after validation.")
+    return live_subdomains
