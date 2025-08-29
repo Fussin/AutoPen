@@ -4,6 +4,8 @@ from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from cyberhunter_3d.web.models import db, User, Scan, Asset
+from cyberhunter_3d.core.intelligence.historical import get_subdomain_growth, get_live_host_growth, get_new_technologies_growth
+import json
 
 # --- Logging Configuration ---
 logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -279,25 +281,19 @@ def scan_results(scan_id):
 
     return render_template('scan_results.html', scan=scan, grouped_assets=grouped_assets)
 
-# --- Template Helpers ---
-def get_risk_color(risk_level):
-    """Returns a color code for a given risk level."""
-    if risk_level == "Critical":
-        return "#dc3545"  # Red
-    elif risk_level == "High":
-        return "#fd7e14"  # Orange
-    elif risk_level == "Medium":
-        return "#ffc107"  # Yellow
-    elif risk_level == "Low":
-        return "#28a745"  # Green
-    else:
-        return "#6c757d"  # Grey
+@app.route('/historical-intelligence')
+@login_required
+def historical_intelligence():
+    subdomain_data = get_subdomain_growth(current_user.id)
+    live_host_data = get_live_host_growth(current_user.id)
+    tech_data = get_new_technologies_growth(current_user.id)
 
-@app.context_processor
-def utility_processor():
-    """Injects helper functions into the template context."""
-    return dict(get_risk_color=get_risk_color)
-
+    return render_template(
+        'historical_intelligence.html',
+        subdomain_data=json.dumps(subdomain_data),
+        live_host_data=json.dumps(live_host_data),
+        tech_data=json.dumps(tech_data)
+    )
 
 # --- Main Execution ---
 if __name__ == '__main__':

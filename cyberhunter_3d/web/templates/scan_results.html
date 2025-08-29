@@ -41,97 +41,49 @@
   {% if grouped_assets %}
     {% for asset_type, assets in grouped_assets.items()|sort %}
       <h4>{{ asset_type.replace('_', ' ')|title }} ({{ assets|length }})</h4>
-
-      {% if asset_type == 'live_host' %}
-        <!-- Enhanced table for Live Hosts with Risk Scores -->
-        <div style="margin-bottom: 1em;">
-          <strong>Filter by Risk:</strong>
-          <button class="filter-btn" onclick="filterByRisk('all')">All</button>
-          <button class="filter-btn" onclick="filterByRisk('Critical')">Critical</button>
-          <button class="filter-btn" onclick="filterByRisk('High')">High</button>
-          <button class="filter-btn" onclick="filterByRisk('Medium')">Medium</button>
-          <button class="filter-btn" onclick="filterByRisk('Low')">Low</button>
-        </div>
-        <table id="live-hosts-table" style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
-          <thead>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+        <thead>
+          <!-- Custom headers for specific asset types -->
+          {% if asset_type == 'vulnerability' %}
             <tr>
               <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
-              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555; cursor: pointer;" onclick="sortByScore()">Risk Score ▾</th>
-              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Risk Level</th>
-              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Contributing Factors</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Vulnerability Name</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Severity</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Template ID</th>
             </tr>
-          </thead>
-          <tbody>
-            {% for asset in assets %}
-              <tr class="host-row" data-risk="{{ asset.details.risk_level | default('None') }}">
+          {% elif asset_type == 'technology' %}
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Details</th>
+            </tr>
+          {% else %}
+            <!-- Default header for simple assets -->
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Value</th>
+            </tr>
+          {% endif %}
+        </thead>
+        <tbody>
+          {% for asset in assets %}
+            <tr>
+              <!-- Custom cells for specific asset types -->
+              {% if asset_type == 'vulnerability' %}
                 <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #444;" data-score="{{ asset.details.total_risk_score | default(0) }}">
-                  {{ asset.details.total_risk_score | default('N/A') }}
-                </td>
-                <td style="padding: 8px; border-bottom: 1px solid #444;">
-                  {% set level = asset.details.risk_level | default('None') %}
-                  <span style="padding: 0.2em 0.5em; border-radius: 4px; color: white; background-color: {{ get_risk_color(level) }};">
-                    {{ level }}
-                  </span>
-                </td>
-                <td style="padding: 8px; border-bottom: 1px solid #444;">
-                  {% if asset.details.contributing_factors %}
-                    <ul>
-                      {% for factor in asset.details.contributing_factors %}
-                        <li><strong>{{ factor.factor }} ({{ factor.score }} pts):</strong> {{ factor.details }}</li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    No specific risk factors identified.
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <!-- Default table for other asset types -->
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
-          <thead>
-            {% if asset_type == 'vulnerability' %}
-              <tr>
-                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
-                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Vulnerability Name</th>
-                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Severity</th>
-                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Template ID</th>
-              </tr>
-            {% elif asset_type == 'technology' %}
-              <tr>
-                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
-                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Details</th>
-              </tr>
-            {% else %}
-              <tr>
-                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Value</th>
-              </tr>
-            {% endif %}
-          </thead>
-          <tbody>
-            {% for asset in assets %}
-              <tr>
-                {% if asset_type == 'vulnerability' %}
-                  <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.name }}</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.severity|title }}</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details['template-id'] }}</td>
-                {% elif asset_type == 'technology' %}
-                   <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
-                   <td style="padding: 8px; border-bottom: 1px solid #444;">
-                      <pre style="background: #2b2b2b; padding: 1em; border-radius: 4px; white-space: pre-wrap;"><code>{{ asset.details | tojson(indent=2) }}</code></pre>
-                   </td>
-                {% else %}
-                  <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
-                {% endif %}
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% endif %}
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.name }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.severity|title }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details['template-id'] }}</td>
+              {% elif asset_type == 'technology' %}
+                 <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+                 <td style="padding: 8px; border-bottom: 1px solid #444;">
+                    <pre style="background: #2b2b2b; padding: 1em; border-radius: 4px; white-space: pre-wrap;"><code>{{ asset.details | tojson(indent=2) }}</code></pre>
+                 </td>
+              {% else %}
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     {% endfor %}
   {% elif scan.status == 'COMPLETED' or scan.status == 'PENDING_REVIEW' %}
     <p>Scan finished, but no in-scope assets were discovered.</p>

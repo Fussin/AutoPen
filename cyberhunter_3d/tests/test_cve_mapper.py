@@ -1,45 +1,32 @@
-import unittest
-from unittest.mock import patch, MagicMock
-import requests
-from cyberhunter_3d.core.scoring.cve_mapper import get_cves_for_technology
+import pytest
+from unittest.mock import patch
+from plugins.cve_mapper_plugin import CveMapperPlugin
+from cyberhunter_3d.utils.logger import setup_logger
 
-class TestCveMapper(unittest.TestCase):
+logger = setup_logger('TestCveMapper', 'test_cve_mapper.log')
 
-    @patch('cyberhunter_3d.core.scoring.cve_mapper.requests.get')
-    def test_get_cves_for_technology_success(self, mock_get):
-        """
-        Test successful fetching of CVEs for a technology.
-        """
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "vulnerabilities": [
-                {"cve": {"id": "CVE-2021-44228"}},
-                {"cve": {"id": "CVE-2021-45046"}},
-            ]
-        }
-        mock_get.return_value = mock_response
+@patch('plugins.cve_mapper_plugin.CveMapperPlugin._query_nvd_for_cpe')
+def test_map_tech_to_cves(mock_query_nvd):
+    """
+    Tests that _map_tech_to_cves correctly maps technologies to CVEs.
+    """
+    # 1. Setup
+    plugin = CveMapperPlugin()
 
-        cves = get_cves_for_technology("log4j", "2.15.0")
+    # 2. Mock the NVD API response
+    mock_nvd_response = [
+        {"cve": {"id": "CVE-2021-1234"}},
+        {"cve": {"id": "CVE-2021-5678"}},
+    ]
+    mock_query_nvd.return_value = mock_nvd_response
 
-        self.assertEqual(len(cves), 2)
-        self.assertEqual(cves[0]['cve']['id'], "CVE-2021-44228")
-        mock_get.assert_called_once()
-        # Check if the version was included in the search
-        self.assertIn("2.15.0", mock_get.call_args.kwargs['params']['keywordSearch'])
+    # 3. Execute
+    technologies = ["nginx", "apache"]
+    cve_results = plugin._map_tech_to_cves(technologies, logger)
 
-
-    @patch('cyberhunter_3d.core.scoring.cve_mapper.requests.get')
-    def test_get_cves_for_technology_api_error(self, mock_get):
-        """
-        Test handling of an API error (e.g., 500 server error).
-        """
-        mock_get.side_effect = requests.exceptions.RequestException("API is down")
-
-        cves = get_cves_for_technology("some-tech")
-
-        self.assertEqual(cves, [])
-        mock_get.assert_called_once()
-
-if __name__ == '__main__':
-    unittest.main()
+    # 4. Assertions
+    assert "nginx" in cve_results
+    assert "apache" in cve_results
+    assert cve_results["nginx"] == mock_nvd_response
+    assert cve_results["apache"] == mock_nvd_response
+    assert mock_query_nvd.call_count == 2

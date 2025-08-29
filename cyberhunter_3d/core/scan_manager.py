@@ -1,8 +1,6 @@
 from cyberhunter_3d.web.models import db, Scan, Target, Asset
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
-from cyberhunter_3d.core.scoring.cve_mapper import get_cves_for_technology
-from cyberhunter_3d.core.scoring.risk_scorer import calculate_host_risk
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
@@ -102,45 +100,6 @@ def run_discovery_phase(scan_id, app):
                     elif status == 'out_of_scope': out_of_scope_count += 1
 
                 db.session.commit()
-
-            # --- Risk Assessment Phase ---
-            print(f"Starting Risk Assessment for scan {scan_id}...")
-            live_hosts_assets = Asset.query.filter_by(scan_id=scan.id, type='live_host').all()
-            for asset in live_hosts_assets:
-                host_data = {"host": asset.value, "cves": [], "open_ports": [], "technologies": [], "screenshot_tags": []}
-
-                # Gather technologies and ports
-                tech_assets = Asset.query.filter_by(scan_id=scan.id, type='technology').all()
-                for tech_asset in tech_assets:
-                    # A bit of a simplification: we assume the tech might be on this host
-                    # A better model would link technologies directly to hosts.
-                    host_data["technologies"].append(tech_asset.value)
-                    if tech_asset.details and 'ports' in tech_asset.details:
-                        host_data["open_ports"].extend(tech_asset.details['ports'])
-
-                # Fetch CVEs for technologies
-                for tech in host_data["technologies"]:
-                    cves = get_cves_for_technology(tech)
-                    if cves:
-                        host_data["cves"].extend(cves)
-
-                # Check for takeover risk
-                takeover_asset = Asset.query.filter_by(scan_id=scan.id, type='vulnerability', value=asset.value).first()
-                host_data["takeover_risk"] = takeover_asset is not None
-
-                # Calculate risk
-                risk_info = calculate_host_risk(host_data)
-
-                # Update asset with risk info
-                if asset.details:
-                    asset.details.update(risk_info)
-                else:
-                    asset.details = risk_info
-
-                db.session.add(asset)
-            db.session.commit()
-            print("Risk Assessment phase complete.")
-            # --- End Risk Assessment Phase ---
 
             scan.results = f"Discovery phase complete. Found {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
             scan.status = 'PENDING_REVIEW'

@@ -4,10 +4,16 @@ from typing import Set, List, Dict
 from cyberhunter_3d.utils.logger import setup_logger
 from .utils import load_config, save_to_json, detect_wildcard_ips, resolve_and_validate
 from ..plugins.manager import PluginManager
+from ..scoring.risk_scorer import calculate_risk
 from cyberhunter_3d.reporting.reporting import generate_html_report
+from flask import Flask
+from cyberhunter_3d.web.models import db, Scan, Asset
 
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
+
+def save_results_to_db(domain: str, results: Dict[str, any]):
+    pass
 
 def perform_delta_scan(master_subdomains: Set[str], previous_subdomains: Set[str], logger) -> Dict[str, str]:
     if not previous_subdomains:
@@ -104,12 +110,21 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
                 pipeline_data["live_hosts"] = master_subdomains
 
 
+    # --- Post-Plugin Processing ---
+    risk_info = {}
+    if "CVE Mapper" in plugin_results:
+        cve_results = plugin_results["CVE Mapper"].get("cve_results", {})
+        for host, cves_by_tech in cve_results.items():
+            all_cves_for_host = [cve for cve_list in cves_by_tech.values() for cve in cve_list]
+            risk_info[host] = calculate_risk(all_cves_for_host)
+
     # --- Final Aggregation and Reporting ---
     final_results = {
         "target": domain,
         "all_subdomains": list(pipeline_data['all_subdomains']),
         "live_hosts": list(pipeline_data['live_hosts']),
         "plugin_results": plugin_results,
+        "risk_info": risk_info,
     }
 
     # Save the final results to a JSON file
