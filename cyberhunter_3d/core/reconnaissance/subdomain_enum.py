@@ -26,11 +26,9 @@ from .passive_dns import get_passive_dns_for_domain
 from cyberhunter_3d.reporting.reporting import generate_html_report
 from flask import Flask
 from cyberhunter_3d.web.models import db, Scan, Asset
+
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
-def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
-    """
-    Runs the full V3 reconnaissance pipeline.
 
 def save_results_to_db(domain: str, results: Dict[str, any]):
     """
@@ -43,20 +41,17 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
     db.init_app(app)
 
     with app.app_context():
-        # Create a new scan object
-        scan = Scan(user_id=1, in_scope_rules=domain) # Assuming user_id 1 for CLI scans
+        scan = Scan(user_id=1, in_scope_rules=domain)
         db.session.add(scan)
         db.session.flush()
 
         for asset_type, data in results.items():
             if not data:
                 continue
-
             if isinstance(data, list):
                 for item in data:
                     value = item.get('value') if isinstance(item, dict) else item
                     details = item if isinstance(item, dict) else None
-
                     existing_asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(value)).first()
                     if existing_asset:
                         existing_asset.details = details
@@ -64,7 +59,6 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
                     else:
                         asset = Asset(scan_id=scan.id, type=asset_type, value=str(value), details=details)
                         db.session.add(asset)
-
             elif isinstance(data, dict):
                 for key, value in data.items():
                     existing_asset = Asset.query.filter_by(scan_id=scan.id, type=asset_type, value=str(key)).first()
@@ -74,7 +68,6 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
                     else:
                         asset = Asset(scan_id=scan.id, type=asset_type, value=str(key), details=value)
                         db.session.add(asset)
-
         db.session.commit()
         logger.info(f"Results for domain {domain} saved to database with scan_id {scan.id}")
 
@@ -82,13 +75,9 @@ def save_results_to_db(domain: str, results: Dict[str, any]):
 def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
     """
     Runs the full V2 reconnaissance pipeline and performs delta detection if a previous scan is provided.
-
     """
     logger.info(f"Starting V3 reconnaissance for: {domain}")
 
-    # TODO: Implement delta scan logic using previous_scan_dir
-
-    # Load previous scan's subdomains for delta detection
     previous_subdomains = set()
     if previous_scan_dir:
         previous_subdomains_file = os.path.join(previous_scan_dir, "subdomains_verified.json")
@@ -97,21 +86,16 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
                 previous_subdomains = set(json.load(f))
             logger.info(f"Loaded {len(previous_subdomains)} subdomains from previous scan for delta detection.")
 
-    # Step 0: Wildcard Detection
-    # Run this first to avoid polluting results from active and permutation engines.
     wildcard_ips = detect_wildcard_ips(domain, logger)
-
     raw_subdomains = set()
     initial_subdomains = set()
 
     logger.info("Running passive and active enumeration engines in parallel...")
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        # Submit passive and active engines
         future_to_engine = {
             executor.submit(run_passive_enumeration, domain): "Passive",
             executor.submit(run_active_enumeration, domain): "Active"
         }
-
         for future in concurrent.futures.as_completed(future_to_engine):
             engine_name = future_to_engine[future]
             try:
@@ -124,7 +108,6 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     raw_subdomains.update(initial_subdomains)
     logger.info(f"Found {len(initial_subdomains)} subdomains from passive and active scans.")
 
-    # Now, run the permutation engine with the results from the initial scans
     logger.info("Running permutation engine...")
     permutation_results = run_permutation_enumeration(domain, initial_subdomains)
     raw_subdomains.update(permutation_results)
@@ -132,76 +115,45 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
 
     logger.info(f"Total raw subdomains found from all engines: {len(raw_subdomains)}")
 
-    # Step 1: DNS Resolution and Validation
-    logger.info("Starting DNS resolution and validation...")
     master_subdomains = resolve_and_validate(raw_subdomains, wildcard_ips, logger)
     logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
 
-    # AI-Powered Noise Reduction
-    logger.info("Applying AI noise reduction to filter false positives...")
     master_subdomains = filter_false_positives(master_subdomains, logger)
     logger.info(f"{len(master_subdomains)} subdomains remain after AI noise filtering.")
 
-    # Create output directory if it doesn't exist
     output_dir = config['recon_output_dir']
     os.makedirs(output_dir, exist_ok=True)
-
-    # Save to master_subdomains.txt
     master_subdomains_file = os.path.join(output_dir, config['master_subdomains_file'])
     with open(master_subdomains_file, 'w') as f:
         for sub in master_subdomains:
             f.write(f"{sub}\n")
 
-    # Step 2: Live Host Detection and Visual Recon
     live_hosts, screenshots_dir = run_visual_recon(master_subdomains)
     logger.info(f"Found {len(live_hosts)} live hosts.")
     logger.info(f"Screenshots saved in: {screenshots_dir}")
 
-    # AI-Powered Screenshot Analysis
-    logger.info("Starting AI-powered screenshot analysis (OCR)...")
     ocr_results = generate_ocr_tags(screenshots_dir, logger)
     logger.info(f"Generated OCR tags for {len(ocr_results)} screenshots.")
 
-    # Step 3: Subdomain Takeover Scan
-    logger.info("Starting subdomain takeover scan...")
     takeover_findings = run_takeover_scan(live_hosts)
     logger.info(f"Found {len(takeover_findings)} potential takeover vulnerabilities.")
 
-    # Step 4: JS & Code Analysis Engine
-    logger.info("Starting JS & Code analysis...")
     code_analysis_subdomains, secrets_and_endpoints = run_js_and_code_analysis(domain, live_hosts)
     logger.info(f"Found {len(code_analysis_subdomains)} subdomains from code analysis.")
-    # Add these to the master list, as they might be new
     master_subdomains.update(code_analysis_subdomains)
 
-
-    # Step 5: Technology Fingerprinting and Port Scanning
-    logger.info("Starting technology fingerprinting and port scanning...")
     tech_results = run_tech_fingerprinting(live_hosts)
-
-    # Correlate technology stacks
     logger.info("Correlating technology stacks...")
     tech_clusters = correlate_tech_stack(tech_results)
     if tech_clusters:
         logger.info(f"Found {len(tech_clusters)} technology clusters.")
 
-    # Step 6: Cloud Asset Identification
-    logger.info("Starting cloud asset identification...")
     cloud_assets = find_cloud_assets(master_subdomains)
-
-    # Step 7: IP and ASN Enrichment
-    logger.info("Starting IP and ASN enrichment...")
     subdomain_ip_mapping = resolve_subdomains_to_ips(master_subdomains, logger)
-
-    # Collect all unique IPs from the mapping
-    all_ips = set()
-    for ip_list in subdomain_ip_mapping.values():
-        all_ips.update(ip_list)
-
+    all_ips = set(ip for ip_list in subdomain_ip_mapping.values() for ip in ip_list)
     asn_details = get_asn_for_ips(all_ips)
     logger.info(f"Completed IP and ASN enrichment for {len(all_ips)} unique IPs.")
 
-    # Threat Intel Enrichment
     logger.info("Starting Threat Intelligence enrichment...")
     shodan_data = enrich_ips_with_shodan(all_ips)
     censys_data = enrich_ips_with_censys(all_ips)
@@ -210,27 +162,11 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
     passive_dns_data = get_passive_dns_for_domain(domain)
     logger.info("Threat Intelligence enrichment complete.")
 
-    # Step 8: Save all datasets to structured files
     logger.info("Saving all datasets to structured output files...")
-    output_file_paths = {}
-
-    # Prepare structured data
     tech_fingerprinting = {host: data.get('technologies', []) for host, data in tech_results.items()}
     ports_services = {host: data.get('ports', []) for host, data in tech_results.items()}
 
-    # Define datasets
     datasets = {
-
-        "master_subdomains.json": master_subdomains,
-        "subdomain_ip_mapping.json": subdomain_ip_mapping,
-        "asn_details.json": asn_details,
-        "live_hosts.json": live_hosts,
-        "technology_and_ports.json": tech_results,
-        "takeover_vulnerabilities.json": takeover_findings,
-        "code_analysis_subdomains.json": code_analysis_subdomains,
-        "cloud_assets.json": cloud_assets,
-        "ocr_results.json": ocr_results,
-
         "subdomains_verified": list(master_subdomains),
         "subdomain_ip_mapping": subdomain_ip_mapping,
         "asn_details": asn_details,
@@ -247,39 +183,32 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
         "fofa_enrichment": fofa_data,
         "greynoise_enrichment": greynoise_data,
         "passive_dns": passive_dns_data,
-
+        "ocr_results": ocr_results,
     }
 
+    output_file_paths = {}
     if save_to_db:
         save_results_to_db(domain, datasets)
     else:
         for filename, data in datasets.items():
-            if data: # Only save if there is data
+            if data:
                 path = save_to_json(data, f"{filename}.json", logger)
                 if path:
                     output_file_paths[filename] = path
 
-    # Also include the path to the screenshots directory
     output_file_paths['screenshots'] = screenshots_dir
 
-    # TODO: Implement database saving logic if save_to_db is True
-
-    # Delta Detection
     if previous_subdomains:
         new_subdomains = master_subdomains - previous_subdomains
         removed_subdomains = previous_subdomains - master_subdomains
-
         if new_subdomains:
             path = save_to_json(list(new_subdomains), "new_subdomains.json", logger)
             if path: output_file_paths['new_subdomains'] = path
-
         if removed_subdomains:
             path = save_to_json(list(removed_subdomains), "removed_subdomains.json", logger)
             if path: output_file_paths['removed_subdomains'] = path
-
         logger.info(f"Delta detection complete. Found {len(new_subdomains)} new and {len(removed_subdomains)} removed subdomains.")
 
-    # Generate HTML report
     if not save_to_db:
         logger.info("Generating HTML report...")
         report_path = os.path.join(output_dir, "recon_report.html")
@@ -305,7 +234,6 @@ def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -
 
     resolved_subdomains = set()
     try:
-        # Use puredns to resolve and validate the subdomains
         puredns_path = config['tools']['puredns']
         resolvers_list = config['wordlists']['resolvers']
         puredns_command = [
@@ -313,12 +241,10 @@ def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -
             '-r', resolvers_list,
             '--quiet'
         ]
-        result = subprocess.run(puredns_command, capture_output=_True, text=True, check=True)
-
+        result = subprocess.run(puredns_command, capture_output=True, text=True, check=True)
         for line in result.stdout.strip().split('\n'):
             if line:
                 resolved_subdomains.add(line)
-
     except FileNotFoundError:
         logger.error("Error: 'puredns' not found. Please ensure it is installed and in your PATH.")
     except subprocess.CalledProcessError as e:
@@ -329,9 +255,7 @@ def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -
     if not wildcard_ips or not resolved_subdomains:
         return resolved_subdomains
 
-    # Step 2: Filter out any subdomains that resolve to the wildcard IPs
     logger.info(f"Filtering {len(resolved_subdomains)} resolved subdomains against {len(wildcard_ips)} wildcard IPs...")
-
     with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as subs_to_filter_file:
         subs_to_filter_filename = subs_to_filter_file.name
         for sub in resolved_subdomains:
@@ -340,33 +264,26 @@ def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -
     final_subdomains = set()
     try:
         dnsx_path = config['tools']['dnsx']
-        # Get A records for all resolved subdomains
         dnsx_command = [dnsx_path, '-l', subs_to_filter_filename, '-a', '-resp', '-silent']
         result = subprocess.run(dnsx_command, capture_output=True, text=True, check=True)
-
         ip_regex = re.compile(r'\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]')
         for line in result.stdout.strip().split('\n'):
             if not line:
                 continue
-
-            # Line is like "sub.example.com [1.2.3.4]"
             subdomain = line.split()[0]
             ip_match = ip_regex.search(line)
-
             if ip_match:
                 ip = ip_match.group(1)
                 if ip not in wildcard_ips:
                     final_subdomains.add(subdomain)
-
         filtered_count = len(resolved_subdomains) - len(final_subdomains)
         logger.info(f"Filtered out {filtered_count} wildcard subdomains.")
-
     except FileNotFoundError:
         logger.error(f"Error: '{dnsx_path}' not found. Skipping wildcard filtering.")
-        return resolved_subdomains # Return unfiltered list if dnsx is missing
+        return resolved_subdomains
     except Exception as e:
         logger.error(f"An error occurred during wildcard filtering with dnsx: {e}")
-        return resolved_subdomains # Return unfiltered list on error
+        return resolved_subdomains
     finally:
         os.remove(subs_to_filter_filename)
 
