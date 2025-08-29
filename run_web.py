@@ -4,8 +4,6 @@ from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from cyberhunter_3d.web.models import db, User, Scan, Asset
-from cyberhunter_3d.core.intelligence.historical import get_subdomain_growth, get_live_host_growth, get_new_technologies_growth
-import json
 
 # --- Logging Configuration ---
 logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -280,20 +278,6 @@ def scan_results(scan_id):
         grouped_assets[asset.type].append(asset)
 
     return render_template('scan_results.html', scan=scan, grouped_assets=grouped_assets)
-
-@app.route('/historical-intelligence')
-@login_required
-def historical_intelligence():
-    subdomain_data = get_subdomain_growth(current_user.id)
-    live_host_data = get_live_host_growth(current_user.id)
-    tech_data = get_new_technologies_growth(current_user.id)
-
-    return render_template(
-        'historical_intelligence.html',
-        subdomain_data=json.dumps(subdomain_data),
-        live_host_data=json.dumps(live_host_data),
-        tech_data=json.dumps(tech_data)
-    )
 
 # --- Main Execution ---
 if __name__ == '__main__':

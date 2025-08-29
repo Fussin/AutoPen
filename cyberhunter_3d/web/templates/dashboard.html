@@ -4,8 +4,7 @@
     <h2>Dashboard</h2>
     <div>
       <span style="margin-right: 1em;">Welcome, {{ current_user.username }}!</span>
-      <a href="{{ url_for('historical_intelligence') }}" class="button">History</a>
-      <a href="{{ url_for('profile') }}" class="button" style="margin-left: 1em;">Profile</a>
+      <a href="{{ url_for('profile') }}" class="button">Profile</a>
       <a href="{{ url_for('logout') }}" class="button" style="background-color: #d9534f; margin-left: 1em;">Logout</a>
     </div>
   </div>
