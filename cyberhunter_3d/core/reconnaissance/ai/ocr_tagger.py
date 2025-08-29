@@ -1,61 +1,53 @@
-from typing import Dict, List
+from __future__ import annotations
 import os
-import re
+from pathlib import Path
+from typing import Dict, List
 try:
+    import pytesseract
     from PIL import Image
-except ImportError:
-    import Image
-import pytesseract
-from cyberhunter_3d.utils.logger import setup_logger
+except Exception:
+    pytesseract = None
+    Image = None
 
-def generate_ocr_tags(screenshots_dir: str, logger) -> Dict[str, List[str]]:
+def generate_ocr_tags(screenshots_root: str, logger=None) -> Dict[str, List[str]]:
     """
-    Performs OCR on screenshots and generates descriptive tags.
-    This function recursively scans the given directory for images.
+    Recursively scan screenshots_root for image files, run OCR (if available),
+    and return a mapping: {relative_image_path: [tags...]}.
+    If pytesseract is unavailable, returns empty tags but still returns paths.
     """
-    logger.info("AI OCR Tagger: Performing OCR on screenshots...")
+    root = Path(screenshots_root)
+    if not root.exists():
+        if logger:
+            logger.warning(f"OCR: screenshots root not found: {screenshots_root}")
+        return {}
 
-    ocr_results = {}
-    if not os.path.isdir(screenshots_dir):
-        logger.warning(f"Screenshots directory '{screenshots_dir}' not found. Cannot perform OCR.")
-        return ocr_results
+    image_exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
+    results: Dict[str, List[str]] = {}
 
-    for root, _, files in os.walk(screenshots_dir):
-        for filename in files:
-            if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                hostname = os.path.splitext(filename)[0]
-                image_path = os.path.join(root, filename)
-
+    for img_path in root.rglob("*"):
+        if img_path.is_file() and img_path.suffix.lower() in image_exts:
+            rel = str(img_path.relative_to(root))
+            tags: List[str] = []
+            if pytesseract and Image:
                 try:
-                    # Perform OCR
-                    text = pytesseract.image_to_string(Image.open(image_path), timeout=30)
+                    text = pytesseract.image_to_string(Image.open(img_path))
+                    text = (text or "").strip()
+                    # Simple heuristics: find suspicious keywords
+                    kws = ["staging", "internal", "debug", "admin", "login", "password", "username", "token"]
+                    for kw in kws:
+                        if kw.lower() in text.lower():
+                            tags.append(kw)
+                    # If page title-like text exists, add short title tag
+                    if len(text) > 0:
+                        preview = " ".join(text.splitlines()[:2])[:200]
+                        tags.append(f"title:{preview}")
+                except Exception:
+                    if logger:
+                        logger.exception(f"OCR failed for {img_path}")
+            else:
+                # Fallback: return empty list but include path
+                if logger:
+                    logger.debug("pytesseract not installed; skipping OCR content.")
+            results[rel] = tags
 
-                    # Generate tags from OCR text (simple keyword matching)
-                    tags = set()
-                    text_lower = text.lower()
-
-                    if "login" in text_lower or "sign in" in text_lower:
-                        tags.add("login-page")
-                    if "404" in text_lower or "not found" in text_lower:
-                        tags.add("404-not-found")
-                    if "error" in text_lower or "exception" in text_lower:
-                        tags.add("error-page")
-                    if "dashboard" in text_lower or "admin" in text_lower:
-                        tags.add("dashboard")
-                    if "api" in text_lower or "documentation" in text_lower:
-                        tags.add("api-docs")
-
-                    # Add some generic tags
-                    tags.add("webpage")
-                    tags.add("screenshot")
-
-                    ocr_results[hostname] = sorted(list(tags))
-
-                except pytesseract.TesseractNotFoundError:
-                    logger.error("Tesseract is not installed or not in your PATH. Cannot perform OCR.")
-                    return {} # Stop processing if Tesseract is not found
-                except Exception as e:
-                    logger.error(f"Error performing OCR on {image_path}: {e}")
-
-    logger.info(f"Generated OCR tags for {len(ocr_results)} screenshots.")
-    return ocr_results
+    return results
