@@ -45,5 +45,35 @@
     <script>
       mermaid.initialize({ startOnLoad: true, theme: 'dark' });
     </script>
+    <script>
+        // --- Sorting and Filtering for Risk Table ---
+        let sortAsc = true;
+        function sortByScore() {
+            const table = document.getElementById("live-hosts-table");
+            if (!table) return;
+            const tbody = table.querySelector("tbody");
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+
+            rows.sort((a, b) => {
+                const scoreA = parseFloat(a.querySelector("td[data-score]").dataset.score);
+                const scoreB = parseFloat(b.querySelector("td[data-score]").dataset.score);
+                return sortAsc ? scoreA - scoreB : scoreB - scoreA;
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+            sortAsc = !sortAsc;
+        }
+
+        function filterByRisk(level) {
+            const rows = document.querySelectorAll("#live-hosts-table tbody tr.host-row");
+            rows.forEach(row => {
+                if (level === 'all' || row.dataset.risk === level) {
+                    row.style.display = "";
+                } else {
+                    row.style.display = "none";
+                }
+            });
+        }
+    </script>
   </body>
 </html>

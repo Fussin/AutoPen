@@ -279,6 +279,26 @@ def scan_results(scan_id):
 
     return render_template('scan_results.html', scan=scan, grouped_assets=grouped_assets)
 
+# --- Template Helpers ---
+def get_risk_color(risk_level):
+    """Returns a color code for a given risk level."""
+    if risk_level == "Critical":
+        return "#dc3545"  # Red
+    elif risk_level == "High":
+        return "#fd7e14"  # Orange
+    elif risk_level == "Medium":
+        return "#ffc107"  # Yellow
+    elif risk_level == "Low":
+        return "#28a745"  # Green
+    else:
+        return "#6c757d"  # Grey
+
+@app.context_processor
+def utility_processor():
+    """Injects helper functions into the template context."""
+    return dict(get_risk_color=get_risk_color)
+
+
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database()
