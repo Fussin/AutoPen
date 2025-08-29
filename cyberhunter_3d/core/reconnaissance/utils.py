@@ -177,3 +177,59 @@ def save_to_json(data: any, filename: str, logger) -> str:
     except Exception as e:
         logger.error(f"Failed to save data to {file_path}: {e}")
         return None
+
+def resolve_and_validate(subdomains: Set[str], wildcard_ips: Set[str], logger) -> Set[str]:
+    """
+    Resolves subdomains and validates them against known wildcard IPs.
+    """
+    if not subdomains:
+        return set()
+
+    logger.info(f"Resolving and validating {len(subdomains)} subdomains...")
+
+    config = load_config()
+    puredns_path = config['tools'].get('puredns')
+    resolvers_path = config['resolvers_path']
+
+    if not puredns_path or not resolvers_path:
+        logger.error("puredns or resolvers not configured. Skipping validation.")
+        return subdomains
+
+    live_subdomains = set()
+
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt") as subs_file:
+        subs_filename = subs_file.name
+        for sub in subdomains:
+            subs_file.write(f"{sub}\n")
+
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as results_file:
+        results_filename = results_file.name
+
+    try:
+        command = [
+            puredns_path, 'resolve', subs_filename,
+            '--resolvers-file', resolvers_path,
+            '--write', results_filename,
+            '--quiet'
+        ]
+        subprocess.run(command, check=True, capture_output=True, text=True)
+
+        with open(results_filename, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 2:
+                    sub, ip = parts
+                    if ip not in wildcard_ips:
+                        live_subdomains.add(sub)
+    except FileNotFoundError:
+        logger.error(f"Error: '{puredns_path}' not found.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"puredns failed during validation: {e.stderr}")
+    except Exception as e:
+        logger.error(f"An error occurred during puredns execution: {e}")
+    finally:
+        os.remove(subs_filename)
+        os.remove(results_filename)
+
+    logger.info(f"Found {len(live_subdomains)} live subdomains after validation.")
+    return live_subdomains
