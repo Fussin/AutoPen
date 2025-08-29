@@ -42,6 +42,7 @@ class Scan(db.Model):
 
     # Relationship to discovered assets
     assets = db.relationship('Asset', backref='scan', lazy=True, cascade="all, delete-orphan")
+    output_path = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
         return f'<Scan {self.id} - {self.status}>'

@@ -65,3 +65,58 @@ def generate_html_report(output_dir: str, report_path: str):
         f.write(html)
 
     print(f"HTML report generated at {report_path}")
+
+def generate_delta_report(output_dir: str, delta_paths: dict):
+    """
+    Generates a visual diff report for new and removed subdomains.
+    """
+    new_subdomains_path = delta_paths.get('new_subdomains')
+    removed_subdomains_path = delta_paths.get('removed_subdomains')
+
+    new_subdomains = []
+    if new_subdomains_path and os.path.exists(new_subdomains_path):
+        with open(new_subdomains_path, 'r') as f:
+            new_subdomains = json.load(f)
+
+    removed_subdomains = []
+    if removed_subdomains_path and os.path.exists(removed_subdomains_path):
+        with open(removed_subdomains_path, 'r') as f:
+            removed_subdomains = json.load(f)
+
+    html = f"""
+    <html>
+    <head>
+        <title>CyberHunter 3D - Delta Report</title>
+        <style>
+            body {{ font-family: sans-serif; }}
+            .added {{ color: green; }}
+            .removed {{ color: red; }}
+        </style>
+    </head>
+    <body>
+        <h1>Delta Report</h1>
+        <h2>New Subdomains ({len(new_subdomains)})</h2>
+        <ul>
+    """
+    for sub in new_subdomains:
+        html += f'<li class="added">{sub}</li>'
+
+    html += f"""
+        </ul>
+        <h2>Removed Subdomains ({len(removed_subdomains)})</h2>
+        <ul>
+    """
+    for sub in removed_subdomains:
+        html += f'<li class="removed">{sub}</li>'
+
+    html += """
+        </ul>
+    </body>
+    </html>
+    """
+
+    report_path = os.path.join(output_dir, "delta_report.html")
+    with open(report_path, 'w') as f:
+        f.write(html)
+
+    print(f"Delta report generated at {report_path}")

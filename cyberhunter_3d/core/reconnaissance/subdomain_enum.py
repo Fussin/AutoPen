@@ -5,9 +5,9 @@ from cyberhunter_3d.utils.logger import setup_logger
 from .utils import load_config, save_to_json, detect_wildcard_ips, resolve_and_validate
 from ..plugins.manager import PluginManager
 from ..scoring.risk_scorer import calculate_risk
-from cyberhunter_3d.reporting.reporting import generate_html_report
+from cyberhunter_3d.reporting.reporting import generate_html_report, generate_delta_report
 from flask import Flask
-from cyberhunter_3d.web.models import db, Scan, Asset
+from cyberhunter_3d.web.models import db, Scan, Asset, Target
 
 logger = setup_logger('Pipeline', 'pipeline.log')
 config = load_config()
@@ -15,7 +15,7 @@ config = load_config()
 def save_results_to_db(domain: str, results: Dict[str, any]):
     pass
 
-def perform_delta_scan(master_subdomains: Set[str], previous_subdomains: Set[str], logger) -> Dict[str, str]:
+def perform_delta_scan(master_subdomains: Set[str], previous_subdomains: Set[str], logger, output_dir: str) -> Dict[str, str]:
     if not previous_subdomains:
         logger.info("No previous subdomains found. Skipping delta scan.")
         return {}
@@ -28,19 +28,37 @@ def perform_delta_scan(master_subdomains: Set[str], previous_subdomains: Set[str
     delta_paths = {}
 
     if new_subdomains:
-        path = save_to_json(list(new_subdomains), 'new_subdomains.json', logger)
+        path = save_to_json(list(new_subdomains), os.path.join(output_dir, 'new_subdomains.json'), logger)
         if path:
             delta_paths['new_subdomains'] = path
 
     if removed_subdomains:
-        path = save_to_json(list(removed_subdomains), 'removed_subdomains.json', logger)
+        path = save_to_json(list(removed_subdomains), os.path.join(output_dir, 'removed_subdomains.json'), logger)
         if path:
             delta_paths['removed_subdomains'] = path
 
     return delta_paths
 
-def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
+def enumerate_subdomains_v2(domain: str, scan_id: int, app, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
     logger.info(f"Starting V3 Plugin-Based Reconnaissance for: {domain}")
+
+    # Find previous subdomains
+    previous_subdomains = set()
+    with app.app_context():
+        # Find the most recent completed scan for the same domain
+        previous_scan = Scan.query.filter(
+            Scan.id < scan_id,
+            Scan.targets.any(Target.value == domain),
+            Scan.status == 'COMPLETED'
+        ).order_by(Scan.created_at.desc()).first()
+
+        if previous_scan and previous_scan.output_path and os.path.exists(previous_scan.output_path):
+            logger.info(f"Found previous scan {previous_scan.id} to compare for delta.")
+            with open(previous_scan.output_path, 'r') as f:
+                old_data = json.load(f)
+                previous_subdomains = set(old_data.get('all_subdomains', []))
+        elif previous_scan:
+            logger.warning(f"Previous scan {previous_scan.id} found, but no output path is set or file does not exist.")
 
     # --- Data buckets for the pipeline ---
     pipeline_data = {
@@ -127,13 +145,18 @@ def enumerate_subdomains_v2(domain: str, previous_scan_dir: str = None, save_to_
         "risk_info": risk_info,
     }
 
-    # Save the final results to a JSON file
-    final_output_path = save_to_json(final_results, 'final_recon_data.json', logger)
+    # Create a scan-specific output directory
+    config = load_config()
+    output_dir = os.path.join(config.get('recon_output_dir', 'recon_results'), f"scan_{scan_id}")
+    os.makedirs(output_dir, exist_ok=True)
 
-    # Placeholder for delta scan and reporting, assuming they are needed
-    # previous_subdomains = ... # This would need to be loaded from a previous scan
-    # perform_delta_scan(pipeline_data['all_subdomains'], previous_subdomains, logger)
-    # if final_output_path:
-    #    generate_html_report(final_output_path)
+    # Save the final results to a JSON file
+    final_output_path = save_to_json(final_results, os.path.join(output_dir, 'final_recon_data.json'), logger)
+
+    # Perform delta scan and generate report
+    if previous_subdomains:
+        delta_paths = perform_delta_scan(pipeline_data['all_subdomains'], previous_subdomains, logger, output_dir)
+        if delta_paths:
+            generate_delta_report(output_dir, delta_paths)
 
     return [final_output_path] if final_output_path else []
