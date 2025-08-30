@@ -1,11 +1,13 @@
-import argparse
 import json
 import os
 import sys
+import click
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
+from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
 from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
+from cyberhunter_3d.utils.file_utils import get_results_dir
 
 def aggregate_results(output_paths: dict, domain: str, logger):
     """
@@ -40,14 +42,13 @@ def aggregate_results(output_paths: dict, domain: str, logger):
     risk_info = load_json_data('risk_info')
 
     if not master_subdomains:
-        logger.error("Master subdomains list is empty. Cannot aggregate results.")
-        return
-
-    # Initialize host map from master subdomains list
-    for host in master_subdomains:
-        host_map[host] = {
-            "host": host,
-            "alive": False,
+        logger.warning("Master subdomains list not found. Skipping host aggregation.")
+    else:
+        # Initialize host map from master subdomains list
+        for host in master_subdomains:
+            host_map[host] = {
+                "host": host,
+                "alive": False,
             "ips": [],
             "asn_details": [],
             "open_ports": [],
@@ -133,39 +134,32 @@ def aggregate_results(output_paths: dict, domain: str, logger):
         logger.error(f"Failed to write final aggregated file: {e}")
 
 
-def main():
+@click.command()
+@click.option("-d", "--domain", required=True, help="The target domain for reconnaissance.")
+@click.option("-v", "--verbose", is_flag=True, help="Enable verbose output.")
+@click.option("--upload-to-r2", is_flag=True, help="Upload results to Cloudflare R2.")
+@click.option("--save-to-db", is_flag=True, help="Save the scan results to the database.")
+@click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
+@click.option("--url-discovery", is_flag=True, help="Run the URL discovery phase.")
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery):
     """
     Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
     """
-    parser = argparse.ArgumentParser(description="CyberHunter 3D - V3 Reconnaissance Pipeline")
-    parser.add_argument("-d", "--domain", required=True, help="The target domain for reconnaissance.")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output.")
-    parser.add_argument("--upload-to-r2", action="store_true", help="Upload results to Cloudflare R2.")
-    parser.add_argument("--save-to-db", action="store_true", help="Save the scan results to the database.")
-    parser.add_argument("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
-    parser.add_argument("--url-discovery", action="store_true", help="Run the URL discovery phase.")
-
-    if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
-
-    args = parser.parse_args()
-    target_domain = args.domain
-    log_level = 'DEBUG' if args.verbose else 'INFO'
+    target_domain = domain
+    log_level = 'DEBUG' if verbose else 'INFO'
 
     # Setup logger
     logger = setup_logger('Main', 'main.log', level=log_level)
 
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
 
-    if args.url_discovery:
+    if url_discovery:
         logger.info(f"Starting URL discovery for: {target_domain}")
         from run_web import create_app
         from cyberhunter_3d.web.models import db, Scan, Target
-        from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
         app = create_app()
         with app.app_context():
-            target = Target(name=target_domain)
+            target = Target(value=target_domain)
             scan = Scan(status='RUNNING')
             scan.targets.append(target)
             db.session.add(target)
@@ -174,8 +168,12 @@ def main():
             scan_id = scan.id
 
         discover_urls(target_domain, scan_id, app)
+
+        results_dir = get_results_dir(target_domain, scan_id)
+        aggregate_results({}, target_domain, logger, results_dir)
+
         logger.info("URL discovery finished.")
-        sys.exit(0)
+        return
 
 
     logger.info(f"Starting V3 reconnaissance pipeline for: {target_domain}")
@@ -183,8 +181,8 @@ def main():
     # Run the full enumeration pipeline
     output_paths = enumerate_subdomains_v2(
         target_domain,
-        previous_scan_dir=args.previous_scan_dir,
-        save_to_db=args.save_to_db
+        previous_scan_dir=previous_scan_dir,
+        save_to_db=save_to_db
     )
 
     if not output_paths:
@@ -200,14 +198,14 @@ def main():
     logger.info(f"All findings have been aggregated into: {final_file_path}")
 
     # Upload to R2 if the flag is set
-    if args.upload_to_r2:
+    if upload_to_r2:
         logger.info("R2 upload flag is set. Initiating upload...")
         screenshots_dir = output_paths.get('screenshots')
         upload_to_r2(logger, file_path=final_file_path, directory_path=screenshots_dir)
     else:
         logger.info("Skipping R2 upload as the flag was not provided.")
 
-    if not args.save_to_db:
+    if not save_to_db:
         logger.info("Output files generated:")
         for name, path in output_paths.items():
             logger.info(f"- {name.replace('_', ' ').title()}: {path}")
