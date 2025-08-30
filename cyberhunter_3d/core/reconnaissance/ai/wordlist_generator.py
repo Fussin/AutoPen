@@ -1,53 +1,50 @@
-from typing import Set, List
-import itertools
+import logging
+import re
+from typing import List, Set
+from collections import Counter
 
-# A dictionary of common tech terms and their variations.
-TECH_SYNONYMS = {
-    "dev": ["development", "dev", "develop"],
-    "prod": ["production", "prod", "live"],
-    "stag": ["staging", "stage", "stg"],
-    "test": ["testing", "test", "tst"],
-    "uat": ["uat", "user-acceptance-testing"],
-    "admin": ["administrator", "admin", "adm"],
-    "api": ["api", "gateway", "gw"],
-    "db": ["database", "db", "sql", "mysql", "postgres"],
-    "git": ["git", "gitlab", "github", "gitea"],
-    "ci": ["ci", "jenkins", "bamboo", "teamcity"],
-    "cd": ["cd", "argo", "spinnaker"],
-}
+log = logging.getLogger(__name__)
 
-def generate_ai_wordlist(seed_words: Set[str]) -> Set[str]:
+def generate_intelligent_wordlist(keywords: List[str]) -> List[str]:
     """
-    Generates a new wordlist based on permutations and combinations of seed words
-    and common technical terms. This is a more advanced rule-based generator.
+    Generates a prioritized wordlist from a list of keywords.
     """
-    new_words = set()
+    log.info(f"Generating intelligent wordlist from {len(keywords)} keywords.")
 
-    # Add synonyms for seed words if they match any key in our dictionary
-    for word in list(seed_words):
-        for key, synonyms in TECH_SYNONYMS.items():
-            if key in word:
-                new_words.update(synonyms)
+    prefixes = ["dev", "stage", "uat", "test", "demo", "api", "vpn"]
+    suffixes = ["-dev", "-stage", "-uat", "-test", "-demo", "-api", "-vpn"]
 
-    # Combine seed words with common tech terms
-    all_tech_words = set(itertools.chain.from_iterable(TECH_SYNONYMS.values()))
-
-    # Combine with separators
-    separators = ["-", "_", ".", ""]
-    for word1 in seed_words:
-        for word2 in all_tech_words:
-            for sep in separators:
-                new_words.add(f"{word1}{sep}{word2}")
-                new_words.add(f"{word2}{sep}{word1}")
-
-    # Add some common prefixes and suffixes as well
-    prefixes = ["dev", "stage", "api", "test", "uat", "prod"]
-    suffixes = ["-dev", "-staging", "-uat", "-test", "-prod"]
-    for word in seed_words:
+    wordlist = []
+    for keyword in keywords:
+        wordlist.append(keyword)
         for prefix in prefixes:
-            new_words.add(f"{prefix}{word}")
-            new_words.add(f"{prefix}.{word}")
+            wordlist.append(f"{prefix}-{keyword}")
+            wordlist.append(f"{prefix}{keyword}")
         for suffix in suffixes:
-            new_words.add(f"{word}{suffix}")
+            wordlist.append(f"{keyword}{suffix}")
 
-    return new_words
+    final_wordlist = sorted(list(set(wordlist)))
+    log.info(f"Generated wordlist with {len(final_wordlist)} unique words.")
+    return final_wordlist
+
+def extract_keywords_from_subdomains(subdomains: List[str]) -> List[str]:
+    """
+    Extracts meaningful keywords from a list of subdomains.
+    """
+    log.info(f"Extracting keywords from {len(subdomains)} subdomains.")
+
+    words = []
+    for sub in subdomains:
+        parts = sub.split('.')
+        if len(parts) > 2:
+            subdomain_part = '.'.join(parts[:-2])
+            words.extend(re.split(r'[\.\-_]', subdomain_part))
+
+    common_words = {'www', 'mail', 'ftp', 'cpanel', 'webmail', 'webdisk'}
+    filtered_words = [word for word in words if word and word not in common_words and len(word) > 2 and not word.isnumeric()]
+
+    word_counts = Counter(filtered_words)
+    most_common_words = [word for word, count in word_counts.most_common(20)]
+
+    log.info(f"Extracted {len(most_common_words)} keywords: {most_common_words}")
+    return most_common_words

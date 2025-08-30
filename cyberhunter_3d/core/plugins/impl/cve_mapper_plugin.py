@@ -45,7 +45,6 @@ class CveMapperPlugin(Plugin):
         log.info(f"Found CVEs for {len(cve_results)} hosts.")
 
     def _get_cpe_for_tech(self, technology: str) -> str:
-        # This mapping is simplified and would be more extensive in a real app
         tech_to_cpe = {
             "nginx": "cpe:2.3:a:nginx:nginx",
             "apache": "cpe:2.3:a:apache:http_server",
@@ -60,13 +59,12 @@ class CveMapperPlugin(Plugin):
             return []
 
         base_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-        params = {"cpeName": cpe, "resultsPerPage": 5} # Limit results
+        params = {"cpeName": cpe, "resultsPerPage": 5}
         headers = {"apiKey": api_key}
 
         try:
             response = requests.get(base_url, params=params, headers=headers, timeout=30)
             response.raise_for_status()
-            # Respect NVD API rate limits
             time.sleep(1)
             data = response.json()
             return data.get("vulnerabilities", [])

@@ -2,7 +2,7 @@ import logging
 from ..plugins.manager import PluginManager
 from ..plugins.context import ScanContext
 from cyberhunter_3d.utils.file_utils import save_to_json, get_results_dir
-from cyberhunter_3d.web.models import Scan, Asset, db
+from ...web.models import Scan, Asset, db
 
 log = logging.getLogger(__name__)
 
@@ -15,16 +15,6 @@ def perform_delta_scan(master_subdomains: set, previous_subdomains: set, logger)
     removed_subdomains = previous_subdomains - master_subdomains
 
     logger.info(f"Delta scan found {len(new_subdomains)} new and {len(removed_subdomains)} removed subdomains.")
-
-    delta_paths = {}
-
-    if new_subdomains:
-        # The save_to_json function is not available here anymore.
-        # This function should probably just return the sets of new and removed domains.
-        pass
-
-    if removed_subdomains:
-        pass
 
     return {"new": new_subdomains, "removed": removed_subdomains}
 
@@ -43,22 +33,15 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         results_dir = get_results_dir(domain, scan_id)
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
 
-        # The PluginManager will discover, sort, and run all plugins.
         plugin_manager = PluginManager()
         plugin_manager.run_all_plugins(context)
 
-        # All results are now in the context.
-        # Filter the discovered subdomains using the noise filter.
-        from .ai.noise_filter import NoiseFilter
-        noise_filter = NoiseFilter()
         all_subdomains = context.get('subdomains', set())
-        filtered_subdomains = noise_filter.predict(list(all_subdomains))
 
-        # Consolidate and save the final results.
         final_results = {
             "target": domain,
             "scan_id": scan_id,
-            "all_subdomains": list(filtered_subdomains),
+            "all_subdomains": list(all_subdomains),
             "validated_subdomains": list(context.get('validated_subdomains', set())),
             "cloud_assets": context.get('cloud_assets', []),
             "tech_fingerprints": context.get('tech_fingerprints', {}),
@@ -74,8 +57,7 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
             results_dir
         )
 
-        # Persist assets to the database
-        for sub in filtered_subdomains:
+        for sub in all_subdomains:
             asset = Asset(
                 scan_id=scan_id,
                 target_id=scan.targets[0].id,

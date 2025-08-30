@@ -1,34 +1,33 @@
-import pytest
-from cyberhunter_3d.core.reconnaissance.ai.wordlist_generator import generate_ai_wordlist
+import unittest
+from cyberhunter_3d.core.reconnaissance.ai.wordlist_generator import extract_keywords_from_subdomains, generate_intelligent_wordlist
 
-def test_generate_ai_wordlist():
-    """
-    Tests that the generate_ai_wordlist function generates a reasonable set of
-    new words based on the seed words and predefined tech terms.
-    """
-    seed_words = {"corp"}
+class TestWordlistGenerator(unittest.TestCase):
 
-    generated_words = generate_ai_wordlist(seed_words)
+    def test_extract_keywords(self):
+        subdomains = [
+            "dev.api.example.com",
+            "staging-api.example.com",
+            "test.vpn.example.com",
+            "www.example.com",
+            "mail.example.com",
+        ]
 
-    # Check for some expected generated words
-    assert "corp-dev" in generated_words
-    assert "dev-corp" in generated_words
-    assert "corp.admin" in generated_words
-    assert "admin.corp" in generated_words
-    assert "devcorp" in generated_words
+        keywords = extract_keywords_from_subdomains(subdomains)
 
-def test_generate_ai_wordlist_with_synonyms():
-    """
-    Tests that the wordlist generator correctly expands seed words that
-    are also keys in the TECH_SYNONYMS dictionary.
-    """
-    seed_words = {"dev"}
+        self.assertIn("api", keywords)
+        self.assertIn("staging", keywords)
+        self.assertIn("vpn", keywords)
+        self.assertNotIn("www", keywords)
+        self.assertNotIn("mail", keywords)
 
-    generated_words = generate_ai_wordlist(seed_words)
+    def test_generate_wordlist(self):
+        keywords = ["api", "staging"]
+        wordlist = generate_intelligent_wordlist(keywords)
 
-    # Check that synonyms are added
-    assert "development" in generated_words
-    assert "develop" in generated_words
+        self.assertIn("api", wordlist)
+        self.assertIn("staging", wordlist)
+        self.assertIn("dev-api", wordlist)
+        self.assertIn("staging-uat", wordlist)
 
-    # Check for combinations of seed words with synonyms of other tech terms
-    assert "dev-database" in generated_words
+if __name__ == '__main__':
+    unittest.main()

@@ -3,8 +3,7 @@ import logging
 from typing import List
 from ..base import Plugin
 from ..context import ScanContext
-from ....utils.file_utils import run_command
-from ...reconnaissance.utils import load_config
+from ...reconnaissance.utils import load_config, run_command
 
 log = logging.getLogger(__name__)
 
@@ -42,18 +41,16 @@ class PassiveEnumPlugin(Plugin):
 
         all_subdomains = set()
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_cmd = {executor.submit(run_command, cmd): cmd for cmd in commands}
+            future_to_cmd = {executor.submit(run_command, cmd, target, log): cmd for cmd in commands}
             for future in concurrent.futures.as_completed(future_to_cmd):
                 cmd = future_to_cmd[future]
                 try:
-                    output = future.result()
-                    subdomains = set(output.strip().split('\n'))
+                    subdomains = future.result()
                     all_subdomains.update(subdomains)
                     log.info(f"Found {len(subdomains)} subdomains with {' '.join(cmd)}")
                 except Exception as exc:
                     log.error(f"{' '.join(cmd)} generated an exception: {exc}")
 
-        # Add results to the context
         existing_subdomains = context.get("subdomains", set())
         combined_subdomains = existing_subdomains.union(all_subdomains)
         context.set("subdomains", combined_subdomains)
