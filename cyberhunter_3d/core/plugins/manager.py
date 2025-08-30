@@ -142,8 +142,12 @@ class PluginManager:
 
         return sorted_order
 
-    def run_all_plugins(self, context: ScanContext):
+    def run_all_plugins(self, context: ScanContext, include_plugins: List[str] = None):
         self.run_order = self.resolve_dependencies()
+
+        if include_plugins:
+            self.run_order = [p for p in self.run_order if p.name in include_plugins]
+
         log.info(f"Plugin execution order: {[p.name for p in self.run_order]}")
 
         for plugin in self.run_order:

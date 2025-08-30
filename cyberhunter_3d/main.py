@@ -143,6 +143,7 @@ def main():
     parser.add_argument("--upload-to-r2", action="store_true", help="Upload results to Cloudflare R2.")
     parser.add_argument("--save-to-db", action="store_true", help="Save the scan results to the database.")
     parser.add_argument("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
+    parser.add_argument("--url-discovery", action="store_true", help="Run the URL discovery phase.")
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
@@ -156,6 +157,27 @@ def main():
     logger = setup_logger('Main', 'main.log', level=log_level)
 
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
+
+    if args.url_discovery:
+        logger.info(f"Starting URL discovery for: {target_domain}")
+        from run_web import create_app
+        from cyberhunter_3d.web.models import db, Scan, Target
+        from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
+        app = create_app()
+        with app.app_context():
+            target = Target(name=target_domain)
+            scan = Scan(status='RUNNING')
+            scan.targets.append(target)
+            db.session.add(target)
+            db.session.add(scan)
+            db.session.commit()
+            scan_id = scan.id
+
+        discover_urls(target_domain, scan_id, app)
+        logger.info("URL discovery finished.")
+        sys.exit(0)
+
+
     logger.info(f"Starting V3 reconnaissance pipeline for: {target_domain}")
 
     # Run the full enumeration pipeline
