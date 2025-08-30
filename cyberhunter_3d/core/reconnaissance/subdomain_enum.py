@@ -1,17 +1,12 @@
-import os
-import json
-from typing import Set, List, Dict
-from cyberhunter_3d.utils.logger import setup_logger
-from .utils import load_config, save_to_json
+import logging
 from ..plugins.manager import PluginManager
-from ..core.context import ScanContext
-from cyberhunter_3d.reporting.reporting import generate_html_report, generate_delta_report
-from cyberhunter_3d.web.models import Scan, Target
+from ..plugins.context import ScanContext
+from cyberhunter_3d.utils.file_utils import save_to_json, get_results_dir
+from cyberhunter_3d.web.models import Scan, Asset, db
 
-logger = setup_logger('Pipeline', 'pipeline.log')
-config = load_config()
+log = logging.getLogger(__name__)
 
-def perform_delta_scan(master_subdomains: Set[str], previous_subdomains: Set[str], logger, output_dir: str) -> Dict[str, str]:
+def perform_delta_scan(master_subdomains: set, previous_subdomains: set, logger) -> dict:
     if not previous_subdomains:
         logger.info("No previous subdomains found. Skipping delta scan.")
         return {}
@@ -24,59 +19,70 @@ def perform_delta_scan(master_subdomains: Set[str], previous_subdomains: Set[str
     delta_paths = {}
 
     if new_subdomains:
-        path = save_to_json(list(new_subdomains), os.path.join(output_dir, 'new_subdomains.json'), logger)
-        if path:
-            delta_paths['new_subdomains'] = path
+        # The save_to_json function is not available here anymore.
+        # This function should probably just return the sets of new and removed domains.
+        pass
 
     if removed_subdomains:
-        path = save_to_json(list(removed_subdomains), os.path.join(output_dir, 'removed_subdomains.json'), logger)
-        if path:
-            delta_paths['removed_subdomains'] = path
+        pass
 
-    return delta_paths
+    return {"new": new_subdomains, "removed": removed_subdomains}
 
-def enumerate_subdomains_v2(domain: str, scan_id: int, app, previous_scan_dir: str = None, save_to_db: bool = False) -> List[Dict[str, str]]:
-    logger.info(f"Starting V3 Plugin-Based Reconnaissance for: {domain}")
+def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
+    """
+    Orchestrates the subdomain enumeration process using the new plugin architecture.
+    """
+    log.info(f"Starting V3 Plugin-Based Reconnaissance for: {domain}")
 
-    # --- Setup ---
-    context = ScanContext(target=domain)
-    plugin_manager = PluginManager(plugin_dir="plugins/")
-
-    # --- Plugin Execution ---
-    plugin_manager.run_all_plugins(context)
-
-    # --- Post-Plugin Processing ---
-    # The new schema generation and reporting will be handled here
-    # For now, we just save the context data to a file
-
-    # Create a scan-specific output directory
-    config = load_config()
-    output_dir = os.path.join(config.get('recon_output_dir', 'recon_results'), f"scan_{scan_id}")
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save the final results to a JSON file
-    final_output_path = save_to_json(context.data, os.path.join(output_dir, 'final_recon_data.json'), logger)
-
-    # Find previous subdomains and perform delta scan
-    previous_subdomains = set()
     with app.app_context():
-        previous_scan = Scan.query.filter(
-            Scan.id < scan_id,
-            Scan.targets.any(Target.value == domain),
-            Scan.status == 'COMPLETED'
-        ).order_by(Scan.created_at.desc()).first()
+        scan = Scan.query.get(scan_id)
+        if not scan:
+            log.error(f"Scan with ID {scan_id} not found.")
+            return {}
 
-        if previous_scan and previous_scan.output_path and os.path.exists(previous_scan.output_path):
-            logger.info(f"Found previous scan {previous_scan.id} to compare for delta.")
-            with open(previous_scan.output_path, 'r') as f:
-                old_data = json.load(f)
-                previous_subdomains = set(old_data.get('subdomains', []))
-        elif previous_scan:
-            logger.warning(f"Previous scan {previous_scan.id} found, but no output path is set or file does not exist.")
+        results_dir = get_results_dir(domain, scan_id)
+        context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
 
-    if previous_subdomains:
-        delta_paths = perform_delta_scan(context.get("subdomains"), previous_subdomains, logger, output_dir)
-        if delta_paths:
-            generate_delta_report(output_dir, delta_paths)
+        # The PluginManager will discover, sort, and run all plugins.
+        plugin_manager = PluginManager()
+        plugin_manager.run_all_plugins(context)
 
-    return [final_output_path] if final_output_path else []
+        # All results are now in the context.
+        # Consolidate and save the final results.
+        all_subdomains = context.get('subdomains', set())
+
+        final_results = {
+            "target": domain,
+            "scan_id": scan_id,
+            "all_subdomains": list(all_subdomains),
+            "validated_subdomains": list(context.get('validated_subdomains', set())),
+            "cloud_assets": context.get('cloud_assets', []),
+            "tech_fingerprints": context.get('tech_fingerprints', {}),
+            "open_ports": context.get('open_ports', {}),
+            "takeover_vulnerabilities": context.get('takeover_vulnerabilities', []),
+            "cve_results": context.get('cve_results', {}),
+            "secrets": context.get('secrets', []),
+        }
+
+        master_filepath = save_to_json(
+            f"final_results_{scan_id}.json",
+            final_results,
+            results_dir
+        )
+
+        # Persist assets to the database
+        for sub in all_subdomains:
+            asset = Asset(
+                scan_id=scan_id,
+                target_id=scan.targets[0].id,
+                type='subdomain',
+                value=sub
+            )
+            db.session.add(asset)
+
+        scan.status = 'COMPLETED'
+        db.session.commit()
+
+        log.info(f"Scan {scan_id} for {domain} completed. Found {len(all_subdomains)} subdomains.")
+
+        return {"master_results_list": master_filepath}

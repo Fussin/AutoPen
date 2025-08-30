@@ -3,10 +3,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <h2>Scan Results for #{{ scan.id }}</h2>
     <div>
-      {% if delta_report_exists %}
-        <a href="{{ url_for('serve_report', filename=delta_report_path) }}" class="button" target="_blank">View Delta Report</a>
-      {% endif %}
-      <a href="{{ url_for('graph_view', scan_id=scan.id) }}" class="button" style="margin-left: 1em;">View Graph</a>
+      <a href="{{ url_for('graph_view', scan_id=scan.id) }}" class="button">View Graph</a>
       <a href="{{ url_for('dashboard') }}" class="button" style="margin-left: 1em;">Back to Dashboard</a>
     </div>
   </div>
