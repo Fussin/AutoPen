@@ -1,44 +1,102 @@
-from typing import Set
+import logging
 import re
-from cyberhunter_3d.utils.logger import setup_logger
+import joblib
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.preprocessing import FunctionTransformer
 
-# Common uninteresting subdomains to filter out.
-# This list can be expanded over time.
-FALSE_POSITIVE_PATTERNS = [
-    r'^autodiscover\.',
-    r'^cpanel\.',
-    r'^webmail\.',
-    r'^ftp\.',
-    r'^mail\.',
-    r'^smtp\.',
-    r'^imap\.',
-    r'^pop\.',
-    r'^ns[0-9]+\.',
-    r'^www\.', # Often not interesting for recon, but can be debatable.
-]
+log = logging.getLogger(__name__)
 
-def filter_false_positives(subdomains: Set[str], logger) -> Set[str]:
-    """
-    Filters out likely false positive subdomains using a list of regex patterns.
-    This is a rule-based approach that serves as a practical implementation
-    of the AI noise filter.
-    """
-    logger.info("AI Noise Filter: Applying rule-based filtering for common false positives...")
+# --- Feature Extraction Functions ---
 
-    filtered_subdomains = set()
-    removed_count = 0
+def get_length(text):
+    return pd.DataFrame([len(t) for t in text])
 
-    for sub in subdomains:
-        is_false_positive = False
-        for pattern in FALSE_POSITIVE_PATTERNS:
-            if re.search(pattern, sub):
-                is_false_positive = True
-                removed_count += 1
-                logger.debug(f"Filtered out subdomain '{sub}' due to pattern: {pattern}")
-                break
+def get_subdomain_parts(text):
+    return pd.DataFrame([t.count('.') + 1 for t in text])
 
-        if not is_false_positive:
-            filtered_subdomains.add(sub)
+def has_numbers(text):
+    return pd.DataFrame([any(char.isdigit() for char in t) for t in text])
 
-    logger.info(f"AI Noise Filter: Removed {removed_count} potential false positive subdomains.")
-    return filtered_subdomains
+def has_hyphens(text):
+    return pd.DataFrame(['-' in t for t in text])
+
+# --- Main Classifier Class ---
+
+class NoiseFilter:
+    def __init__(self, model_path="noise_filter_model.joblib"):
+        self.model_path = model_path
+        self.pipeline = self._build_pipeline()
+        try:
+            self.model = joblib.load(self.model_path)
+            log.info(f"Loaded noise filter model from {self.model_path}")
+        except FileNotFoundError:
+            self.model = None
+            log.warning(f"Noise filter model not found at {self.model_path}. Please train the model.")
+
+    def _build_pipeline(self):
+        """Builds the scikit-learn pipeline for feature extraction and classification."""
+
+        # Feature extraction pipeline
+        feature_pipeline = FeatureUnion([
+            ('length', FunctionTransformer(get_length, validate=False)),
+            ('parts', FunctionTransformer(get_subdomain_parts, validate=False)),
+            ('has_numbers', FunctionTransformer(has_numbers, validate=False)),
+            ('has_hyphens', FunctionTransformer(has_hyphens, validate=False)),
+            ('chars', CountVectorizer(analyzer='char', ngram_range=(1, 3))),
+        ])
+
+        # Full pipeline with classifier
+        pipeline = Pipeline([
+            ('features', feature_pipeline),
+            ('clf', RandomForestClassifier(n_estimators=100, random_state=42))
+        ])
+        return pipeline
+
+    def train(self, labeled_data):
+        """
+        Trains the classifier on labeled data.
+        :param labeled_data: A list of tuples, where each tuple is (subdomain_string, is_false_positive_boolean)
+        """
+        log.info("Training noise filter model...")
+        if not labeled_data:
+            log.error("No labeled data provided for training.")
+            return
+
+        df = pd.DataFrame(labeled_data, columns=['subdomain', 'is_false_positive'])
+        X = df['subdomain']
+        y = df['is_false_positive']
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        self.pipeline.fit(X_train, y_train)
+
+        accuracy = self.pipeline.score(X_test, y_test)
+        log.info(f"Model training complete. Accuracy: {accuracy:.2f}")
+
+        joblib.dump(self.pipeline, self.model_path)
+        log.info(f"Saved trained model to {self.model_path}")
+        self.model = self.pipeline
+
+    def predict(self, subdomains):
+        """
+        Predicts which subdomains are likely to be false positives.
+        :param subdomains: A list of subdomain strings.
+        :return: A list of subdomains predicted to be valid (not false positives).
+        """
+        if self.model is None:
+            log.warning("No trained model available. Skipping noise filtering.")
+            return subdomains
+
+        if not subdomains:
+            return []
+
+        predictions = self.model.predict(subdomains)
+
+        valid_subdomains = [sub for sub, pred in zip(subdomains, predictions) if not pred]
+
+        log.info(f"Filtered {len(subdomains) - len(valid_subdomains)} subdomains as noise.")
+        return valid_subdomains

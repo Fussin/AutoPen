@@ -86,8 +86,10 @@ class PluginManager:
         all_plugins = []
         # Discover new-style plugins
         if os.path.exists(self.new_plugin_dir):
+            print(f"Value of self.new_plugin_dir before listdir: {self.new_plugin_dir}")
             print(f"Files in new_plugin_dir: {os.listdir(self.new_plugin_dir)}")
             for filename in os.listdir(self.new_plugin_dir):
+                print(f"Processing new plugin file: {filename}")
                 if filename.endswith(".py") and not filename.startswith("__"):
                     # Convert file path to module path
                     relative_path = os.path.relpath(self.new_plugin_dir, 'cyberhunter_3d')

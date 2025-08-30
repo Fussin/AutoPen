@@ -74,6 +74,7 @@ class Asset(db.Model):
     first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    is_false_positive = db.Column(db.Boolean, nullable=True, default=False)
 
     def __repr__(self):
         return f'<Asset {self.value} ({self.type})>'
