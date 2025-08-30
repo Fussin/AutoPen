@@ -93,8 +93,10 @@ class TestPluginManager(unittest.TestCase):
         """
         Tests that the plugin manager can discover both old and new style plugins.
         """
-        new_plugin_dir = "cyberhunter_3d/tests/test_plugins"
-        old_plugin_dir = "cyberhunter_3d/tests/old_plugins"
+        import os
+        base_dir = os.path.dirname(__file__)
+        new_plugin_dir = os.path.join(base_dir, "test_plugins")
+        old_plugin_dir = os.path.join(base_dir, "old_plugins")
 
         plugin_manager = PluginManager(new_plugin_dir=new_plugin_dir, old_plugin_dir=old_plugin_dir)
 

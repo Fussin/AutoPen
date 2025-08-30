@@ -48,13 +48,17 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         plugin_manager.run_all_plugins(context)
 
         # All results are now in the context.
-        # Consolidate and save the final results.
+        # Filter the discovered subdomains using the noise filter.
+        from .ai.noise_filter import NoiseFilter
+        noise_filter = NoiseFilter()
         all_subdomains = context.get('subdomains', set())
+        filtered_subdomains = noise_filter.predict(list(all_subdomains))
 
+        # Consolidate and save the final results.
         final_results = {
             "target": domain,
             "scan_id": scan_id,
-            "all_subdomains": list(all_subdomains),
+            "all_subdomains": list(filtered_subdomains),
             "validated_subdomains": list(context.get('validated_subdomains', set())),
             "cloud_assets": context.get('cloud_assets', []),
             "tech_fingerprints": context.get('tech_fingerprints', {}),
@@ -71,7 +75,7 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         )
 
         # Persist assets to the database
-        for sub in all_subdomains:
+        for sub in filtered_subdomains:
             asset = Asset(
                 scan_id=scan_id,
                 target_id=scan.targets[0].id,
