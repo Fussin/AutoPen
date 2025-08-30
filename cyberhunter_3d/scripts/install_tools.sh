@@ -76,6 +76,10 @@ go install -v github.com/PentestPad/subzy@latest
 go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest
 go install -v github.com/jaeles-project/gospider@latest
 go install -v github.com/lc/gau/v2/cmd/gau@latest
+go install -v github.com/tomnomnom/waybackurls@latest
+go install -v github.com/projectdiscovery/katana/cmd/katana@latest
+go install -v github.com/hakluke/hakrawler@latest
+go install -v github.com/tomnomnom/unfurl@latest
 
 
 echo "Go-based tools installed successfully."

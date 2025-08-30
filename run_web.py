@@ -8,33 +8,35 @@ from cyberhunter_3d.web.models import db, User, Scan, Asset
 # --- Logging Configuration ---
 logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# --- App Initialization ---
-app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
+def create_app():
+    app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
 
-# --- Configuration ---
-# In a real app, this should be a more complex, securely stored secret.
-app.config['SECRET_KEY'] = 'a-very-secret-key-that-should-be-changed'
-# Define the database path
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # --- Configuration ---
+    app.config['SECRET_KEY'] = 'a-very-secret-key-that-should-be-changed'
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- Extensions Initialization ---
-db.init_app(app)
-bcrypt = Bcrypt(app)
-login_manager = LoginManager(app)
-login_manager.login_view = 'login' # The route to redirect to for login
+    # --- Extensions Initialization ---
+    db.init_app(app)
+    Bcrypt(app)
+    login_manager = LoginManager(app)
+    login_manager.login_view = 'login'
 
-@login_manager.user_loader
-def load_user(user_id):
-    """Flask-Login hook to load a user by ID."""
-    return User.query.get(int(user_id))
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
 
-# --- Database Initialization ---
-def init_database():
+    return app
+
+app = create_app()
+bcrypt = Bcrypt(app) # bcrypt needs to be available globally for password hashing in routes
+
+def init_database(app_context):
     """Create database tables if they don't exist."""
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
     if not os.path.exists(db_path):
-        with app.app_context():
+        with app_context:
             print("Creating database and tables...")
             db.create_all()
             print("Database initialized.")
@@ -161,12 +163,27 @@ from cyberhunter_3d.web.models import Scan, Target
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
+from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
 
 # --- Background Task Executor ---
 # Using a simple thread pool for background tasks.
 # For a production app, a more robust solution like Celery would be better.
 executor = ThreadPoolExecutor(max_workers=2)
 app.executor = executor
+
+def run_full_scan(scan_id, app):
+    """Runs both discovery and URL discovery phases."""
+    # Submit the discovery phase to the executor
+    future = app.executor.submit(run_discovery_phase, scan_id, app)
+
+    # Wait for the discovery phase to complete
+    future.result()
+
+    with app.app_context():
+        scan = Scan.query.get(scan_id)
+        if scan:
+            for target in scan.targets:
+                discover_urls(target.value, scan_id, app)
 
 from cyberhunter_3d.web.views.dashboard import dashboard_bp
 
@@ -226,7 +243,7 @@ def submit_targets():
     db.session.commit()
 
     # Trigger the scan in the background
-    executor.submit(run_discovery_phase, new_scan.id, app)
+    executor.submit(run_full_scan, new_scan.id, app)
 
     flash(f'{len(targets)} targets have been queued for scanning.', 'success')
     return redirect(url_for('dashboard'))
@@ -281,6 +298,6 @@ def scan_results(scan_id):
 
 # --- Main Execution ---
 if __name__ == '__main__':
-    init_database()
+    init_database(app.app_context())
     # In a real deployment, use a proper WSGI server like Gunicorn.
     app.run(debug=True, port=5001)
