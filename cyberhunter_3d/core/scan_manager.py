@@ -64,7 +64,7 @@ def run_discovery_phase(scan_id, app):
 
                 elif target.type in ['domain', 'wildcard_domain']:
                     print(f"Finding subdomains for '{target.value}'...")
-                    recon_data = enumerate_subdomains_v2(target.value, scan_id=scan.id, app=app)
+                    recon_data = enumerate_subdomains_v2(target.value)
 
                     # Persist assets directly from the recon data dictionary
                     for sub in recon_data.get('master_subdomains', []):
@@ -100,9 +100,6 @@ def run_discovery_phase(scan_id, app):
                     elif status == 'out_of_scope': out_of_scope_count += 1
 
                 db.session.commit()
-
-            if recon_data:
-                scan.output_path = recon_data[0] if recon_data else None
 
             scan.results = f"Discovery phase complete. Found {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
             scan.status = 'PENDING_REVIEW'

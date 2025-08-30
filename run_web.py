@@ -43,7 +43,7 @@ def init_database():
 
 # --- Routes ---
 from cyberhunter_3d.web.api import api_bp
-from flask import render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
+from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, current_user, login_required
 import pyotp
 import qrcode
@@ -277,23 +277,7 @@ def scan_results(scan_id):
     for asset in scan.assets:
         grouped_assets[asset.type].append(asset)
 
-    # Check if a delta report exists for this scan
-    delta_report_path = f"scan_{scan_id}/delta_report.html"
-    delta_report_exists = os.path.exists(os.path.join('recon_results', delta_report_path))
-
-    return render_template(
-        'scan_results.html',
-        scan=scan,
-        grouped_assets=grouped_assets,
-        delta_report_exists=delta_report_exists,
-        delta_report_path=delta_report_path
-    )
-
-@app.route('/reports/<path:filename>')
-@login_required
-def serve_report(filename):
-    """Serves reports from the recon_results directory."""
-    return send_from_directory('recon_results', filename)
+    return render_template('scan_results.html', scan=scan, grouped_assets=grouped_assets)
 
 # --- Main Execution ---
 if __name__ == '__main__':
