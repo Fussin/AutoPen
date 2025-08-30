@@ -68,10 +68,10 @@ class PluginManager:
     def __init__(self, new_plugin_dir="cyberhunter_3d/core/plugins/impl", old_plugin_dir="plugins"):
         self.new_plugin_dir = os.path.abspath(new_plugin_dir) if new_plugin_dir else None
         self.old_plugin_dir = os.path.abspath(old_plugin_dir) if old_plugin_dir else None
-        self.plugins = self._discover_plugins()
+        self.plugins = self.discover_plugins()
         self.run_order: List[Plugin] = []
 
-    def _discover_plugins(self) -> List[Plugin]:
+    def discover_plugins(self) -> List[Plugin]:
         all_plugins = []
         if self.new_plugin_dir and os.path.exists(self.new_plugin_dir):
             for filename in os.listdir(self.new_plugin_dir):

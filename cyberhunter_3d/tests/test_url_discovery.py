@@ -37,12 +37,16 @@ class TestURLDiscoveryPlugins(unittest.TestCase):
             context.set("redirect_urls", [])
             context.set("url_parameters", ["param1", "param2"])
 
+            # Simulate file creation by URLDiscoveryPlugin
+            with open(os.path.join(self.results_dir, f"way_kat_{self.scan_id}.txt"), "w") as f:
+                f.write("http://example.com/url1\nhttp://example.com/url2\n")
+
             # Simulate file creation by URLProcessorPlugin
-            with open(os.path.join(self.results_dir, f"alive_{self.domain}.txt"), "w") as f:
+            with open(os.path.join(self.results_dir, f"alive_urls_{self.scan_id}.txt"), "w") as f:
                 f.write("http://example.com/url1\n")
-            with open(os.path.join(self.results_dir, f"dead_{self.domain}.txt"), "w") as f:
+            with open(os.path.join(self.results_dir, f"dead_urls_{self.scan_id}.txt"), "w") as f:
                 f.write("http://example.com/url2\n")
-            with open(os.path.join(self.results_dir, "parameters.txt"), "w") as f:
+            with open(os.path.join(self.results_dir, f"parameters_{self.scan_id}.txt"), "w") as f:
                 f.write("param1\nparam2\n")
 
         mock_manager_instance.run_all_plugins.side_effect = side_effect
@@ -73,9 +77,10 @@ class TestURLDiscoveryPlugins(unittest.TestCase):
         self.assertEqual(call_kwargs["include_plugins"], ["URL Discovery", "URL Processor"])
 
         # Check that the files were created
-        self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"alive_{self.domain}.txt")))
-        self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"dead_{self.domain}.txt")))
-        self.assertTrue(os.path.exists(os.path.join(self.results_dir, "parameters.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"way_kat_{self.scan_id}.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"alive_urls_{self.scan_id}.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"dead_urls_{self.scan_id}.txt")))
+        self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"parameters_{self.scan_id}.txt")))
 
 if __name__ == '__main__':
     unittest.main()

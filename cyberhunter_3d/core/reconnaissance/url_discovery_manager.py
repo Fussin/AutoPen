@@ -22,6 +22,7 @@ def discover_urls(domain: str, scan_id: int, app):
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
 
         plugin_manager = PluginManager()
+        plugin_manager.discover_plugins()
         plugin_manager.run_all_plugins(
             context,
             include_plugins=["URL Discovery", "URL Processor"]

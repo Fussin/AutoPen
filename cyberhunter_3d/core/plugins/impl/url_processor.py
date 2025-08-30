@@ -45,54 +45,8 @@ class URLProcessorPlugin(Plugin):
 
         target_domain = context.target_domain
         results_dir = context.results_dir
-        log.info(f"Processing {len(urls)} URLs for {target_domain}")
-
-        # Write URLs to a temporary file for httpx
-        temp_url_file = os.path.join(results_dir, "temp_urls.txt")
-        with open(temp_url_file, "w") as f:
-            f.write("\n".join(urls))
-
-        # Run httpx to get status codes
-        httpx_output_file = os.path.join(results_dir, "httpx_output.json")
-        httpx_command = f"httpx -l {temp_url_file} -json -o {httpx_output_file} -silent -status-code -tech-detect -title -follow-redirects"
-
-        try:
-            subprocess.run(httpx_command, shell=True, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            log.error(f"httpx command failed: {e.stderr}")
-            return
-        except FileNotFoundError:
-            log.error("httpx command not found. Is it installed and in PATH?")
-            return
-
-        # Process httpx output
-        live_urls = []
-        dead_urls = []
-        redirect_urls = []
-
-        try:
-            with open(httpx_output_file, "r") as f:
-                for line in f:
-                    try:
-                        result = json.loads(line)
-                        status_code = result.get("status_code")
-                        url = result.get("url")
-                        if not url:
-                            continue
-
-                        if 200 <= status_code < 300:
-                            live_urls.append(url)
-                        elif 300 <= status_code < 400:
-                            redirect_urls.append(url)
-                        else:
-                            dead_urls.append(url)
-                    except json.JSONDecodeError:
-                        continue
-        except FileNotFoundError:
-            log.error(f"httpx output file not found: {httpx_output_file}")
-            return
-
         scan_id = context.scan_id
+        log.info(f"Processing {len(urls)} URLs for {target_domain}")
 
         temp_url_file = os.path.join(results_dir, f"temp_urls_{scan_id}.txt")
         httpx_output_file = os.path.join(results_dir, f"httpx_output_{scan_id}.json")
@@ -127,7 +81,7 @@ class URLProcessorPlugin(Plugin):
             self._save_urls_to_file(redirect_urls, f"redirect_urls_{scan_id}.txt", results_dir)
 
             # Extract parameters using unfurl
-            unfurl_command = f"cat {temp_url_file} | unfurl --unique format %p > {unfurl_output_file}"
+            unfurl_command = f"cat {temp_url_file} | unfurl --unique keys > {unfurl_output_file}"
             subprocess.run(unfurl_command, shell=True, check=True, capture_output=True, text=True)
 
             url_parameters = []
