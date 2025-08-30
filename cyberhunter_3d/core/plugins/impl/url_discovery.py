@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import os
 from typing import List, Set
 from ..base import Plugin
 from ..context import ScanContext
@@ -85,4 +86,11 @@ class URLDiscoveryPlugin(Plugin):
         unique_urls = sorted(list(all_urls))
 
         log.info(f"Found a total of {len(unique_urls)} unique URLs for {target_domain}")
+
+        # Save master URL list
+        master_url_file = os.path.join(context.results_dir, f"way_kat_{context.scan_id}.txt")
+        with open(master_url_file, "w") as f:
+            f.write("\n".join(unique_urls))
+        log.info(f"Saved master URL list to {master_url_file}")
+
         context.set("urls", unique_urls)

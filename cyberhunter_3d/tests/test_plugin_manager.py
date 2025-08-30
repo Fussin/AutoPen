@@ -7,7 +7,7 @@ from cyberhunter_3d.core.plugins.context import ScanContext
 class TestPluginManager(unittest.TestCase):
 
     def test_dependency_resolution_simple(self):
-        with patch('cyberhunter_3d.core.plugins.manager.PluginManager._discover_plugins', return_value=[]):
+        with patch('cyberhunter_3d.core.plugins.manager.PluginManager.discover_plugins', return_value=[]):
             plugin_manager = PluginManager()
 
         p1 = MagicMock(spec=Plugin)
@@ -28,7 +28,7 @@ class TestPluginManager(unittest.TestCase):
         self.assertEqual([p.name for p in sorted_plugins], ["P1", "P2", "P3"])
 
     def test_dependency_resolution_missing(self):
-        with patch('cyberhunter_3d.core.plugins.manager.PluginManager._discover_plugins', return_value=[]):
+        with patch('cyberhunter_3d.core.plugins.manager.PluginManager.discover_plugins', return_value=[]):
             plugin_manager = PluginManager()
 
         p1 = MagicMock(spec=Plugin)
@@ -41,7 +41,7 @@ class TestPluginManager(unittest.TestCase):
             plugin_manager.resolve_dependencies()
 
     def test_dependency_resolution_circular(self):
-        with patch('cyberhunter_3d.core.plugins.manager.PluginManager._discover_plugins', return_value=[]):
+        with patch('cyberhunter_3d.core.plugins.manager.PluginManager.discover_plugins', return_value=[]):
             plugin_manager = PluginManager()
 
         p1 = MagicMock(spec=Plugin)
@@ -64,7 +64,7 @@ class TestPluginManager(unittest.TestCase):
         plugin2 = MagicMock(spec=Plugin, name="Plugin2", provides=["data2"], requires=["data1"], run=MagicMock(side_effect=lambda ctx: call_order_mock("plugin2")))
         plugin3 = MagicMock(spec=Plugin, name="Plugin3", provides=[], requires=["data2"], run=MagicMock(side_effect=lambda ctx: call_order_mock("plugin3")))
 
-        with patch('cyberhunter_3d.core.plugins.manager.PluginManager._discover_plugins', return_value=[plugin3, plugin1, plugin2]):
+        with patch('cyberhunter_3d.core.plugins.manager.PluginManager.discover_plugins', return_value=[plugin3, plugin1, plugin2]):
             plugin_manager = PluginManager()
 
         context = ScanContext(target_domain="example.com")
