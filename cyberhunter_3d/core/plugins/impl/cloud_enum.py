@@ -4,8 +4,7 @@ import os
 from typing import List, Set
 from ..base import Plugin
 from ..context import ScanContext
-from ....utils.file_utils import run_command
-from ...reconnaissance.utils import load_config
+from ...reconnaissance.utils import load_config, run_command
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ class CloudEnumPlugin(Plugin):
         try:
             s3scanner_path = self.config['tools']['s3scanner']
             s3_command = [s3scanner_path, "scan", "-f", bucket_filename]
-            result = run_command(s3_command)
+            result = run_command(s3_command, "", log)
             for line in result.strip().split('\n'):
                 if "is readable" in line or "exists" in line:
                     cloud_assets.append({'type': 's3_bucket', 'value': line.split()[0]})
@@ -68,10 +67,9 @@ class CloudEnumPlugin(Plugin):
         names = set()
         for sub in subdomains:
             names.add(sub)
-            # Add variations like company-backup, company-dev, etc.
             parts = sub.split('.')
-            if len(parts) > 2: # e.g., assets.example.com
-                names.add(parts[0]) # assets
-                names.add(parts[1]) # example
-                names.add(f"{parts[1]}-{parts[0]}") # example-assets
+            if len(parts) > 2:
+                names.add(parts[0])
+                names.add(parts[1])
+                names.add(f"{parts[1]}-{parts[0]}")
         return names

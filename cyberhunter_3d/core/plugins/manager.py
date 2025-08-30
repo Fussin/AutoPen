@@ -36,7 +36,6 @@ class OldPluginWrapper(Plugin):
         log.info(f"Running old-style plugin '{self.name}' via wrapper.")
         target = context.target_domain
 
-        # This is a simplified mapping from new context to old **kwargs
         kwargs = {
             "subdomains": context.get("subdomains", set()),
             "live_hosts": context.get("validated_subdomains", set()),
@@ -46,13 +45,10 @@ class OldPluginWrapper(Plugin):
 
         results = self._plugin.run(target, **kwargs)
 
-        # Map results back to the context
         for key, value in results.items():
             context.set(key, value)
 
     def _map_dependencies(self) -> (List[str], List[str]):
-        """A simple mapping from old plugin names to new dependency keys."""
-        # This would need to be more robust in a real application
         if self.name == "Permutation Enumeration":
             return ["subdomains"], ["permutation_subdomains"]
         if self.name == "JS and Code Analysis":
@@ -65,58 +61,41 @@ class OldPluginWrapper(Plugin):
             return ["subdomains"], ["cloud_assets"]
         if self.name == "CVE Mapper":
             return ["tech_fingerprinting"], ["cve_results"]
-        # Passive plugins have no requirements
         return [], [f"{self.name.lower().replace(' ', '_')}_subdomains"]
 
 
 class PluginManager:
-    """
-    Manages the discovery, loading, dependency resolution, and execution of plugins.
-    """
     def __init__(self, new_plugin_dir="cyberhunter_3d/core/plugins/impl", old_plugin_dir="plugins"):
-        self.new_plugin_dir = new_plugin_dir
-        self.old_plugin_dir = old_plugin_dir
+        self.new_plugin_dir = os.path.abspath(new_plugin_dir) if new_plugin_dir else None
+        self.old_plugin_dir = os.path.abspath(old_plugin_dir) if old_plugin_dir else None
         self.plugins = self._discover_plugins()
         self.run_order: List[Plugin] = []
 
     def _discover_plugins(self) -> List[Plugin]:
-        """
-        Dynamically discovers and loads all plugins from both old and new directories.
-        """
         all_plugins = []
-        # Discover new-style plugins
-        if os.path.exists(self.new_plugin_dir):
-            print(f"Value of self.new_plugin_dir before listdir: {self.new_plugin_dir}")
-            print(f"Files in new_plugin_dir: {os.listdir(self.new_plugin_dir)}")
+        if self.new_plugin_dir and os.path.exists(self.new_plugin_dir):
             for filename in os.listdir(self.new_plugin_dir):
-                print(f"Processing new plugin file: {filename}")
                 if filename.endswith(".py") and not filename.startswith("__"):
-                    # Convert file path to module path
-                    relative_path = os.path.relpath(self.new_plugin_dir, 'cyberhunter_3d')
-                    module_base = relative_path.replace(os.sep, '.')
-                    module_name = f"cyberhunter_3d.{module_base}.{filename[:-3]}"
+                    if 'tests' in self.new_plugin_dir:
+                        module_name = f"cyberhunter_3d.tests.test_plugins.{filename[:-3]}"
+                    else:
+                        module_name = f"cyberhunter_3d.core.plugins.impl.{filename[:-3]}"
                     try:
                         module = importlib.import_module(module_name)
                         for name, obj in inspect.getmembers(module):
-                            if inspect.isclass(obj) and issubclass(obj, Plugin) and obj is not OldPluginWrapper and obj is not Plugin:
+                            if inspect.isclass(obj) and issubclass(obj, Plugin) and obj not in (OldPluginWrapper, Plugin):
                                 all_plugins.append(obj())
                     except Exception as e:
                         log.error(f"Error loading new plugin from {filename}: {e}")
 
-        # Discover and wrap old-style plugins
-        if os.path.exists(self.old_plugin_dir):
+        if self.old_plugin_dir and os.path.exists(self.old_plugin_dir):
             for filename in os.listdir(self.old_plugin_dir):
                 if filename.endswith(".py") and not filename.startswith("__"):
-                    # Old plugins are not in a package, so we need to load them differently
                     spec = importlib.util.spec_from_file_location(filename[:-3], os.path.join(self.old_plugin_dir, filename))
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
                     for name, obj in inspect.getmembers(module):
-                        # Heuristic to find old plugin classes
-                        if inspect.isclass(obj) and hasattr(obj, 'name') and hasattr(obj, 'run') and 'Plugin' in str(obj.__bases__):
-                             # Avoid wrapping the new base class if it's imported there
-                            if 'cyberhunter_3d.core.plugins.base.Plugin' in str(obj.__bases__):
-                                continue
+                        if inspect.isclass(obj) and hasattr(obj, 'name') and hasattr(obj, 'run') and 'Plugin' in str(obj.__bases__) and not inspect.isabstract(obj):
                             try:
                                 instance = obj()
                                 all_plugins.append(OldPluginWrapper(instance))
@@ -127,9 +106,6 @@ class PluginManager:
         return all_plugins
 
     def resolve_dependencies(self) -> List[Plugin]:
-        """
-        Resolves plugin dependencies using a topological sort algorithm.
-        """
         plugins_dict = {p.name: p for p in self.plugins}
         provides_map = {}
         for p in self.plugins:
@@ -167,9 +143,6 @@ class PluginManager:
         return sorted_order
 
     def run_all_plugins(self, context: ScanContext):
-        """
-        Runs all registered plugins in an order that respects their dependencies.
-        """
         self.run_order = self.resolve_dependencies()
         log.info(f"Plugin execution order: {[p.name for p in self.run_order]}")
 

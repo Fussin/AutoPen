@@ -5,8 +5,7 @@ import json
 from typing import List
 from ..base import Plugin
 from ..context import ScanContext
-from ....utils.file_utils import run_command
-from ...reconnaissance.utils import load_config
+from ...reconnaissance.utils import load_config, run_command
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ class TakeoverPlugin(Plugin):
         try:
             nuclei_path = self.config['tools']['nuclei']
             command = [nuclei_path, "-l", target_file, "-t", "http/takeovers/", "-json", "-silent"]
-            result = run_command(command)
+            result = run_command(command, "", log)
 
             for line in result.strip().split('\n'):
                 if line:

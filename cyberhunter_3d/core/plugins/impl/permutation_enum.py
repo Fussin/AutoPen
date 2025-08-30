@@ -4,8 +4,9 @@ import os
 from typing import List, Set
 from ..base import Plugin
 from ..context import ScanContext
-from ....utils.file_utils import run_command
-from ...reconnaissance.utils import load_config
+from ...reconnaissance.utils import load_config, run_command
+from ...reconnaissance.ai.wordlist_generator import extract_keywords_from_subdomains, generate_intelligent_wordlist
+from ....web.models import Asset, Target
 
 log = logging.getLogger(__name__)
 
@@ -35,28 +36,31 @@ class PermutationEnumPlugin(Plugin):
 
     def run(self, context: ScanContext):
         log.info("Running permutation enumeration plugin...")
-        known_subdomains = context.get("validated_subdomains")
-        if not known_subdomains:
-            log.warning("No known subdomains to permute. Skipping.")
+
+        previous_subdomains = self._get_previous_subdomains(context.target_domain)
+        keywords = extract_keywords_from_subdomains(previous_subdomains)
+        intelligent_wordlist = generate_intelligent_wordlist(keywords)
+
+        if not intelligent_wordlist:
+            log.warning("No intelligent wordlist generated. Skipping permutation.")
             context.set("permutation_subdomains", set())
             return
 
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as subs_file:
-            subs_file.write('\n'.join(known_subdomains))
-            subs_filename = subs_file.name
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as wordlist_file:
+            wordlist_file.write('\n'.join(intelligent_wordlist))
+            wordlist_filename = wordlist_file.name
 
         try:
             dnsgen_path = self.config['tools']['dnsgen']
-            dnsgen_cmd = [dnsgen_path, subs_filename]
-            permutations = run_command(dnsgen_cmd).strip().split('\n')
-            log.info(f"Generated {len(permutations)} permutations.")
+            dnsgen_cmd = [dnsgen_path, "-w", wordlist_filename, context.target_domain]
+            permutations = run_command(dnsgen_cmd, context.target_domain, log).strip().split('\n')
+            log.info(f"Generated {len(permutations)} permutations with intelligent wordlist.")
 
             resolvers = self.config['wordlists']['resolvers']
             validated_permutations = self._validate_subdomains(set(permutations), resolvers)
 
             context.set("permutation_subdomains", validated_permutations)
 
-            # Add to the main subdomains list
             existing_subdomains = context.get("subdomains", set())
             combined_subdomains = existing_subdomains.union(validated_permutations)
             context.set("subdomains", combined_subdomains)
@@ -64,7 +68,19 @@ class PermutationEnumPlugin(Plugin):
             log.info(f"Found {len(validated_permutations)} new validated subdomains from permutations.")
 
         finally:
-            os.remove(subs_filename)
+            os.remove(wordlist_filename)
+
+    def _get_previous_subdomains(self, target_domain: str) -> List[str]:
+        try:
+            from run_web import app
+            with app.app_context():
+                targets = Target.query.filter_by(value=target_domain).all()
+                scan_ids = {t.scan_id for t in targets}
+                assets = Asset.query.filter(Asset.scan_id.in_(scan_ids), Asset.type == 'subdomain').all()
+                return [a.value for a in assets]
+        except Exception as e:
+            log.error(f"Could not fetch previous subdomains from database: {e}")
+            return []
 
 
     def _validate_subdomains(self, subdomains: Set[str], resolvers: str) -> Set[str]:
@@ -77,8 +93,9 @@ class PermutationEnumPlugin(Plugin):
             tmp_subs_path = tmp_subs.name
 
         try:
-            validation_cmd = ["dnsx", "-l", tmp_subs_path, "-r", resolvers, "-silent"]
-            result = run_command(validation_cmd)
+            dnsx_path = self.config['tools']['dnsx']
+            validation_cmd = [dnsx_path, "-l", tmp_subs_path, "-r", resolvers, "-silent"]
+            result = run_command(validation_cmd, "", log)
             validated = set(result.strip().split('\n'))
             log.info(f"Validated {len(validated)} live permutation subdomains.")
         except Exception as e:

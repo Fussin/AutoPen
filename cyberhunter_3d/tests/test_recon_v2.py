@@ -14,7 +14,6 @@ class TestReconV2(unittest.TestCase):
         db.init_app(self.app)
         with self.app.app_context():
             db.create_all()
-            # Create a dummy scan so the function can find it
             scan = Scan(id=1, status="RUNNING", user_id=1)
             target = Target(scan_id=1, value="example.com")
             scan.targets.append(target)
@@ -32,16 +31,13 @@ class TestReconV2(unittest.TestCase):
         """
         Integration test for the new plugin-based reconnaissance pipeline.
         """
-        # 1. Setup
         mock_pm_instance = mock_plugin_manager.return_value
         mock_pm_instance.run_all_plugins = MagicMock()
 
-        # 2. Execute the function
         domain = "example.com"
         with self.app.app_context():
             output_files = enumerate_subdomains_v2(domain, scan_id=1, app=self.app)
 
-        # 3. Assertions
         mock_pm_instance.run_all_plugins.assert_called_once()
         mock_save_json.assert_called()
 

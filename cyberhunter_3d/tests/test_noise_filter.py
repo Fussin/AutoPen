@@ -1,61 +1,50 @@
-import unittest
-import os
-import joblib
-from unittest.mock import patch, MagicMock
-from cyberhunter_3d.core.reconnaissance.ai.noise_filter import NoiseFilter
+import pytest
+from cyberhunter_3d.core.reconnaissance.ai.noise_filter import filter_false_positives
+from cyberhunter_3d.utils.logger import setup_logger
 
-class TestNoiseFilter(unittest.TestCase):
+logger = setup_logger('TestNoiseFilter', 'test_noise_filter.log')
 
-    def setUp(self):
-        self.test_model_path = "test_model.joblib"
-        self.noise_filter = NoiseFilter(model_path=self.test_model_path)
-        self.labeled_data = [
-            ("dev.example.com", False),
-            ("staging.example.com", False),
-            ("www.example.com", False),
-            ("randomstringofchars", True),
-            ("another-random-string", True),
-        ]
+def test_filter_false_positives():
+    """
+    Tests that the filter_false_positives function correctly removes subdomains
+    that match the predefined false positive patterns.
+    """
+    subdomains_to_test = {
+        "example.com",
+        "test.example.com",
+        "cpanel.example.com", # Should be removed
+        "www.example.com",    # Should be removed
+        "autodiscover.example.com", # Should be removed
+        "ftp.example.com",    # Should be removed
+        "mail.example.com",   # Should be removed
+        "smtp.example.com",   # Should be removed
+        "imap.example.com",   # Should be removed
+        "pop.example.com",    # Should be removed
+        "ns1.example.com",    # Should be removed
+        "dev.example.com",
+    }
 
-    def tearDown(self):
-        if os.path.exists(self.test_model_path):
-            os.remove(self.test_model_path)
+    expected_subdomains = {
+        "example.com",
+        "test.example.com",
+        "dev.example.com",
+    }
 
-    def test_train(self):
-        """Tests that the train method creates a model file."""
-        self.noise_filter.train(self.labeled_data)
-        self.assertTrue(os.path.exists(self.test_model_path))
+    filtered = filter_false_positives(subdomains_to_test, logger)
 
-    def test_predict_with_trained_model(self):
-        """Tests the predict method with a trained model."""
-        # Train the model first
-        self.noise_filter.train(self.labeled_data)
+    assert filtered == expected_subdomains
 
-        # Now, create a new instance to load the model
-        new_filter = NoiseFilter(model_path=self.test_model_path)
+def test_filter_false_positives_no_matches():
+    """
+    Tests that the filter works correctly when no subdomains should be filtered.
+    """
+    subdomains_to_test = {
+        "example.com",
+        "test.example.com",
+        "dev.example.com",
+        "api.example.com",
+    }
 
-        subdomains_to_predict = ["test.example.com", "anotherrandomstring", "www.example.com"]
+    filtered = filter_false_positives(subdomains_to_test, logger)
 
-        # We expect 'anotherrandomstring' to be filtered out
-        expected_valid = ["test.example.com", "www.example.com"]
-
-        # The model might not be perfect, so we check if the prediction is reasonable
-        # For this test, we'll mock the actual predict call to check the logic
-        with patch.object(new_filter.model, 'predict', return_value=[False, True, False]) as mock_predict:
-            valid_subdomains = new_filter.predict(subdomains_to_predict)
-            self.assertEqual(valid_subdomains, expected_valid)
-            mock_predict.assert_called_once()
-
-    def test_predict_no_model(self):
-        """Tests that the predict method returns all subdomains if no model is found."""
-        # Ensure no model file exists
-        if os.path.exists(self.test_model_path):
-            os.remove(self.test_model_path)
-
-        no_model_filter = NoiseFilter(model_path=self.test_model_path)
-
-        subdomains = ["a.com", "b.com"]
-        self.assertEqual(no_model_filter.predict(subdomains), subdomains)
-
-if __name__ == '__main__':
-    unittest.main()
+    assert filtered == subdomains_to_test

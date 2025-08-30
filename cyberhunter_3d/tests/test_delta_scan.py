@@ -5,10 +5,6 @@ from cyberhunter_3d.core.reconnaissance.subdomain_enum import perform_delta_scan
 class TestDeltaScan(unittest.TestCase):
 
     def test_perform_delta_scan(self):
-        """
-        Tests that the perform_delta_scan function correctly identifies new and
-        removed subdomains.
-        """
         master_subdomains = {"a.example.com", "b.example.com", "c.example.com"}
         previous_subdomains = {"a.example.com", "d.example.com"}
 
@@ -23,10 +19,6 @@ class TestDeltaScan(unittest.TestCase):
         self.assertEqual(delta_results["removed"], expected_removed)
 
     def test_perform_delta_scan_no_previous_subdomains(self):
-        """
-        Tests that the delta scan function does nothing if there are no
-        previous subdomains to compare against.
-        """
         master_subdomains = {"a.example.com", "b.example.com"}
         previous_subdomains = set()
 
