@@ -20,14 +20,23 @@ class JsAndCodePlugin(Plugin):
     def description(self) -> str:
         return "Crawls JS files and searches code repositories for subdomains and secrets."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    @property
+    def requires(self) -> List[str]:
+        return ["live_hosts"]
+
+    @property
+    def provides(self) -> List[str]:
+        return ["subdomains"]
+
+    def run(self, context: 'ScanContext'):
         logger = setup_logger('JsAndCodePlugin', 'js_and_code_plugin.log')
         config = load_config()
+        target = context.target
 
-        live_hosts = kwargs.get('live_hosts')
+        live_hosts = context.get("live_hosts")
         if not live_hosts:
             logger.info("No live hosts to analyze. Skipping JS/Code analysis.")
-            return {}
+            return
 
         all_raw_text = []
 
@@ -58,12 +67,9 @@ class JsAndCodePlugin(Plugin):
         combined_text = "\n".join(all_raw_text)
         extracted_subdomains = self._extract_subdomains_from_text(combined_text, target)
 
-        secrets_and_endpoints = {}
-
-        return {
-            "js_subdomains": extracted_subdomains,
-            "secrets_and_endpoints": secrets_and_endpoints,
-        }
+        context.update_set("subdomains", extracted_subdomains)
+        # In the future, we can add secrets and endpoints to the context as well
+        # context.set("secrets", secrets)
 
     def _extract_subdomains_from_text(self, text: str, domain: str) -> Set[str]:
         generic_domain_regex = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+")

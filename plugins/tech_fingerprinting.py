@@ -19,14 +19,23 @@ class TechFingerprintingPlugin(Plugin):
     def description(self) -> str:
         return "Performs technology fingerprinting with Wappalyzer and port scanning with Naabu/Nmap."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    @property
+    def requires(self) -> List[str]:
+        return ["live_hosts"]
+
+    @property
+    def provides(self) -> List[str]:
+        return ["tech"]
+
+    def run(self, context: 'ScanContext'):
         logger = setup_logger('TechFingerprintingPlugin', 'tech_fingerprinting_plugin.log')
         config = load_config()
+        target = context.target
 
-        live_hosts = kwargs.get('live_hosts')
+        live_hosts = context.get("live_hosts")
         if not live_hosts:
             logger.info("No live hosts provided for technology fingerprinting.")
-            return {}
+            return
 
         tech_results = {}
 
@@ -84,4 +93,4 @@ class TechFingerprintingPlugin(Plugin):
             if os.path.exists(naabu_results_file):
                 os.remove(naabu_results_file)
 
-        return {"tech_fingerprinting": tech_results}
+        context.set("tech", tech_results)

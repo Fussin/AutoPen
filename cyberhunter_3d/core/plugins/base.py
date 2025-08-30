@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import List
+from ..context import ScanContext
 
 class Plugin(ABC):
     """
@@ -17,14 +18,21 @@ class Plugin(ABC):
         """A brief description of what the plugin does."""
         pass
 
+    @property
+    def requires(self) -> List[str]:
+        """A list of data keys that this plugin requires from the ScanContext."""
+        return []
+
+    @property
+    def provides(self) -> List[str]:
+        """A list of data keys that this plugin provides to the ScanContext."""
+        return []
+
     @abstractmethod
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    def run(self, context: ScanContext):
         """
         The main execution method for the plugin.
 
-        :param target: The main target for the plugin to run against (e.g., a domain).
-        :param kwargs: A dictionary of additional data that the plugin might need
-                       (e.g., a list of known subdomains, live hosts).
-        :return: A dictionary of results from the plugin.
+        :param context: The shared ScanContext object containing all scan data.
         """
         pass

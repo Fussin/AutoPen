@@ -19,9 +19,14 @@ class ActiveEnumPlugin(Plugin):
     def description(self) -> str:
         return "Runs active subdomain enumeration tools like gobuster, puredns bruteforce, etc."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    @property
+    def provides(self) -> List[str]:
+        return ["subdomains"]
+
+    def run(self, context: 'ScanContext'):
         logger = setup_logger('ActiveEnumPlugin', 'active_enum_plugin.log')
         config = load_config()
+        target = context.target
 
         logger.info(f"Starting active enumeration for: {target}")
 
@@ -51,7 +56,7 @@ class ActiveEnumPlugin(Plugin):
         validated_subdomains = self._validate_subdomains(all_subdomains, resolvers, config, logger)
 
         logger.info(f"Total unique validated active subdomains found: {len(validated_subdomains)}")
-        return {"active_subdomains": validated_subdomains}
+        context.update_set("subdomains", validated_subdomains)
 
     def _validate_subdomains(self, subdomains: Set[str], resolvers: str, config: Dict, logger) -> Set[str]:
         if not subdomains:

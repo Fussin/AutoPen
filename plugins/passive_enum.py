@@ -16,9 +16,14 @@ class PassiveEnumPlugin(Plugin):
     def description(self) -> str:
         return "Runs passive subdomain enumeration tools like subfinder, amass, etc."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    @property
+    def provides(self) -> List[str]:
+        return ["subdomains"]
+
+    def run(self, context: 'ScanContext'):
         logger = setup_logger('PassiveEnumPlugin', 'passive_enum_plugin.log')
         config = load_config()
+        target = context.target
 
         logger.info(f"Starting passive enumeration for: {target}")
 
@@ -42,4 +47,4 @@ class PassiveEnumPlugin(Plugin):
                     logger.error(f"'{' '.join(map(str, command))}' generated an exception: {exc}")
 
         logger.info(f"Total unique passive subdomains found: {len(all_subdomains)}")
-        return {"passive_subdomains": all_subdomains}
+        context.update_set("subdomains", all_subdomains)

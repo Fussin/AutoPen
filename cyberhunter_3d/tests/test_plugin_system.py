@@ -1,65 +1,74 @@
 import pytest
-from pathlib import Path
 from unittest.mock import patch
 from cyberhunter_3d.core.plugins.manager import PluginManager
 from cyberhunter_3d.core.plugins.base import Plugin
+from cyberhunter_3d.core.context import ScanContext
 
 # Define dummy plugins for testing
-class DummyPlugin1(Plugin):
+class DummyPluginA(Plugin):
     @property
-    def name(self): return "Dummy Plugin 1"
+    def name(self): return "A"
     @property
-    def description(self): return "A dummy plugin."
-    def run(self, target, **kwargs): return {"result": "dummy1"}
+    def description(self): return "Provides A"
+    @property
+    def provides(self): return ["A_data"]
+    def run(self, context: ScanContext): context.set("A_data", "A_result")
 
-class DummyPlugin2(Plugin):
+class DummyPluginB(Plugin):
     @property
-    def name(self): return "Dummy Plugin 2"
+    def name(self): return "B"
     @property
-    def description(self): return "Another dummy plugin."
-    def run(self, target, **kwargs): return {"result": "dummy2"}
+    def description(self): return "Requires A, provides B"
+    @property
+    def requires(self): return ["A_data"]
+    @property
+    def provides(self): return ["B_data"]
+    def run(self, context: ScanContext):
+        a_data = context.get("A_data")
+        context.set("B_data", f"{a_data}_B_result")
 
-def test_plugin_manager_discovery(tmp_path: Path):
+class DummyPluginC(Plugin):
+    @property
+    def name(self): return "C"
+    @property
+    def description(self): return "Requires B"
+    @property
+    def requires(self): return ["B_data"]
+    def run(self, context: ScanContext):
+        b_data = context.get("B_data")
+        context.set("C_data", f"{b_data}_C_result")
+
+def test_dependency_resolution():
     """
-    Tests that the PluginManager can discover and load plugins from a directory.
+    Tests that the PluginManager correctly sorts plugins based on dependencies.
     """
-    plugins_dir = tmp_path / "plugins"
-    plugins_dir.mkdir()
+    # Unordered plugins
+    plugins = [DummyPluginC(), DummyPluginA(), DummyPluginB()]
 
-    plugin1_code = """
-from cyberhunter_3d.core.plugins.base import Plugin
-class TestPlugin1(Plugin):
-    @property
-    def name(self): return "Test Plugin 1"
-    @property
-    def description(self): return "Test desc 1"
-    def run(self, target, **kwargs): return {"data": "test1"}
-"""
-    (plugins_dir / "plugin1.py").write_text(plugin1_code)
+    manager = PluginManager(plugin_dir="dummy")
+    # Manually set the plugins to test the sorting logic
+    manager.plugins = manager._resolve_dependencies(plugins)
 
-    import sys
-    sys.path.insert(0, str(tmp_path))
+    # Check the order
+    assert manager.plugins[0].name == "A"
+    assert manager.plugins[1].name == "B"
+    assert manager.plugins[2].name == "C"
 
-    manager = PluginManager(plugin_dir=str(plugins_dir))
-
-    # This test is tricky because the plugin loading logic is tied to the `plugins` package.
-    # A real test would need a more complex setup.
-    # For now, we will rely on the mocked test below.
-    assert True
-
-@patch('cyberhunter_3d.core.plugins.manager.PluginManager._load_plugins')
-def test_plugin_manager_run_plugins(mock_load):
+def test_plugin_manager_run_plugins():
     """
-    Tests that the PluginManager can run all loaded plugins.
+    Tests that the PluginManager runs plugins in the correct order and updates the context.
     """
-    mock_plugin1 = DummyPlugin1()
-    mock_plugin2 = DummyPlugin2()
-    mock_load.return_value = [mock_plugin1, mock_plugin2]
+    plugins = [DummyPluginC(), DummyPluginA(), DummyPluginB()]
 
-    manager = PluginManager(plugin_dir="dummy_dir")
-    results = manager.run_all_plugins(target="example.com")
+    with patch.object(PluginManager, '_load_plugins', return_value=plugins):
+        manager = PluginManager(plugin_dir="dummy")
+        # Manually sort them for the test
+        manager.plugins = manager._resolve_dependencies(plugins)
 
-    assert "Dummy Plugin 1" in results
-    assert results["Dummy Plugin 1"] == {"result": "dummy1"}
-    assert "Dummy Plugin 2" in results
-    assert results["Dummy Plugin 2"] == {"result": "dummy2"}
+        context = ScanContext(target="example.com")
+        manager.run_all_plugins(context)
+
+        # Assert that the context was updated correctly
+        assert context.get("A_data") == "A_result"
+        assert context.get("B_data") == "A_result_B_result"
+        assert context.get("C_data") == "A_result_B_result_C_result"

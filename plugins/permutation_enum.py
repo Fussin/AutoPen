@@ -20,14 +20,23 @@ class PermutationEnumPlugin(Plugin):
     def description(self) -> str:
         return "Runs permutation-based subdomain enumeration tools."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    @property
+    def requires(self) -> List[str]:
+        return ["subdomains"]
+
+    @property
+    def provides(self) -> List[str]:
+        return ["subdomains"]
+
+    def run(self, context: 'ScanContext'):
         logger = setup_logger('PermutationEnumPlugin', 'permutation_enum_plugin.log')
         config = load_config()
+        target = context.target
 
-        known_subdomains = kwargs.get('known_subdomains')
+        known_subdomains = context.get("subdomains")
         if not known_subdomains:
             logger.warning("No known subdomains to permute. Skipping permutation engine.")
-            return {}
+            return
 
         custom_wordlist_filename = self._generate_custom_wordlist(known_subdomains, logger)
 
@@ -66,7 +75,7 @@ class PermutationEnumPlugin(Plugin):
 
         validated_subdomains = self._validate_subdomains(all_subdomains, config, logger)
 
-        return {"permutation_subdomains": validated_subdomains}
+        context.update_set("subdomains", validated_subdomains)
 
     def _generate_custom_wordlist(self, subdomains: Set[str], logger) -> str:
         custom_words = set()

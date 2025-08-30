@@ -19,14 +19,23 @@ class TakeoverPlugin(Plugin):
     def description(self) -> str:
         return "Checks for subdomain takeover vulnerabilities using Nuclei."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    @property
+    def requires(self) -> List[str]:
+        return ["live_hosts"]
+
+    @property
+    def provides(self) -> List[str]:
+        return ["takeover_vulns"]
+
+    def run(self, context: 'ScanContext'):
         logger = setup_logger('TakeoverPlugin', 'takeover_plugin.log')
         config = load_config()
+        target = context.target
 
-        live_hosts = kwargs.get('live_hosts')
+        live_hosts = context.get("live_hosts")
         if not live_hosts:
             logger.info("No live hosts provided for takeover scan.")
-            return {}
+            return
 
         nuclei_path = config['tools'].get('nuclei')
         if not nuclei_path or not os.path.exists(nuclei_path):
@@ -62,4 +71,4 @@ class TakeoverPlugin(Plugin):
             os.remove(target_file)
 
         logger.info(f"Subdomain takeover scan complete. Found {len(vulnerabilities)} potential vulnerabilities.")
-        return {"takeover_vulnerabilities": vulnerabilities}
+        context.set("takeover_vulns", vulnerabilities)

@@ -18,14 +18,23 @@ class CloudEnumPlugin(Plugin):
     def description(self) -> str:
         return "Finds cloud assets (S3 buckets, Azure blobs, GCP buckets)."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
+    @property
+    def requires(self) -> List[str]:
+        return ["subdomains"]
+
+    @property
+    def provides(self) -> List[str]:
+        return ["cloud_assets"]
+
+    def run(self, context: 'ScanContext'):
         logger = setup_logger('CloudEnumPlugin', 'cloud_enum_plugin.log')
         config = load_config()
+        target = context.target
 
-        subdomains = kwargs.get('subdomains')
+        subdomains = context.get("subdomains")
         if not subdomains:
             logger.info("No subdomains provided for cloud asset enumeration.")
-            return {}
+            return
 
         cloud_assets = []
         potential_bucket_names = set()
@@ -66,4 +75,4 @@ class CloudEnumPlugin(Plugin):
         finally:
             os.remove(bucket_filename)
 
-        return {"cloud_assets": cloud_assets}
+        context.set("cloud_assets", cloud_assets)

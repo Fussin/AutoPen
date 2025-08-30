@@ -17,20 +17,30 @@ class CveMapperPlugin(Plugin):
     def description(self) -> str:
         return "Maps technologies to CVEs using the NVD API."
 
-    def run(self, target: str, **kwargs) -> Dict[str, Any]:
-        logger = setup_logger('CveMapperPlugin', 'cve_mapper_plugin.log')
+    @property
+    def requires(self) -> List[str]:
+        return ["tech"]
 
-        tech_fingerprinting = kwargs.get('tech_fingerprinting')
-        if not tech_fingerprinting:
-            logger.info("No technology fingerprinting data provided. Skipping CVE mapping.")
-            return {}
+    @property
+    def provides(self) -> List[str]:
+        return ["cve_results"]
+
+    def run(self, context: 'ScanContext'):
+        logger = setup_logger('CveMapperPlugin', 'cve_mapper_plugin.log')
+        target = context.target
+
+        tech_data = context.get("tech")
+        if not tech_data:
+            logger.info("No technology data provided. Skipping CVE mapping.")
+            return
 
         cve_results = {}
-        for host, techs in tech_fingerprinting.items():
+        for host, data in tech_data.items():
+            techs = [t['name'] for t in data.get('technologies', [])]
             if techs:
                 cve_results[host] = self._map_tech_to_cves(techs, logger)
 
-        return {"cve_results": cve_results}
+        context.set("cve_results", cve_results)
 
     def _get_cpe_for_tech(self, technology: str) -> str:
         tech_to_cpe = {
