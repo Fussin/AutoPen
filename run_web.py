@@ -282,6 +282,30 @@ from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.file_utils import get_results_dir
 import json
 
+from flask import send_from_directory
+from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
+
+@app.route('/scan/<int:scan_id>/report/download')
+@login_required
+def download_report(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to access this report.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    target_domain = scan.targets[0].value if scan.targets else 'report'
+    results_dir = get_results_dir(target_domain, scan_id)
+    pdf_path = os.path.join(results_dir, f"scan_report_{scan_id}.pdf")
+
+    if not os.path.exists(pdf_path):
+        # Generate the report if it doesn't exist
+        generate_pdf_report(scan_id, target_domain, app)
+        if not os.path.exists(pdf_path):
+            flash('Failed to generate PDF report.', 'danger')
+            return redirect(url_for('scan_results', scan_id=scan_id))
+
+    return send_from_directory(directory=results_dir, path=f"scan_report_{scan_id}.pdf", as_attachment=True)
+
 @app.route('/scan/<int:scan_id>')
 @login_required
 def scan_results(scan_id):
