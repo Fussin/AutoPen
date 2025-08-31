@@ -25,7 +25,7 @@ def discover_urls(domain: str, scan_id: int, app):
         plugin_manager.discover_plugins()
         plugin_manager.run_all_plugins(
             context,
-            include_plugins=["URL Discovery", "URL Processor"]
+            include_plugins=["URL Discovery", "URL Processor", "Vulnerability Scanner"]
         )
 
         log.info(f"URL Discovery for {domain} completed.")
