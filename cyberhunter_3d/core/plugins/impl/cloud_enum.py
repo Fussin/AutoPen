@@ -18,7 +18,7 @@ class CloudEnumPlugin(Plugin):
 
     @property
     def name(self) -> str:
-        return "cloud_enum"
+        return "Cloud Enumeration"
 
     @property
     def description(self) -> str:

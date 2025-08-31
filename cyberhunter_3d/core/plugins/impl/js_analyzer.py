@@ -27,7 +27,7 @@ class JavaScriptAnalyzerPlugin(Plugin):
 
     @property
     def provides(self) -> List[str]:
-        return ["js_endpoints", "js_secrets", "new_urls_from_js"]
+        return ["api_endpoints", "js_secrets", "new_urls_from_js"]
 
     def _run_command(self, command: str) -> str:
         """Runs a command and returns its stdout."""
@@ -100,7 +100,7 @@ class JavaScriptAnalyzerPlugin(Plugin):
                     all_js_secrets[js_url] = secrets
 
         # --- Set results in context ---
-        context.set("js_endpoints", all_js_endpoints)
+        context.set("api_endpoints", all_js_endpoints)
         context.set("js_secrets", all_js_secrets)
         context.set("new_urls_from_js", list(new_urls_from_js))
 
