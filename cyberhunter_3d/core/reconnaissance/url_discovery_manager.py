@@ -30,7 +30,7 @@ def run_subdomain_enum(context: ScanContext):
     log.info("Subdomain enumeration finished.")
 
 
-def discover_urls(domain: str, scan_id: int, app, sast_dir=None):
+def discover_urls(domain: str, scan_id: int, app):
     """
     Orchestrates the expanded URL discovery and vulnerability scanning pipeline.
     """
@@ -44,8 +44,6 @@ def discover_urls(domain: str, scan_id: int, app, sast_dir=None):
 
         results_dir = get_results_dir(domain, scan_id)
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
-        if sast_dir:
-            context.set("sast_dir", sast_dir)
 
         # Run subdomain enumeration first to get targets for URL discovery
         run_subdomain_enum(context)
