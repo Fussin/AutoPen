@@ -98,7 +98,7 @@ tool_commands:
   ghauri_scan: "ghauri -l {input_file} --batch -o {output_file}"
 
   # LFI Testing
-  # Often done with custom scripts or nuclei templates. No single tool command.
+  nuclei_lfi_scan: "nuclei -l {input_file} -t lfi/ -json -o {output_file} -silent"
 
   # CORS Scanning
   corscanner_scan: "python3 CORScanner/cors_scan.py -i {input_file} -o {output_file}"
