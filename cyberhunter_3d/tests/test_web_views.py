@@ -1,6 +1,7 @@
 import unittest
 import os
 import json
+import shutil
 from unittest.mock import patch, MagicMock
 from run_web import app, db
 from cyberhunter_3d.web.models import User, Scan, Target
@@ -78,8 +79,7 @@ class TestWebView(unittest.TestCase):
         self.assertIn(b'id', response.data)
 
         # Clean up mock files
-        os.remove(report_path)
-        os.rmdir(results_dir)
+        shutil.rmtree(results_dir)
 
 if __name__ == '__main__':
     unittest.main()
