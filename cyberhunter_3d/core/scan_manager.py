@@ -1,4 +1,5 @@
-from cyberhunter_3d.web.models import db, Scan, Target, Asset
+from cyberhunter_3d.web.models import db, Scan, Target, Asset, Finding
+from cyberhunter_3d.core.triage_engine import TriageEngine
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
@@ -225,16 +226,31 @@ def run_execution_phase(scan_id, app):
 
             specialized_scanner = SpecializedScanManager()
             specialized_scanner.run(context)
+            print("Specialized Scanning Phase complete.")
 
-            specialized_results = context.get('specialized_scan_results')
-            print(f"Specialized Scanning Phase complete. Results: {specialized_results}")
+            # 5. Automated Triage
+            print("Starting Automated Triage Phase...")
+            triage_engine = TriageEngine(context)
+            triaged_findings = triage_engine.run()
 
+            for finding_data in triaged_findings:
+                finding = Finding(
+                    scan_id=scan.id,
+                    title=finding_data['title'],
+                    severity=finding_data['severity'],
+                    confidence=finding_data['confidence'],
+                    description=finding_data['description'],
+                    supporting_evidence=finding_data['supporting_evidence']
+                )
+                db.session.add(finding)
+            db.session.commit()
+            print(f"Automated Triage Phase complete. Stored {len(triaged_findings)} findings.")
 
-            # 5. Finalize Scan
+            # 6. Finalize Scan
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
             scan.results = (
-                f"Execution phase complete. Total in-scope assets: {final_asset_count} "
-                f"(including {rdns_found_count} from rDNS and {analytics_found_count} from analytics). "
+                f"Execution phase complete. Total in-scope assets: {final_asset_count}. "
+                f"Generated {len(triaged_findings)} triaged findings. "
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
             scan.status = 'COMPLETED'

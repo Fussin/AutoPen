@@ -42,6 +42,7 @@ class Scan(db.Model):
 
     # Relationship to discovered assets
     assets = db.relationship('Asset', backref='scan', lazy=True, cascade="all, delete-orphan")
+    findings = db.relationship('Finding', backref='scan', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Scan {self.id} - {self.status}>'
@@ -77,3 +78,19 @@ class Asset(db.Model):
 
     def __repr__(self):
         return f'<Asset {self.value} ({self.type})>'
+
+class Finding(db.Model):
+    """
+    Finding model to store triaged and correlated findings.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    severity = db.Column(db.String(50), nullable=False)
+    confidence = db.Column(db.String(50), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    supporting_evidence = db.Column(db.JSON, nullable=False)
+    scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Finding {self.title} ({self.severity})>'
