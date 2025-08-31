@@ -10,7 +10,7 @@ from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_ur
 from cyberhunter_3d.core.specialized_scan_manager import SpecializedScanManager
 from cyberhunter_3d.core.plugins.context import ScanContext
 
-def run_url_discovery_phase(scan_id, app):
+def run_url_discovery_phase(scan_id, app, sast_dir=None):
     """
     Performs the URL discovery and vulnerability scanning phase.
     """
@@ -23,7 +23,7 @@ def run_url_discovery_phase(scan_id, app):
         for target in scan.targets:
             # Assuming the main target for URL discovery is the 'domain' type
             if target.type == 'domain':
-                discover_urls(target.value, scan_id, app)
+                discover_urls(target.value, scan_id, app, sast_dir)
 
 def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
     """Helper to create a new asset if it is in scope and doesn't already exist."""
