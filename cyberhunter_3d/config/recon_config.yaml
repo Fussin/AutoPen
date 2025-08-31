@@ -87,6 +87,31 @@ tool_commands:
   sqlmap_scan: "sqlmap -m {input_file} --batch --output-dir={output_dir} --risk=3 --level=5"
   dirsearch_scan: "dirsearch -L {input_file} --json-report={output_file}"
 
+  # --- New Scanners from Diagram ---
+
+  # XSS Hunting
+  gxss_scan: "cat {input_file} | Gxss -c 100 -p Xss -o {output_file}"
+  kxss_scan: "kxss -l {input_file} -o {output_file}"
+  xsstrike_scan: "xsstrike -u {target_url} --fuzzer --batch" # Note: XSStrike is often interactive, might need wrapper
+
+  # SQL Injection
+  ghauri_scan: "ghauri -l {input_file} --batch -o {output_file}"
+
+  # LFI Testing
+  # Often done with custom scripts or nuclei templates. No single tool command.
+
+  # CORS Scanning
+  corscanner_scan: "python3 CORScanner/cors_scan.py -i {input_file} -o {output_file}"
+
+  # Sensitive Data
+  git_exposure_check: "httpx -l {input_file} -path /.git/config -status-code -mc 200"
+  backup_file_check: "nuclei -l {input_file} -t exposures/backups/ -o {output_file}"
+  config_file_check: "nuclei -l {input_file} -t exposures/configs/ -o {output_file}"
+
+  # SSRF/XXE
+  ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -o {output_file}" # Assumes interactsh server is configured
+  xxe_test: "nuclei -l {input_file} -t xxe/ -o {output_file}"
+
 # Plugin settings
 plugins:
   enabled:
