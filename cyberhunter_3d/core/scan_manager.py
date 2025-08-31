@@ -1,4 +1,5 @@
-from cyberhunter_3d.web.models import db, Scan, Target, Asset
+from cyberhunter_3d.web.models import db, Scan, Target, Asset, Finding
+from cyberhunter_3d.core.triage_engine import TriageEngine
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
@@ -198,11 +199,60 @@ def run_execution_phase(scan_id, app):
                         out_of_scope_count += 1
             print(f"Analytics complete. Found {analytics_found_count} new domains.")
 
+
+            # 4. Specialized Scanning Phase
+            print("Starting Specialized Scanning Phase...")
+            # Create a ScanContext and populate it with data from the scan so far
+            context = ScanContext(target_domain=scan.targets[0].value, scan_id=scan.id)
+
+            # This is a simplified data gathering process. A real implementation
+            # would need to be more robust.
+            live_hosts = [asset.value for asset in Asset.query.filter_by(scan_id=scan.id, type='live_host').all()]
+            js_urls = [asset.value for asset in Asset.query.filter_by(scan_id=scan.id, type='js_file').all()]
+            validated_subdomains = [asset.value for asset in Asset.query.filter_by(scan_id=scan.id, type='subdomain').all()]
+
+            # Get WordPress URLs from technology assets
+            wordpress_urls = []
+            wp_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'technology', Asset.value.ilike('%wordpress%')).all()
+            for asset in wp_assets:
+                if asset.details and 'host' in asset.details:
+                    wordpress_urls.append(asset.details['host'])
+
+            context.set('live_hosts', list(set(live_hosts)))
+            context.set('js_files_urls', list(set(js_urls)))
+            context.set('validated_subdomains', list(set(validated_subdomains)))
+            context.set('wordpress_urls', list(set(wordpress_urls)))
+
+            specialized_scanner = SpecializedScanManager()
+            specialized_scanner.run(context)
+            print("Specialized Scanning Phase complete.")
+
+            # 5. Automated Triage
+            print("Starting Automated Triage Phase...")
+            triage_engine = TriageEngine(context)
+            triaged_findings = triage_engine.run()
+
+            for finding_data in triaged_findings:
+                finding = Finding(
+                    scan_id=scan.id,
+                    title=finding_data['title'],
+                    severity=finding_data['severity'],
+                    confidence=finding_data['confidence'],
+                    description=finding_data['description'],
+                    supporting_evidence=finding_data['supporting_evidence']
+                )
+                db.session.add(finding)
+            db.session.commit()
+            print(f"Automated Triage Phase complete. Stored {len(triaged_findings)} findings.")
+
+            # 6. Finalize Scan
+
             # 4. Finalize Scan
+
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
             scan.results = (
-                f"Execution phase complete. Total in-scope assets: {final_asset_count} "
-                f"(including {rdns_found_count} from rDNS and {analytics_found_count} from analytics). "
+                f"Execution phase complete. Total in-scope assets: {final_asset_count}. "
+                f"Generated {len(triaged_findings)} triaged findings. "
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
             scan.status = 'COMPLETED'
