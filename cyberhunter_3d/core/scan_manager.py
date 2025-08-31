@@ -4,6 +4,7 @@ from cyberhunter_3d.core.specialized_scan_manager import SpecializedScanManager
 from cyberhunter_3d.core.plugins.context import ScanContext
 from cyberhunter_3d.core.triage_engine import TriageEngine
 from cyberhunter_3d.core.validation_engine import ValidationEngine
+from cyberhunter_3d.core.response_engine import ResponseEngine
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
@@ -250,11 +251,17 @@ def run_execution_phase(scan_id, app):
             db.session.commit()
             print(f"Safe Validation Phase complete. Confirmed {len(validated_results)} findings.")
 
-            # 7. Finalize Scan
+            # 7. Autonomous Response Phase
+            print("Starting Autonomous Response Phase...")
+            response_engine = ResponseEngine(validated_results)
+            response_engine.run()
+            print("Autonomous Response Phase complete.")
+
+            # 8. Finalize Scan
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
             scan.results = (
                 f"Execution phase complete. Total in-scope assets: {final_asset_count}. "
-                f"Generated {len(triaged_findings)} triaged findings, {len(validated_results)} of which were validated. "
+                f"Generated {len(triaged_findings)} triaged findings, {len(validated_results)} of which were validated and sent for response. "
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
             scan.status = 'COMPLETED'

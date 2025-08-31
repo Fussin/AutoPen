@@ -5,7 +5,7 @@ from cyberhunter_3d.utils.logger import setup_logger
 
 logger = setup_logger('test_cve_mapper.log')
 
-@patch('plugins.cve_mapper_plugin.CveMapperPlugin._query_nvd_for_cpe')
+@patch('cyberhunter_3d.core.plugins.impl.cve_mapper_plugin.CveMapperPlugin._query_nvd_for_cpe')
 def test_map_tech_to_cves(mock_query_nvd):
     """
     Tests that _map_tech_to_cves correctly maps technologies to CVEs.
@@ -22,7 +22,7 @@ def test_map_tech_to_cves(mock_query_nvd):
 
     # 3. Execute
     technologies = ["nginx", "apache"]
-    cve_results = plugin._map_tech_to_cves(technologies, logger)
+    cve_results = plugin._map_tech_to_cves(technologies)
 
     # 4. Assertions
     assert "nginx" in cve_results

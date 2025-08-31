@@ -36,7 +36,7 @@ class TestContentDiscoveryPlugin(unittest.TestCase):
 
         # Setup mock context and files
         live_urls = ["http://example.com"]
-        self.context.set("live_urls", live_urls)
+        self.context.set("live_urls_2xx", live_urls)
 
         # Mock gobuster output
         def side_effect(command, shell, check, capture_output, text):
