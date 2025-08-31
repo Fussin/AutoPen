@@ -35,7 +35,6 @@ tools:
   sublist3r: sublist3r
   gh_dork: gh-dork.py # Assumes gh-dork repo is cloned and script is in PATH
   s3scanner: s3scanner
-  semgrep: semgrep
 
 # Paths to wordlists
 # These paths need to be updated for the Docker container.
@@ -83,7 +82,7 @@ tool_commands:
   trufflehog_file: "trufflehog filesystem {url} --json"
 
   # Vulnerability Scanning
-  nuclei_scan: "nuclei -l {input_file} -t cves/,misconfiguration/,technologies/ -oast -json -o {output_file} -silent"
+  nuclei_scan: "nuclei -l {input_file} -t cves/,misconfiguration/,technologies/ -json -o {output_file} -silent"
   dalfox_scan: "dalfox file {input_file} -o {output_file}"
   sqlmap_scan: "sqlmap -m {input_file} --batch --output-dir={output_dir} --risk=3 --level=5"
   dirsearch_scan: "dirsearch -L {input_file} --json-report={output_file}"
@@ -99,42 +98,19 @@ tool_commands:
   ghauri_scan: "ghauri -l {input_file} --batch -o {output_file}"
 
   # LFI Testing
-  nuclei_lfi_scan: "nuclei -l {input_file} -t lfi/ -oast -json -o {output_file} -silent"
+  # Often done with custom scripts or nuclei templates. No single tool command.
 
   # CORS Scanning
   corscanner_scan: "python3 CORScanner/cors_scan.py -i {input_file} -o {output_file}"
-   nuclei_cors_scan: "nuclei -l {input_file} -t misconfiguration/cors/ -oast -json -o {output_file} -silent"
 
   # Sensitive Data
   git_exposure_check: "httpx -l {input_file} -path /.git/config -status-code -mc 200"
-   api_keys_check: "nuclei -l {input_file} -t exposures/api-keys/ -oast -json -o {output_file} -silent"
-   backup_file_check: "nuclei -l {input_file} -t exposures/backups/ -oast -json -o {output_file} -silent"
-   config_file_check: "nuclei -l {input_file} -t exposures/configs/ -oast -json -o {output_file} -silent"
+  backup_file_check: "nuclei -l {input_file} -t exposures/backups/ -o {output_file}"
+  config_file_check: "nuclei -l {input_file} -t exposures/configs/ -o {output_file}"
 
   # SSRF/XXE
-   ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -oast -json -o {output_file} -silent" # Assumes interactsh server is configured
-   xxe_test: "nuclei -l {input_file} -t xxe/ -oast -json -o {output_file} -silent"
-   cloud_metadata_check: "nuclei -l {input_file} -t ssrf/cloud-metadata/ -oast -json -o {output_file} -silent"
-
-  # Technology-Specific Scanning
-  nuclei_tech_scan: "nuclei -u {target_url} -t {template_dir} -oast -json -o {output_file} -silent"
-
-  # SAST Scanning
-  semgrep_scan: "semgrep scan --config auto --json -o {output_file} {target_dir}"
-
-# SQLMap settings
-sqlmap:
-  tamper_scripts: "space2comment,randomcase,unmagicquotes"
-
-# Technology to Nuclei template mapping
-tech_to_template_map:
-  "WordPress": "technologies/wordpress/"
-  "Joomla": "technologies/joomla/"
-  "Drupal": "technologies/drupal/"
-  "Apache": "technologies/apache/"
-  "Nginx": "technologies/nginx/"
-  "PHP": "technologies/php/"
-  "Jenkins": "technologies/jenkins/"
+  ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -o {output_file}" # Assumes interactsh server is configured
+  xxe_test: "nuclei -l {input_file} -t xxe/ -o {output_file}"
 
 # Plugin settings
 plugins:

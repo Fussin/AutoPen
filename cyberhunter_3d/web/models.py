@@ -87,6 +87,7 @@ class Finding(db.Model):
     title = db.Column(db.String(255), nullable=False)
     severity = db.Column(db.String(50), nullable=False)
     confidence = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='New')
     description = db.Column(db.Text, nullable=False)
     supporting_evidence = db.Column(db.JSON, nullable=False)
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
