@@ -111,8 +111,9 @@ tool_commands:
    config_file_check: "nuclei -l {input_file} -t exposures/configs/ -json -o {output_file} -silent"
 
   # SSRF/XXE
-  ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -o {output_file}" # Assumes interactsh server is configured
-  xxe_test: "nuclei -l {input_file} -t xxe/ -o {output_file}"
+   ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -json -o {output_file} -silent" # Assumes interactsh server is configured
+   xxe_test: "nuclei -l {input_file} -t xxe/ -json -o {output_file} -silent"
+   cloud_metadata_check: "nuclei -l {input_file} -t ssrf/cloud-metadata/ -json -o {output_file} -silent"
 
 # Plugin settings
 plugins:
