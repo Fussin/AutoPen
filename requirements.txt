@@ -16,3 +16,4 @@ greynoise
 Pillow
 pytesseract
 pdfkit
+jira

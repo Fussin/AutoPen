@@ -2,81 +2,123 @@ import logging
 import time
 import requests
 import re
-from urllib.parse import urlparse
+import boto3
+from botocore.exceptions import ClientError
+from urllib.parse import urlparse, urljoin
 from abc import ABC, abstractmethod
+from typing import Dict, Any
 
 log = logging.getLogger(__name__)
 
+
 class ValidationHandler(ABC):
     """Abstract base class for validation handlers."""
+
     @abstractmethod
-    def validate(self, finding: dict) -> bool:
+    def validate(self, finding: Dict[str, Any]) -> bool:
+        """
+        Takes a TriagedFinding (as a dict) and returns True if it's validated,
+        False otherwise.
+        """
         raise NotImplementedError
+
 
 class TimeBasedSQLiHandler(ValidationHandler):
     """
-    Validates time-based SQL injection vulnerabilities.
+    Validates time-based SQL injection vulnerabilities by re-testing with a
+    safe, time-delay payload.
     """
-    def validate(self, finding: dict) -> bool:
-        # This is a simplified example. A real implementation would need to
-        # parse the finding details to get the vulnerable URL and parameter.
-        target_url = finding.get("supporting_evidence", [{}])[0].get("host")
+    def validate(self, finding: Dict[str, Any]) -> bool:
+        # Extract the original request details from Nuclei's raw evidence
+        nuclei_evidence = next((ev for ev in finding.get("raw_evidence", []) if ev.get("template-id")), None)
+        if not nuclei_evidence:
+            log.warning("Could not find Nuclei evidence in SQLi finding.")
+            return False
+
+        target_url = nuclei_evidence.get("matched-at")
         if not target_url:
+            log.warning("Could not determine target URL from Nuclei evidence.")
             return False
 
         delay = 5
+        # This payload is still generic. A more advanced system might try
+        # different payloads based on the database type identified by Nuclei.
         payload = f"' OR SLEEP({delay})--"
 
+        # Replace the original vulnerable parameter's value with the payload
+        # This assumes a simple GET parameter. A full implementation would need
+        # to handle POST requests, JSON bodies, etc.
+        if "?" in target_url:
+            base_url, query_string = target_url.split("?", 1)
+            params = query_string.split("&")
+            # For simplicity, we append. A real implementation would replace the
+            # specific vulnerable parameter identified by Nuclei.
+            validated_url = f"{target_url}{payload}"
+        else:
+            # This is a fallback and likely won't work if there's no query string.
+            log.warning(f"Cannot inject payload into URL with no query string: {target_url}")
+            return False
+
+        log.info(f"Attempting to validate Time-based SQLi at {validated_url}")
         try:
             start_time = time.time()
-            requests.get(f"{target_url}?param={payload}", timeout=delay + 2)
+            # We add a buffer to the timeout to avoid false negatives on slow networks
+            requests.get(validated_url, timeout=delay + 3, verify=False)
             end_time = time.time()
 
             if (end_time - start_time) >= delay:
-                log.info(f"Time-based SQLi confirmed for {target_url}")
+                log.warning(f"CONFIRMED: Time-based SQLi at {target_url}")
                 return True
-        except requests.exceptions.RequestException:
+        except requests.exceptions.Timeout:
+            # A timeout is also a strong indicator of success
+            log.warning(f"CONFIRMED: Time-based SQLi at {target_url} (request timed out)")
+            return True
+        except requests.exceptions.RequestException as e:
+            log.error(f"Validation request failed for {target_url}: {e}")
             return False
         return False
 
-class ApiKeyValidationHandler(ValidationHandler):
+
+class AWSKeyValidationHandler(ValidationHandler):
     """
-    Validates a leaked API key by making a simple read-only request.
+    Validates a leaked AWS key by making a safe 'GetCallerIdentity' call.
     """
-    def validate(self, finding: dict) -> bool:
-        evidence = finding.get("supporting_evidence", [{}])[0]
-        leaked_key_finding = evidence.get("leaked_key_finding", {})
-        raw_secret = leaked_key_finding.get("Raw")
-
-        if not raw_secret:
+    def validate(self, finding: Dict[str, Any]) -> bool:
+        trufflehog_evidence = next((ev for ev in finding.get("raw_evidence", []) if ev.get("SourceMetadata")), None)
+        if not trufflehog_evidence:
             return False
 
-        # Extract the key value. This is a simple regex, a real one would be more complex.
-        match = re.search(r"['\"](.*?)['\"]", raw_secret)
-        if not match:
+        # Trufflehog provides the raw secret directly
+        api_key = trufflehog_evidence.get("Raw")
+        if not api_key:
             return False
-        api_key = match.group(1)
 
-        # Get the host from the original JS file URL
-        js_url = leaked_key_finding.get("Source") # Assuming Source holds the URL
-        if not js_url:
-            return False
-        host = urlparse(js_url).hostname
+        # Basic check for AWS key format
+        if not re.match(r"AKIA[0-9A-Z]{16}", api_key):
+             return False
 
-        # Try a common read-only endpoint
-        test_endpoints = ["/api/v1/user", "/api/me", "/v1/users/me"]
-        for endpoint in test_endpoints:
-            url = f"https://{host}{endpoint}"
-            headers = {"Authorization": f"Bearer {api_key}"}
-            try:
-                response = requests.get(url, headers=headers, timeout=5)
-                # 200 OK or 403 Forbidden (if we hit a real but unauthorized endpoint) can indicate a valid key
-                if response.status_code in [200, 403]:
-                    log.info(f"API key validation successful for {host}")
-                    return True
-            except requests.exceptions.RequestException:
-                continue
+        # To validate, we need a secret key. A leaked access key alone is not
+        # enough. This highlights a limitation of simple secret scanners.
+        # A real implementation would need to find both parts of the key.
+        # For this example, we'll assume the key is for a public service or
+        # the secret key is found elsewhere. We cannot proceed safely without it.
+        log.warning("Found an AWS Access Key, but cannot validate without the Secret Key.")
         return False
+        # Example of what a real validation would look like if we had the secret:
+        # try:
+        #     client = boto3.client(
+        #         'sts',
+        #         aws_access_key_id=api_key,
+        #         aws_secret_access_key=secret_key
+        #     )
+        #     response = client.get_caller_identity()
+        #     if "Arn" in response:
+        #         log.warning(f"CONFIRMED: Leaked AWS Key is active for ARN: {response['Arn']}")
+        #         return True
+        # except ClientError as e:
+        #     log.info(f"AWS key validation failed: {e}")
+        #     return False
+
 
 class ValidationEngine:
     """
@@ -87,8 +129,9 @@ class ValidationEngine:
         self.findings_to_validate = findings
         self.validated_findings = []
         self.handlers = {
-            "SQL Injection": TimeBasedSQLiHandler(),
-            "Leaked API Key": ApiKeyValidationHandler()
+            "CWE-89": TimeBasedSQLiHandler(), # CWE-89 is SQL Injection
+            "AWSKey": AWSKeyValidationHandler(),
+            # "LeakedKeyForVulnerableApi": ApiKeyValidationHandler(), # Add this later
         }
 
     def run(self):
@@ -98,6 +141,11 @@ class ValidationEngine:
         log.info(f"Starting validation process for {len(self.findings_to_validate)} findings...")
 
         for finding in self.findings_to_validate:
+            # Only try to validate high-confidence findings
+            if finding.get('confidence') != 'High':
+                finding['status'] = 'Validation Skipped (Low Confidence)'
+                continue
+
             handler = self._get_handler(finding)
             if handler:
                 is_validated = handler.validate(finding)
@@ -110,16 +158,11 @@ class ValidationEngine:
                 finding['status'] = 'No Validator'
 
         log.info(f"Validation process finished. Confirmed {len(self.validated_findings)} findings.")
-        return self.validated_findings
+        return self.findings_to_validate # Return all findings with updated statuses
 
     def _get_handler(self, finding: dict) -> ValidationHandler:
         """
-        Gets the appropriate validation handler for a given finding.
+        Gets the appropriate validation handler for a given finding based on its type.
         """
-        # A simple dispatch based on the finding title. A more robust
-        # implementation would use finding types or tags.
-        finding_title = finding.get("title", "")
-        for key, handler in self.handlers.items():
-            if key in finding_title:
-                return handler
-        return None
+        vuln_type = finding.get("vulnerability_type")
+        return self.handlers.get(vuln_type)

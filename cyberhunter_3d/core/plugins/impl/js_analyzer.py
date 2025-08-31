@@ -84,9 +84,9 @@ class JavaScriptAnalyzerPlugin(Plugin):
             linkfinder_output_file = os.path.join(results_dir, "linkfinder_output.txt")
             command = linkfinder_command_template.format(input_file=js_files_list_path, output_file=linkfinder_output_file)
             self._run_command(command)
-            # Process LinkFinder output - this is a simplified parser
+            # Process LinkFinder output
             with open(linkfinder_output_file, "r") as f:
-                endpoints = [line.strip() for line in f if line.strip() and not line.startswith('/')]
+                endpoints = [line.strip() for line in f if line.strip()]
             all_js_endpoints["all_js_files"] = endpoints
             log.info(f"LinkFinder found {len(endpoints)} endpoints.")
 

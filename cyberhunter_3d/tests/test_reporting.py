@@ -1,6 +1,7 @@
 import unittest
 import os
 import json
+import shutil
 from unittest.mock import patch, MagicMock
 from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
 from run_web import app, db
@@ -62,9 +63,8 @@ class TestReporting(unittest.TestCase):
             self.assertTrue(os.path.exists(pdf_path))
 
             # Clean up
-            os.remove(report_path)
-            os.remove(pdf_path)
-            os.rmdir(results_dir)
+            if os.path.exists(results_dir):
+                shutil.rmtree(results_dir)
 
 if __name__ == '__main__':
     unittest.main()

@@ -114,8 +114,8 @@ class TestSpecializedScanners(unittest.TestCase):
         self.assertEqual(len(results.get("data", [])), 1)
 
     @patch('cyberhunter_3d.core.plugins.impl.cloud_enum.load_config')
-    @patch('cyberhunter_3d.core.plugins.impl.cloud_enum.CloudEnumPlugin._run_cloud_scan')
-    def test_cloud_enum_plugin_azure(self, mock_run_cloud_scan, mock_load_config):
+    @patch('cyberhunter_3d.core.plugins.impl.cloud_enum.CloudEnumPlugin._run_command')
+    def test_cloud_enum_plugin_azure(self, mock_run_command, mock_load_config):
         # Arrange
         mock_load_config.return_value = {
             "tool_commands": {
@@ -124,11 +124,13 @@ class TestSpecializedScanners(unittest.TestCase):
             }
         }
 
-        def side_effect(command_template, names, asset_type, platform_name, results_list):
-            if platform_name == "Azure Blob":
-                results_list.append({'type': 'azure_blob', 'value': 'https://test.blob.core.windows.net/public'})
+        def side_effect(command):
+            if "blobhunter" in command:
+                return '{"container": "https://test.blob.core.windows.net/public", "status": "Public"}'
+            else:
+                return ""
 
-        mock_run_cloud_scan.side_effect = side_effect
+        mock_run_command.side_effect = side_effect
         self.context.set("validated_subdomains", ["test.example.com"])
         plugin = CloudEnumPlugin()
 

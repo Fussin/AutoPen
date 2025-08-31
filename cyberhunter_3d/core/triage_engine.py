@@ -1,147 +1,224 @@
 import logging
 from urllib.parse import urlparse
+from typing import List, Dict, Set, Any
 from .plugins.context import ScanContext
 
 log = logging.getLogger(__name__)
 
+
 class TriagedFinding:
     """
     A class to represent a triaged finding, which may be a correlation of
-    multiple raw findings.
+    multiple raw findings. It provides a standardized structure for findings
+    that the Validation and Response engines will use.
     """
-    def __init__(self, title: str, severity: str, description: str, confidence: str, supporting_evidence: list):
+
+    def __init__(self, finding_id: str, title: str, severity: str, description: str,
+                 confidence: str, host: str, vulnerability_type: str,
+                 raw_evidence: List[Dict[str, Any]], tags: Set[str] = None):
+        self.id = finding_id
         self.title = title
         self.severity = severity
         self.description = description
         self.confidence = confidence
-        self.supporting_evidence = supporting_evidence
+        self.host = host  # The primary affected host/domain
+        self.vulnerability_type = vulnerability_type # e.g., "SQLI", "LeakedKey", "RCE"
+        self.raw_evidence = raw_evidence # List of raw tool outputs
+        self.tags = tags or set()
 
     def to_dict(self):
         return {
+            "id": self.id,
             "title": self.title,
             "severity": self.severity,
             "description": self.description,
             "confidence": self.confidence,
-            "supporting_evidence": self.supporting_evidence
+            "host": self.host,
+            "vulnerability_type": self.vulnerability_type,
+            "raw_evidence": self.raw_evidence,
+            "tags": list(self.tags)
         }
+
 
 class TriageEngine:
     """
-    The Triage Engine is responsible for correlating findings, assessing risk,
-    and reducing false positives.
+    The Triage Engine is responsible for normalizing, correlating, and
+    de-duplicating findings from various scanners to produce high-quality,
+    actionable intelligence.
     """
     CONFIDENCE_MAP = {
-        "trufflehog": "High",   # Secret scanners are generally high confidence
-        "nuclei": "Medium",     # Template-based, so medium confidence
-        "wpscan": "High",       # Very specific and reliable
-        "retire.js": "High",    # Version matching is reliable
-        "blobhunter": "High",   # Finding a public blob is high confidence
-        "s3scanner": "High",    # Finding a public bucket is high confidence
-        "default": "Medium"
+        # High confidence sources
+        "trufflehog": "High",
+        "wpscan": "High",
+        "retire.js": "High",
+        "blobhunter": "High",
+        "s3scanner": "High",
+        # Medium confidence sources (template-based or require interpretation)
+        "nuclei": "Medium",
+        # Default for unknown sources
+        "default": "Low"
     }
 
     def __init__(self, context: ScanContext):
         self.context = context
-        self.raw_results = {}
-        self.triaged_findings = []
-        self.used_raw_findings = set() # Keep track of raw findings used in correlations
+        self.normalized_findings = []
+        self.triaged_findings: Dict[str, TriagedFinding] = {}
 
-    def run(self):
+    def run(self) -> List[Dict]:
         """
         The main entry point for the triage process.
         """
         log.info("Starting automated triage process...")
-        self._gather_raw_results()
-        self._correlate_findings()
-        self._triage_individual_findings()
+        raw_results = self.context.get("specialized_scan_results", {})
 
-        log.info(f"Triage complete. Generated {len(self.triaged_findings)} triaged findings.")
-        return [finding.to_dict() for finding in self.triaged_findings]
+        # 1. Normalize all raw results into a common format
+        self._normalize_results(raw_results)
 
-    def _gather_raw_results(self):
+        # 2. Run correlation rules
+        self._run_correlation_rules()
+
+        # 3. Deduplicate and finalize
+        self._deduplicate_and_finalize()
+
+        log.info(f"Triage complete. Generated {len(self.triaged_findings)} final findings.")
+        return [finding.to_dict() for finding in self.triaged_findings.values()]
+
+    def _normalize_results(self, raw_results: Dict):
         """
-        Gathers all the raw results from the ScanContext into a single place.
+        Converts raw tool outputs into a standardized "NormalizedFinding" format.
+        This is a placeholder for what would be a series of parsers for each tool.
+        For now, we'll do a simplified normalization.
         """
-        self.raw_results = self.context.get("specialized_scan_results", {})
-
-    def _correlate_findings(self):
-        """
-        Correlates findings from different scanners to identify high-impact risks.
-        """
-        log.info("Correlating findings...")
-        js_secrets = self.raw_results.get("js_secrets", {})
-        api_vulns = self.raw_results.get("api_vulnerabilities", {})
-
-        if not js_secrets or not api_vulns:
-            log.info("Not enough data to correlate JS secrets and API vulnerabilities.")
-            return
-
-        # Example Correlation: Leaked API Key for a Vulnerable API
+        log.info("Normalizing raw results...")
+        # Example for Nuclei
+        api_vulns = raw_results.get("api_vulnerabilities", {})
+        for host, vulns in api_vulns.items():
+            for vuln in vulns:
+                self.normalized_findings.append({
+                    "source": "nuclei",
+                    "host": host,
+                    "type": vuln.get('info', {}).get('classification', {}).get('cwe-id', 'unknown'),
+                    "details": vuln,
+                    "confidence": self.CONFIDENCE_MAP.get("nuclei")
+                })
+        # Example for Trufflehog
+        js_secrets = raw_results.get("js_secrets", {})
         for url, secrets in js_secrets.items():
-            host = urlparse(url).hostname
-            if not host:
+            for secret in secrets:
+                self.normalized_findings.append({
+                    "source": "trufflehog",
+                    "host": urlparse(url).hostname,
+                    "type": "LeakedSecret",
+                    "details": secret,
+                    "confidence": self.CONFIDENCE_MAP.get("trufflehog")
+                })
+        log.info(f"Normalized {len(self.normalized_findings)} raw results.")
+
+
+    def _run_correlation_rules(self):
+        """
+        Iterates through correlation rules to create initial TriagedFindings.
+        """
+        log.info("Running correlation rules...")
+        self._correlate_leaked_key_with_vulnerable_api()
+        # Future correlation rules would be called here
+        # self._correlate_vulnerable_software_with_exploit()
+
+    def _correlate_leaked_key_with_vulnerable_api(self):
+        """
+        Correlation Rule: Finds leaked API keys that correspond to a host
+        that also has API vulnerabilities.
+        """
+        leaked_secrets = [f for f in self.normalized_findings if f["source"] == "trufflehog"]
+        api_vulns = [f for f in self.normalized_findings if f["source"] == "nuclei"]
+
+        for secret_finding in leaked_secrets:
+            secret_host = secret_finding["host"]
+            # Simple heuristic to see if it's a key
+            raw_secret = secret_finding["details"].get("Raw", "")
+            if "key" not in raw_secret.lower() and "token" not in raw_secret.lower():
                 continue
 
-            for secret in secrets:
-                # A simple heuristic to identify potential API keys
-                if "key" in secret.get("Raw", "").lower() or "token" in secret.get("Raw", "").lower():
-                    # Check if this host has any API vulnerabilities
-                    if host in api_vulns and api_vulns[host]:
-                        title = "Critical Risk: Leaked API Key for Vulnerable API"
-                        description = (
-                            f"An API key was discovered in a JavaScript file ({url}) hosted on {host}. "
-                            f"This same host also has {len(api_vulns[host])} potential API vulnerabilities. "
-                            "This combination could allow an attacker to perform authenticated, malicious actions against the API."
-                        )
-                        evidence = {
-                            "leaked_key_finding": secret,
-                            "api_vulnerability_findings": api_vulns[host]
-                        }
-                        finding = TriagedFinding(
-                            title=title,
-                            severity="Critical",
-                            description=description,
-                            confidence="High",
-                            supporting_evidence=[evidence]
-                        )
-                        self.triaged_findings.append(finding)
-                        # Mark the raw findings as used
-                        self.used_raw_findings.add(f"secret_{secret.get('Raw')}")
-                        for vuln in api_vulns[host]:
-                            self.used_raw_findings.add(f"api_vuln_{vuln.get('template-id')}_{vuln.get('host')}")
-                        log.warning(f"CRITICAL FINDING: {title} on host {host}")
+            # Check for any API vuln on the same host
+            for vuln_finding in api_vulns:
+                if vuln_finding["host"] == secret_host:
+                    finding_id = f"correlated-leaked-key-{secret_host}"
+                    title = f"Critical Risk: Leaked API Key for Vulnerable API on {secret_host}"
+                    description = (
+                        f"An API key was discovered in a JavaScript file on {secret_host}. "
+                        f"This same host also has potential API vulnerabilities, such as "
+                        f"'{vuln_finding['details'].get('info', {}).get('name')}'. "
+                        "This combination could allow an attacker to perform authenticated, "
+                        "malicious actions against the API."
+                    )
+                    finding = TriagedFinding(
+                        finding_id=finding_id,
+                        title=title,
+                        severity="Critical",
+                        description=description,
+                        confidence="High",
+                        host=secret_host,
+                        vulnerability_type="LeakedKeyForVulnerableApi",
+                        raw_evidence=[secret_finding["details"], vuln_finding["details"]],
+                        tags={"LeakedKey", "VulnerableAPI", "Correlation"}
+                    )
+                    # If a finding with this ID already exists, append evidence
+                    if finding_id in self.triaged_findings:
+                        self.triaged_findings[finding_id].raw_evidence.extend(finding.raw_evidence)
+                    else:
+                        self.triaged_findings[finding_id] = finding
+                    log.warning(f"CRITICAL FINDING: {title}")
 
-    def _triage_individual_findings(self):
-        """
-        Creates triaged findings for individual raw results that were not part
-        of a correlation.
-        """
-        log.info("Triaging individual findings...")
-        for key, results in self.raw_results.items():
-            if key == "js_secrets":
-                for url, secrets in results.items():
-                    for secret in secrets:
-                        finding_id = f"secret_{secret.get('Raw')}"
-                        if finding_id not in self.used_raw_findings:
-                            finding = TriagedFinding(
-                                title=f"Potential Secret Leaked in JavaScript on {urlparse(url).hostname}",
-                                severity="High",
-                                description=f"A potential secret was found in {url}. Raw finding: {secret.get('Raw')}",
-                                confidence=self.CONFIDENCE_MAP.get("trufflehog", "Medium"),
-                                supporting_evidence=[secret]
-                            )
-                            self.triaged_findings.append(finding)
 
-            elif key == "api_vulnerabilities":
-                for host, vulns in results.items():
-                    for vuln in vulns:
-                        finding_id = f"api_vuln_{vuln.get('template-id')}_{vuln.get('host')}"
-                        if finding_id not in self.used_raw_findings:
-                            finding = TriagedFinding(
-                                title=f"API Vulnerability: {vuln.get('info', {}).get('name')} on {host}",
-                                severity=vuln.get('info', {}).get('severity', 'Info').capitalize(),
-                                description=vuln.get('info', {}).get('description', 'No description available.'),
-                                confidence=self.CONFIDENCE_MAP.get("nuclei", "Medium"),
-                                supporting_evidence=[vuln]
-                            )
-                            self.triaged_findings.append(finding)
+    def _deduplicate_and_finalize(self):
+        """
+        Creates TriagedFindings for individual normalized results that were not
+        part of a correlation, and performs deduplication.
+        """
+        log.info("Creating findings for non-correlated items and deduplicating...")
+        for norm_finding in self.normalized_findings:
+            # Simple check to see if the evidence is already in a correlated finding
+            is_used = any(
+                norm_finding["details"] in f.raw_evidence
+                for f in self.triaged_findings.values()
+            )
+            if is_used:
+                continue
+
+            # Create a simple, unique-enough ID for deduplication
+            host = norm_finding['host']
+            vuln_type = norm_finding['type']
+            finding_id = f"individual-{host}-{vuln_type}"
+
+            # If we have a similar finding already, just add the evidence and continue
+            if finding_id in self.triaged_findings:
+                self.triaged_findings[finding_id].raw_evidence.append(norm_finding["details"])
+                continue
+
+            # Create a new individual finding
+            if norm_finding["source"] == "nuclei":
+                vuln_info = norm_finding["details"].get("info", {})
+                title = f"API Vulnerability: {vuln_info.get('name')} on {host}"
+                severity = vuln_info.get('severity', 'Info').capitalize()
+                description = vuln_info.get('description', 'No description available.')
+            elif norm_finding["source"] == "trufflehog":
+                title = f"Potential Secret Leaked in JavaScript on {host}"
+                severity = "High"
+                description = f"A potential secret was found. Raw finding: {norm_finding['details'].get('Raw')}"
+            else:
+                title = f"Ungrouped finding on {host}"
+                severity = "Medium"
+                description = "An unclassified finding was reported."
+
+            finding = TriagedFinding(
+                finding_id=finding_id,
+                title=title,
+                severity=severity,
+                description=description,
+                confidence=norm_finding["confidence"],
+                host=host,
+                vulnerability_type=vuln_type,
+                raw_evidence=[norm_finding["details"]],
+                tags={norm_finding["source"]}
+            )
+            self.triaged_findings[finding_id] = finding

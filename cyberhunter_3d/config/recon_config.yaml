@@ -109,38 +109,8 @@ tool_commands:
   config_file_check: "nuclei -l {input_file} -t exposures/configs/ -o {output_file}"
 
   # SSRF/XXE
-
   ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -o {output_file}" # Assumes interactsh server is configured
   xxe_test: "nuclei -l {input_file} -t xxe/ -o {output_file}"
-
-   ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -oast -json -o {output_file} -silent" # Assumes interactsh server is configured
-   xxe_test: "nuclei -l {input_file} -t xxe/ -oast -json -o {output_file} -silent"
-   cloud_metadata_check: "nuclei -l {input_file} -t ssrf/cloud-metadata/ -oast -json -o {output_file} -silent"
-
-  # Technology-Specific Scanning
-  nuclei_tech_scan: "nuclei -u {target_url} -t {template_dir} -oast -json -o {output_file} -silent"
-
-  # SAST Scanning
-  semgrep_scan: "semgrep scan --config auto --json -o {output_file} {target_dir}"
-
-# SQLMap settings
-sqlmap:
-  tamper_scripts: "space2comment,randomcase,unmagicquotes"
-
-# Reporting and Alerting
-reporting:
-  slack_webhook_url: "" # Add your Slack Incoming Webhook URL here
-
-# Technology to Nuclei template mapping
-tech_to_template_map:
-  "WordPress": "technologies/wordpress/"
-  "Joomla": "technologies/joomla/"
-  "Drupal": "technologies/drupal/"
-  "Apache": "technologies/apache/"
-  "Nginx": "technologies/nginx/"
-  "PHP": "technologies/php/"
-  "Jenkins": "technologies/jenkins/"
-
 
 # Plugin settings
 plugins:
