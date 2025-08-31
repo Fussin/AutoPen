@@ -7,6 +7,8 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
+from cyberhunter_3d.core.specialized_scan_manager import SpecializedScanManager
+from cyberhunter_3d.core.plugins.context import ScanContext
 
 def run_url_discovery_phase(scan_id, app, sast_dir=None):
     """
@@ -198,7 +200,37 @@ def run_execution_phase(scan_id, app):
                         out_of_scope_count += 1
             print(f"Analytics complete. Found {analytics_found_count} new domains.")
 
-            # 4. Finalize Scan
+            # 4. Specialized Scanning Phase
+            print("Starting Specialized Scanning Phase...")
+            # Create a ScanContext and populate it with data from the scan so far
+            context = ScanContext(target_domain=scan.targets[0].value, scan_id=scan.id)
+
+            # This is a simplified data gathering process. A real implementation
+            # would need to be more robust.
+            live_hosts = [asset.value for asset in Asset.query.filter_by(scan_id=scan.id, type='live_host').all()]
+            js_urls = [asset.value for asset in Asset.query.filter_by(scan_id=scan.id, type='js_file').all()]
+            validated_subdomains = [asset.value for asset in Asset.query.filter_by(scan_id=scan.id, type='subdomain').all()]
+
+            # Get WordPress URLs from technology assets
+            wordpress_urls = []
+            wp_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'technology', Asset.value.ilike('%wordpress%')).all()
+            for asset in wp_assets:
+                if asset.details and 'host' in asset.details:
+                    wordpress_urls.append(asset.details['host'])
+
+            context.set('live_hosts', list(set(live_hosts)))
+            context.set('js_files_urls', list(set(js_urls)))
+            context.set('validated_subdomains', list(set(validated_subdomains)))
+            context.set('wordpress_urls', list(set(wordpress_urls)))
+
+            specialized_scanner = SpecializedScanManager()
+            specialized_scanner.run(context)
+
+            specialized_results = context.get('specialized_scan_results')
+            print(f"Specialized Scanning Phase complete. Results: {specialized_results}")
+
+
+            # 5. Finalize Scan
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
             scan.results = (
                 f"Execution phase complete. Total in-scope assets: {final_asset_count} "

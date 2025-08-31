@@ -1,4 +1,4 @@
-import yaml
+from yaml import safe_load
 import os
 import re
 import subprocess
@@ -11,7 +11,7 @@ def load_config():
     """
     config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'recon_config.yaml')
     with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
+        return safe_load(f)
 
 def run_command(command: List[str], domain: str, logger, wordlist: str = None) -> Set[str]:
     """
