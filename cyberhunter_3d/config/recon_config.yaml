@@ -102,6 +102,7 @@ tool_commands:
 
   # CORS Scanning
   corscanner_scan: "python3 CORScanner/cors_scan.py -i {input_file} -o {output_file}"
+   nuclei_cors_scan: "nuclei -l {input_file} -t misconfiguration/cors/ -json -o {output_file} -silent"
 
   # Sensitive Data
   git_exposure_check: "httpx -l {input_file} -path /.git/config -status-code -mc 200"
