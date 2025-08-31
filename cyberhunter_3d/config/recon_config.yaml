@@ -122,6 +122,10 @@ tool_commands:
   # Technology-Specific Scanning
   nuclei_tech_scan: "nuclei -u {target_url} -t {template_dir} -json -o {output_file} -silent"
 
+# SQLMap settings
+sqlmap:
+  tamper_scripts: "space2comment,randomcase,unmagicquotes"
+
 # Technology to Nuclei template mapping
 tech_to_template_map:
   "WordPress": "technologies/wordpress/"
