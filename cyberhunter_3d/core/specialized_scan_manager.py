@@ -32,6 +32,7 @@ class SpecializedScanManager(Plugin):
         specialized_plugins = [
             "WordPress Scanner",
             "JavaScript Analyzer",
+            "API Spec Finder",
             "API Security Scanner",
             "Cloud Enumeration",
         ]
@@ -49,7 +50,9 @@ class SpecializedScanManager(Plugin):
         results = {
             "wordpress_vulnerabilities": context.get("wordpress_vulnerabilities"),
             "js_secrets": context.get("js_secrets"),
+            "js_vulnerable_libraries": context.get("js_vulnerable_libraries"),
             "api_endpoints": context.get("api_endpoints"),
+            "spec_endpoints": context.get("spec_endpoints"),
             "new_urls_from_js": context.get("new_urls_from_js"),
             "api_vulnerabilities": context.get("api_vulnerabilities"),
             "cloud_assets": context.get("cloud_assets"),
