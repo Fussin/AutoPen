@@ -134,3 +134,4 @@ subdomains_alive.txt
 subdomains_dead.txt
 *.log
 logs/
+gh-dork/

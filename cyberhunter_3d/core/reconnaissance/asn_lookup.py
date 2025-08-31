@@ -6,7 +6,7 @@ from typing import List, Dict, Set
 from cyberhunter_3d.utils.logger import setup_logger
 from .utils import load_config
 
-logger = setup_logger('ASNEngine', 'asn.log')
+logger = setup_logger('asn.log')
 config = load_config()
 
 def get_asn_for_ips(ips: Set[str]) -> Dict[str, Dict]:

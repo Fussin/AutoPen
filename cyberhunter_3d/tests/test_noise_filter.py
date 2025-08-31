@@ -2,7 +2,7 @@ import pytest
 from cyberhunter_3d.core.reconnaissance.ai.noise_filter import filter_false_positives
 from cyberhunter_3d.utils.logger import setup_logger
 
-logger = setup_logger('TestNoiseFilter', 'test_noise_filter.log')
+logger = setup_logger('test_noise_filter.log')
 
 def test_filter_false_positives():
     """

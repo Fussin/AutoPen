@@ -3,7 +3,7 @@ from unittest.mock import patch
 from cyberhunter_3d.core.plugins.impl.cve_mapper_plugin import CveMapperPlugin
 from cyberhunter_3d.utils.logger import setup_logger
 
-logger = setup_logger('TestCveMapper', 'test_cve_mapper.log')
+logger = setup_logger('test_cve_mapper.log')
 
 @patch('plugins.cve_mapper_plugin.CveMapperPlugin._query_nvd_for_cpe')
 def test_map_tech_to_cves(mock_query_nvd):

@@ -5,7 +5,7 @@ from pathlib import Path
 from cyberhunter_3d.core.reconnaissance.ai.ocr_tagger import generate_ocr_tags
 from cyberhunter_3d.utils.logger import setup_logger
 
-logger = setup_logger('TestOcrTagger', 'test_ocr_tagger.log')
+logger = setup_logger('test_ocr_tagger.log')
 
 @patch('cyberhunter_3d.core.reconnaissance.ai.ocr_tagger.pytesseract.image_to_string')
 @patch('cyberhunter_3d.core.reconnaissance.ai.ocr_tagger.Image')

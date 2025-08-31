@@ -14,7 +14,7 @@ echo "Starting installation of CyberHunter 3D V2 reconnaissance tools..."
 # --- System package installation (apt) ---
 echo "Installing system packages..."
 apt-get update
-apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip seclists wkhtmltopdf
+apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip wkhtmltopdf sqlmap golang-go
 echo "System packages installed successfully."
 
 # --- Go tools installation ---
@@ -56,11 +56,14 @@ go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
 # Live Host Detection / Visual Recon
 go install -v github.com/sensepost/gowitness@latest
 echo "Installing Aquatone..."
+mkdir -p /tmp/aquatone_install
+cd /tmp/aquatone_install
 AQUATONE_VERSION="1.7.0"
 wget "https://github.com/michenriksen/aquatone/releases/download/v${AQUATONE_VERSION}/aquatone_linux_amd64_${AQUATONE_VERSION}.zip"
 unzip "aquatone_linux_amd64_${AQUATONE_VERSION}.zip"
 mv aquatone /usr/local/bin/
-rm "aquatone_linux_amd64_${AQUATONE_VERSION}.zip"
+cd -
+rm -rf /tmp/aquatone_install
 echo "Aquatone installed successfully."
 
 # Technology Fingerprinting & Port Scanning
@@ -80,6 +83,15 @@ go install -v github.com/tomnomnom/waybackurls@latest
 go install -v github.com/projectdiscovery/katana/cmd/katana@latest
 go install -v github.com/hakluke/hakrawler@latest
 go install -v github.com/tomnomnom/unfurl@latest
+go install -v github.com/lc/subjs@latest
+go install -v github.com/hahwul/dalfox/v2@latest
+echo "Installing Trufflehog..."
+git clone https://github.com/trufflesecurity/trufflehog.git
+cd trufflehog
+go build -o /usr/local/bin/trufflehog ./cmd/trufflehog
+cd ..
+rm -rf trufflehog
+echo "Trufflehog installed successfully."
 
 
 echo "Go-based tools installed successfully."
@@ -95,6 +107,7 @@ echo "Python and pip are installed."
 
 # Permutation Engine
 pip3 install dnsgen
+pip3 install dirsearch
 
 # JS/Code Analysis
 echo "Installing LinkFinder..."

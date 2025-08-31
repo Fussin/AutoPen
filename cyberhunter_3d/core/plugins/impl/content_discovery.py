@@ -23,14 +23,14 @@ class ContentDiscoveryPlugin(Plugin):
 
     @property
     def requires(self) -> List[str]:
-        return ["live_urls"]
+        return ["live_urls_2xx"]
 
     @property
     def provides(self) -> List[str]:
         return ["discovered_paths"]
 
     def run(self, context: ScanContext):
-        live_urls = context.get("live_urls")
+        live_urls = context.get("live_urls_2xx")
         if not live_urls:
             log.info("No live URLs to scan for content.")
             return

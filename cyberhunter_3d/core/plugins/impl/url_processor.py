@@ -1,18 +1,18 @@
 import logging
 import subprocess
 import json
-from typing import List, Dict, Any
+import os
+import warnings
+from typing import List
 from ..base import Plugin
 from ..context import ScanContext
 from ...reconnaissance.utils import load_config
-from cyberhunter_3d.utils.file_utils import get_results_dir
-import os
 
 log = logging.getLogger(__name__)
 
 class URLProcessorPlugin(Plugin):
     """
-    A plugin to process discovered URLs.
+    A plugin to process aggregated URLs, check for liveness, and perform triage.
     """
     @property
     def name(self) -> str:
@@ -20,93 +20,116 @@ class URLProcessorPlugin(Plugin):
 
     @property
     def description(self) -> str:
-        return "Processes URLs to check for live status and extracts parameters."
+        return "Processes URLs for liveness, enrichment, and triage."
 
     @property
     def requires(self) -> List[str]:
-        return ["urls"]
+        return ["aggregated_urls"]
 
     @property
     def provides(self) -> List[str]:
-        return ["live_urls", "dead_urls", "redirect_urls", "url_parameters"]
+        return ["live_urls_2xx", "parameterized_urls", "js_files_urls", "live_urls"]
 
-    def _save_urls_to_file(self, urls: List[str], filename: str, results_dir: str):
-        """Saves a list of URLs to a file."""
-        filepath = os.path.join(results_dir, filename)
-        with open(filepath, 'w') as f:
-            for url in urls:
-                f.write(f"{url}\n")
-        log.info(f"Saved {len(urls)} URLs to {filepath}")
+    def _run_command(self, command: str):
+        """Runs a shell command."""
+        try:
+            log.info(f"Running command: {command}")
+            env = os.environ.copy()
+            go_path = subprocess.check_output("go env GOPATH", shell=True, text=True).strip()
+            env['PATH'] = f"{os.path.join(go_path, 'bin')}:{env['PATH']}"
+            subprocess.run(command, shell=True, check=True, capture_output=True, text=True, env=env)
+        except subprocess.CalledProcessError as e:
+            log.error(f"Command '{command}' failed with error: {e.stderr}")
+            raise
+        except FileNotFoundError:
+            log.error(f"Command not found: {command}. Make sure the tool is installed and in PATH.")
+            raise
 
     def run(self, context: ScanContext):
-        urls = context.get("urls")
+        urls = context.get("aggregated_urls")
         if not urls:
-            log.warning("No URLs found in context to process.")
+            log.warning("No aggregated URLs found in context to process.")
             return
 
-        target_domain = context.target_domain
         results_dir = context.results_dir
-        scan_id = context.scan_id
-        log.info(f"Processing {len(urls)} URLs for {target_domain}")
+        log.info(f"Processing {len(urls)} aggregated URLs.")
 
-        temp_url_file = os.path.join(results_dir, f"temp_urls_{scan_id}.txt")
-        httpx_output_file = os.path.join(results_dir, f"httpx_output_{scan_id}.json")
-        unfurl_output_file = os.path.join(results_dir, f"unfurl_output_{scan_id}.json")
+        # Define file paths
+        all_urls_file = os.path.join(results_dir, "all_urls.txt")
+        httpx_results_file = os.path.join(results_dir, "results.json")
+        live_urls_2xx_file = os.path.join(results_dir, "2xx.txt")
+        parameterized_urls_file = os.path.join(results_dir, "p.txt")
+        js_files_urls_file = os.path.join(results_dir, "js_files.txt")
+
+        # Write aggregated URLs to all_urls.txt
+        with open(all_urls_file, "w") as f:
+            f.write("\n".join(urls))
+
+        config = load_config()
+        tool_commands = config.get("tool_commands", {})
 
         try:
-            # Write URLs to a temporary file for httpx
-            with open(temp_url_file, "w") as f:
-                f.write("\n".join(urls))
-
-            config = load_config()
-            tool_commands = config.get("tool_commands", {})
-
-            # Run httpx to get status codes
-            httpx_command = tool_commands.get("httpx_file", "").format(input_file=temp_url_file, output_file=httpx_output_file)
+            # 3. Liveness & Enrichment Probe (HTTPX)
+            httpx_command = tool_commands.get("httpx_enrich", "").format(
+                input_file=all_urls_file,
+                output_file=httpx_results_file
+            )
             if httpx_command:
-                subprocess.run(httpx_command, shell=True, check=True, capture_output=True, text=True)
+                self._run_command(httpx_command)
+            else:
+                log.error("HTTPX enrich command not configured.")
+                return
 
-            # Process httpx output
-            live_urls, dead_urls, redirect_urls = [], [], []
-            with open(httpx_output_file, "r") as f:
-                for line in f:
-                    try:
-                        result = json.loads(line)
-                        status_code = result.get("status_code")
-                        url = result.get("url")
-                        if not url: continue
-                        if 200 <= status_code < 300: live_urls.append(url)
-                        elif 300 <= status_code < 400: redirect_urls.append(url)
-                        else: dead_urls.append(url)
-                    except json.JSONDecodeError: continue
+            # 4A. Data Triage & Analysis
+            # Filter for 2xx status codes
+            jq_2xx_command = tool_commands.get("jq_2xx", "").format(
+                input_file=httpx_results_file,
+                output_file=live_urls_2xx_file
+            )
+            if jq_2xx_command:
+                self._run_command(jq_2xx_command)
 
-            # Save categorized URLs to files
-            self._save_urls_to_file(live_urls, f"alive_urls_{scan_id}.txt", results_dir)
-            self._save_urls_to_file(dead_urls, f"dead_urls_{scan_id}.txt", results_dir)
-            self._save_urls_to_file(redirect_urls, f"redirect_urls_{scan_id}.txt", results_dir)
+            # Filter for URLs with parameters
+            jq_params_command = tool_commands.get("jq_params", "").format(
+                input_file=httpx_results_file,
+                output_file=parameterized_urls_file
+            )
+            if jq_params_command:
+                self._run_command(jq_params_command)
 
-            # Extract parameters using unfurl
-            unfurl_command = tool_commands.get("unfurl_file", "").format(input_file=temp_url_file)
-            if unfurl_command:
-                # We need to redirect the output to the file
-                with open(unfurl_output_file, "w") as f:
-                    subprocess.run(unfurl_command, shell=True, check=True, stdout=f, text=True)
+            # Filter for JavaScript files
+            jq_js_command = tool_commands.get("jq_js", "").format(
+                input_file=httpx_results_file,
+                output_file=js_files_urls_file
+            )
+            if jq_js_command:
+                self._run_command(jq_js_command)
 
-            url_parameters = []
-            with open(unfurl_output_file, "r") as f:
-                url_parameters = [line.strip() for line in f if line.strip()]
-            self._save_urls_to_file(url_parameters, f"parameters_{scan_id}.txt", results_dir)
+            # Read results back and set them in the context
+            with open(live_urls_2xx_file, "r") as f:
+                live_urls_2xx = [line.strip() for line in f if line.strip()]
+            with open(parameterized_urls_file, "r") as f:
+                parameterized_urls = [line.strip() for line in f if line.strip()]
+            with open(js_files_urls_file, "r") as f:
+                js_files_urls = [line.strip() for line in f if line.strip()]
 
-            # Set data in context
-            context.set("live_urls", live_urls)
-            context.set("dead_urls", dead_urls)
-            context.set("redirect_urls", redirect_urls)
-            context.set("url_parameters", url_parameters)
+            context.set("live_urls_2xx", live_urls_2xx)
+            context.set("parameterized_urls", parameterized_urls)
+            context.set("js_files_urls", js_files_urls)
+
+            # Temporary alias for backward compatibility
+            context.set("live_urls", live_urls_2xx)
+            warnings.warn(
+                "Deprecation: 'live_urls' has been replaced by 'live_urls_2xx'. "
+                "Please update your plugins. 'live_urls' will be removed in the next release.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+
+            log.info("URL processing and triage completed successfully.")
+            log.info(f"Found {len(live_urls_2xx)} live 2xx URLs.")
+            log.info(f"Found {len(parameterized_urls)} parameterized URLs.")
+            log.info(f"Found {len(js_files_urls)} JavaScript files.")
 
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            log.error(f"URL processing failed: {e}")
-        finally:
-            # Clean up temporary files
-            for f in [temp_url_file, httpx_output_file, unfurl_output_file]:
-                if os.path.exists(f):
-                    os.remove(f)
+            log.error(f"URL processing and triage failed: {e}")
