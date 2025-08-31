@@ -74,7 +74,7 @@ class TestURLDiscoveryPlugins(unittest.TestCase):
         # Verify the included plugins
         call_args, call_kwargs = mock_manager_instance.run_all_plugins.call_args
         self.assertIn("include_plugins", call_kwargs)
-        self.assertEqual(call_kwargs["include_plugins"], ["URL Discovery", "URL Processor"])
+        self.assertEqual(call_kwargs["include_plugins"], ["URL Discovery", "URL Processor", "Vulnerability Scanner"])
 
         # Check that the files were created
         self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"way_kat_{self.scan_id}.txt")))

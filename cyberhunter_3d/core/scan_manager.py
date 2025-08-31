@@ -6,6 +6,22 @@ from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
+from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
+
+def run_url_discovery_phase(scan_id, app):
+    """
+    Performs the URL discovery and vulnerability scanning phase.
+    """
+    with app.app_context():
+        scan = Scan.query.get(scan_id)
+        if not scan:
+            print(f"Error: Scan {scan_id} not found for URL discovery phase.")
+            return
+
+        for target in scan.targets:
+            # Assuming the main target for URL discovery is the 'domain' type
+            if target.type == 'domain':
+                discover_urls(target.value, scan_id, app)
 
 def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
     """Helper to create a new asset if it is in scope and doesn't already exist."""

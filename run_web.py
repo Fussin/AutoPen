@@ -171,19 +171,17 @@ from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_ur
 executor = ThreadPoolExecutor(max_workers=2)
 app.executor = executor
 
+from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_url_discovery_phase
+
 def run_full_scan(scan_id, app):
     """Runs both discovery and URL discovery phases."""
     # Submit the discovery phase to the executor
     future = app.executor.submit(run_discovery_phase, scan_id, app)
-
     # Wait for the discovery phase to complete
     future.result()
 
-    with app.app_context():
-        scan = Scan.query.get(scan_id)
-        if scan:
-            for target in scan.targets:
-                discover_urls(target.value, scan_id, app)
+    # Run the URL discovery phase
+    run_url_discovery_phase(scan_id, app)
 
 from cyberhunter_3d.web.views.dashboard import dashboard_bp
 
