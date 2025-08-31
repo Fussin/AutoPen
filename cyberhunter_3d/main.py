@@ -8,6 +8,7 @@ from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
 from cyberhunter_3d.utils.file_utils import get_results_dir
+from cyberhunter_3d.core.tools.manager import ToolManager
 
 def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str, scan_id: int):
     """
@@ -139,13 +140,21 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
-def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
+@click.option("--sast-dir", help="Directory to scan with SAST tools.")
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, sast_dir):
     """
     Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
     """
     log_level = 'DEBUG' if verbose else 'INFO'
     logger = setup_logger('main.log', level=log_level)
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
+
+    # --- Tool Management ---
+    tool_manager = ToolManager()
+    tool_manager.update_nuclei_templates() # Attempt to update templates
+    if not tool_manager.verify_tools():
+        logger.error("Halting scan due to missing tools.")
+        sys.exit(1)
 
     from run_web import create_app
     from cyberhunter_3d.web.models import db, Scan, Target
@@ -163,9 +172,19 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
 
     results_dir = get_results_dir(domain, scan_id)
 
+    # The logic for running SAST scan will be added here.
+    if sast_dir:
+        logger.info(f"SAST scan requested for directory: {sast_dir}")
+        # Placeholder for SAST runner call
+        # run_sast_scan(sast_dir, ...)
+
+    if sast_dir:
+        logger.info(f"SAST scan requested for directory: {sast_dir}")
+        # We will pass this to the discovery phase
+
     if url_discovery:
         logger.info(f"Starting URL discovery for: {domain}")
-        run_url_discovery_phase(scan_id, app)
+        run_url_discovery_phase(scan_id, app, sast_dir)
         logger.info("URL discovery finished.")
     else:
         logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")

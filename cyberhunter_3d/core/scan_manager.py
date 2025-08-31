@@ -8,10 +8,8 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
-from cyberhunter_3d.core.specialized_scan_manager import SpecializedScanManager
-from cyberhunter_3d.core.plugins.context import ScanContext
 
-def run_url_discovery_phase(scan_id, app):
+def run_url_discovery_phase(scan_id, app, sast_dir=None):
     """
     Performs the URL discovery and vulnerability scanning phase.
     """
@@ -24,7 +22,7 @@ def run_url_discovery_phase(scan_id, app):
         for target in scan.targets:
             # Assuming the main target for URL discovery is the 'domain' type
             if target.type == 'domain':
-                discover_urls(target.value, scan_id, app)
+                discover_urls(target.value, scan_id, app, sast_dir)
 
 def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
     """Helper to create a new asset if it is in scope and doesn't already exist."""
@@ -201,6 +199,7 @@ def run_execution_phase(scan_id, app):
                         out_of_scope_count += 1
             print(f"Analytics complete. Found {analytics_found_count} new domains.")
 
+
             # 4. Specialized Scanning Phase
             print("Starting Specialized Scanning Phase...")
             # Create a ScanContext and populate it with data from the scan so far
@@ -247,6 +246,9 @@ def run_execution_phase(scan_id, app):
             print(f"Automated Triage Phase complete. Stored {len(triaged_findings)} findings.")
 
             # 6. Finalize Scan
+
+            # 4. Finalize Scan
+
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
             scan.results = (
                 f"Execution phase complete. Total in-scope assets: {final_asset_count}. "
