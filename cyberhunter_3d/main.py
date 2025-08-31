@@ -139,6 +139,8 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
+from cyberhunter_3d.core.tools.manager import ToolManager
+
 def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
     """
     Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
@@ -146,6 +148,13 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
     log_level = 'DEBUG' if verbose else 'INFO'
     logger = setup_logger('main.log', level=log_level)
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
+
+    # --- Tool Management ---
+    tool_manager = ToolManager()
+    tool_manager.update_nuclei_templates() # Attempt to update templates
+    if not tool_manager.verify_tools():
+        logger.error("Halting scan due to missing tools.")
+        sys.exit(1)
 
     from run_web import create_app
     from cyberhunter_3d.web.models import db, Scan, Target
