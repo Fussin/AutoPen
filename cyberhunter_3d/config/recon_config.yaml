@@ -35,6 +35,7 @@ tools:
   sublist3r: sublist3r
   gh_dork: gh-dork.py # Assumes gh-dork repo is cloned and script is in PATH
   s3scanner: s3scanner
+  wpscan: wpscan
 
 # Paths to wordlists
 # These paths need to be updated for the Docker container.
@@ -82,8 +83,11 @@ tool_commands:
   trufflehog_file: "trufflehog filesystem {url} --json"
 
   # Vulnerability Scanning
+  wpscan_scan: "wpscan --url {target_url} --api-token {api_token} -e vp,vt,u -f json"
   nuclei_scan: "nuclei -l {input_file} -t cves/,misconfiguration/,technologies/ -json -o {output_file} -silent"
+  nuclei_api_scan: "nuclei -l {input_file} -t api/ -json -o {output_file} -silent"
   dalfox_scan: "dalfox file {input_file} -o {output_file}"
+  dalfox_api_scan: "dalfox file {input_file} --json-output {output_file}"
   sqlmap_scan: "sqlmap -m {input_file} --batch --output-dir={output_dir} --risk=3 --level=5"
   dirsearch_scan: "dirsearch -L {input_file} --json-report={output_file}"
 
@@ -123,10 +127,10 @@ plugins:
     - "URL Aggregation"
     - "URL Processor"
     - "Visual Recon"
-    - "JavaScript Analyzer"
     - "Vulnerability Scanner"
     # Other existing plugins
     - "Technology Fingerprinting"
     - "Subdomain Takeover"
-    - "Cloud Enumeration"
     - "CVE Mapper"
+    # Specialized scanning phase - managed by its own plugin
+    - "Specialized Scan Manager"
