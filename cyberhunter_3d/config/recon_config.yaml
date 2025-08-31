@@ -119,6 +119,19 @@ tool_commands:
    xxe_test: "nuclei -l {input_file} -t xxe/ -json -o {output_file} -silent"
    cloud_metadata_check: "nuclei -l {input_file} -t ssrf/cloud-metadata/ -json -o {output_file} -silent"
 
+  # Technology-Specific Scanning
+  nuclei_tech_scan: "nuclei -u {target_url} -t {template_dir} -json -o {output_file} -silent"
+
+# Technology to Nuclei template mapping
+tech_to_template_map:
+  "WordPress": "technologies/wordpress/"
+  "Joomla": "technologies/joomla/"
+  "Drupal": "technologies/drupal/"
+  "Apache": "technologies/apache/"
+  "Nginx": "technologies/nginx/"
+  "PHP": "technologies/php/"
+  "Jenkins": "technologies/jenkins/"
+
 # Plugin settings
 plugins:
   enabled:
