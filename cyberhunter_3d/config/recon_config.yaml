@@ -34,6 +34,7 @@ tools:
 # I will handle this in the Dockerfile by placing the wordlists in a known location.
 wordlists:
   dns_bruteforce: /wordlists/subdomains-top1million-5000.txt
+  dir_bruteforce: /wordlists/directory-list-2.3-medium.txt
   resolvers: /wordlists/resolvers.txt
   github_dorks: /app/gh-dork/dorks.txt
 
@@ -58,6 +59,7 @@ tool_commands:
   httpx_file: "httpx -l {input_file} -json -o {output_file} -silent -status-code -tech-detect -title -follow-redirects"
   unfurl_file: "cat {input_file} | unfurl --unique keys"
   nuclei_file: "nuclei -l {input_file} -t cves,technologies,vulnerabilities -json -o {output_file} -silent"
+  gobuster: "gobuster dir -u {url} -w {wordlist} -q -o {output_file}"
 
 # Plugin settings
 plugins:
