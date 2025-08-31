@@ -144,7 +144,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
     Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
     """
     log_level = 'DEBUG' if verbose else 'INFO'
-    logger = setup_logger('Main', 'main.log', level=log_level)
+    logger = setup_logger('main.log', level=log_level)
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
 
     from run_web import create_app

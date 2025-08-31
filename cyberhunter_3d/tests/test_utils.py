@@ -4,7 +4,7 @@ from cyberhunter_3d.core.reconnaissance.utils import detect_wildcard_ips
 from cyberhunter_3d.utils.logger import setup_logger
 
 # Use a single logger instance for all tests in this file
-logger = setup_logger('TestUtils', 'test_utils.log')
+logger = setup_logger('test_utils.log')
 
 @patch('cyberhunter_3d.core.reconnaissance.utils.subprocess.run')
 def test_detect_wildcard_ips_positive_case(mock_run):

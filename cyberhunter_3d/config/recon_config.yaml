@@ -20,6 +20,13 @@ tools:
   assetfinder: assetfinder
   waybackurls: waybackurls
   katana: katana
+  hakrawler: hakrawler
+  unfurl: unfurl
+  subjs: subjs
+  dalfox: dalfox
+  sqlmap: sqlmap
+  dirsearch: dirsearch
+  trufflehog: trufflehog
   subzy: subzy
   nuclei: nuclei
   dnsx: dnsx
@@ -47,20 +54,38 @@ master_subdomains_file: master_subdomains.txt
 
 # Command templates for external tools
 tool_commands:
-  # Single target
+  # 1. Multi-Source URL Collection
   gau: "gau --subs {target}"
   waybackurls: "waybackurls {target}"
   katana: "katana -u {target} -silent"
-  hakrawler: "hakrawler -url {target} -depth 2 -plain"
-
-  # File input
-  gau_file: "gau --subs --file {input_file}"
+  hakrawler: "echo {target} | hakrawler -u -insecure"
+  gau_file: "cat {input_file} | gau --subs"
   katana_list: "katana -list {input_file} -silent"
-  httpx_file: "httpx -l {input_file} -json -o {output_file} -silent -status-code -tech-detect -title -follow-redirects"
-  unfurl_file: "cat {input_file} | unfurl --unique keys"
-  nuclei_file: "nuclei -l {input_file} -t cves,technologies,vulnerabilities -json -o {output_file} -silent"
-  gobuster: "gobuster dir -u {url} -w {wordlist} -q -o {output_file}"
-  linkfinder: "linkfinder.py -i {url} -o cli"
+
+  # 2. Aggregation, Normalization & Deduplication
+  unfurl_normalize: "unfurl format %s://%d%p"
+
+  # 3. Liveness & Enrichment Probe (HTTPX)
+  httpx_enrich: "httpx -l {input_file} -json -o {output_file} -silent -status-code -tech-detect -title -follow-redirects -timeout 10 -retries 2"
+
+  # 4A. Data Triage & Analysis (jq)
+  jq_2xx: "jq 'select(.status_code >= 200 and .status_code < 300) | .url' {input_file} > {output_file}"
+  jq_params: "jq -r '.url | select(contains(\"?\"))' {input_file} > {output_file}"
+  jq_js: "jq -r '.url | select(endswith(\".js\"))' {input_file} > {output_file}"
+
+  # 4B. Visual Recon (Gowitness)
+  gowitness_file: "gowitness file -f {input_file} -P {output_dir} --no-redirect"
+
+  # 5. JavaScript Recursive Analysis
+  subjs: "subjs -i {input_file}"
+  linkfinder_file: "linkfinder.py -i {input_file} -o {output_file}"
+  trufflehog_file: "trufflehog filesystem {url} --json"
+
+  # Vulnerability Scanning
+  nuclei_scan: "nuclei -l {input_file} -t cves/,misconfiguration/,technologies/ -json -o {output_file} -silent"
+  dalfox_scan: "dalfox file {input_file} -o {output_file}"
+  sqlmap_scan: "sqlmap -m {input_file} --batch --output-dir={output_dir} --risk=3 --level=5"
+  dirsearch_scan: "dirsearch -L {input_file} --json-report={output_file}"
 
 # Plugin settings
 plugins:
@@ -68,7 +93,14 @@ plugins:
     - "Passive Enumeration"
     - "Active Enumeration"
     - "Permutation Enumeration"
-    - "JS and Code Analysis"
+    # The new URL discovery and vuln scanning pipeline plugins
+    - "URL Discovery"
+    - "URL Aggregation"
+    - "URL Processor"
+    - "Visual Recon"
+    - "JavaScript Analyzer"
+    - "Vulnerability Scanner"
+    # Other existing plugins
     - "Technology Fingerprinting"
     - "Subdomain Takeover"
     - "Cloud Enumeration"
