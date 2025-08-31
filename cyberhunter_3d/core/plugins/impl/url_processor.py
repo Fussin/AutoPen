@@ -4,6 +4,7 @@ import json
 from typing import List, Dict, Any
 from ..base import Plugin
 from ..context import ScanContext
+from ...reconnaissance.utils import load_config
 from cyberhunter_3d.utils.file_utils import get_results_dir
 import os
 
@@ -57,9 +58,13 @@ class URLProcessorPlugin(Plugin):
             with open(temp_url_file, "w") as f:
                 f.write("\n".join(urls))
 
+            config = load_config()
+            tool_commands = config.get("tool_commands", {})
+
             # Run httpx to get status codes
-            httpx_command = f"httpx -l {temp_url_file} -json -o {httpx_output_file} -silent -status-code -tech-detect -title -follow-redirects"
-            subprocess.run(httpx_command, shell=True, check=True, capture_output=True, text=True)
+            httpx_command = tool_commands.get("httpx_file", "").format(input_file=temp_url_file, output_file=httpx_output_file)
+            if httpx_command:
+                subprocess.run(httpx_command, shell=True, check=True, capture_output=True, text=True)
 
             # Process httpx output
             live_urls, dead_urls, redirect_urls = [], [], []
@@ -81,8 +86,11 @@ class URLProcessorPlugin(Plugin):
             self._save_urls_to_file(redirect_urls, f"redirect_urls_{scan_id}.txt", results_dir)
 
             # Extract parameters using unfurl
-            unfurl_command = f"cat {temp_url_file} | unfurl --unique keys > {unfurl_output_file}"
-            subprocess.run(unfurl_command, shell=True, check=True, capture_output=True, text=True)
+            unfurl_command = tool_commands.get("unfurl_file", "").format(input_file=temp_url_file)
+            if unfurl_command:
+                # We need to redirect the output to the file
+                with open(unfurl_output_file, "w") as f:
+                    subprocess.run(unfurl_command, shell=True, check=True, stdout=f, text=True)
 
             url_parameters = []
             with open(unfurl_output_file, "r") as f:

@@ -4,6 +4,7 @@ import os
 from typing import List, Set
 from ..base import Plugin
 from ..context import ScanContext
+from ...reconnaissance.utils import load_config
 
 log = logging.getLogger(__name__)
 
@@ -50,37 +51,42 @@ class URLDiscoveryPlugin(Plugin):
 
         all_urls = set()
 
+        config = load_config()
+        tool_commands = config.get("tool_commands", {})
+
         if subdomains:
             log.info(f"Starting URL discovery for {len(subdomains)} subdomains.")
-            # Create a temporary file with all subdomains
             temp_subdomain_file = os.path.join(context.results_dir, "temp_subdomains.txt")
             with open(temp_subdomain_file, "w") as f:
                 f.write("\n".join(subdomains))
 
-            commands = {
-                "gau": f"gau --subs --file {temp_subdomain_file}",
-                "katana": f"katana -list {temp_subdomain_file} -silent",
+            commands_to_run = {
+                "gau_file": tool_commands.get("gau_file", "").format(input_file=temp_subdomain_file),
+                "katana_list": tool_commands.get("katana_list", "").format(input_file=temp_subdomain_file),
             }
-            for tool, command in commands.items():
-                log.info(f"Running {tool} for all subdomains")
-                urls = self._run_tool(command)
-                log.info(f"Found {len(urls)} URLs with {tool}")
-                all_urls.update(urls)
+            for tool, command in commands_to_run.items():
+                if command:
+                    log.info(f"Running {tool} for all subdomains")
+                    urls = self._run_tool(command)
+                    log.info(f"Found {len(urls)} URLs with {tool}")
+                    all_urls.update(urls)
 
-            os.remove(temp_subdomain_file)
+            if os.path.exists(temp_subdomain_file):
+                os.remove(temp_subdomain_file)
         else:
             log.info(f"Starting URL discovery for the root domain: {target_domain}")
-            commands = {
-                "gau": f"gau --subs {target_domain}",
-                "waybackurls": f"waybackurls {target_domain}",
-                "katana": f"katana -u {target_domain} -silent",
-                "hakrawler": f"hakrawler -url {target_domain} -depth 2 -plain"
+            commands_to_run = {
+                "gau": tool_commands.get("gau", "").format(target=target_domain),
+                "waybackurls": tool_commands.get("waybackurls", "").format(target=target_domain),
+                "katana": tool_commands.get("katana", "").format(target=target_domain),
+                "hakrawler": tool_commands.get("hakrawler", "").format(target=target_domain),
             }
-            for tool, command in commands.items():
-                log.info(f"Running {tool} for {target_domain}")
-                urls = self._run_tool(command)
-                log.info(f"Found {len(urls)} URLs with {tool}")
-                all_urls.update(urls)
+            for tool, command in commands_to_run.items():
+                if command:
+                    log.info(f"Running {tool} for {target_domain}")
+                    urls = self._run_tool(command)
+                    log.info(f"Found {len(urls)} URLs with {tool}")
+                    all_urls.update(urls)
 
         # Deduplicate URLs
         unique_urls = sorted(list(all_urls))

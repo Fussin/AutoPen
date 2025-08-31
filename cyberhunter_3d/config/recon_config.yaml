@@ -44,6 +44,21 @@ nmap_output_dir: nmap
 final_recon_file: final_recon_data.json
 master_subdomains_file: master_subdomains.txt
 
+# Command templates for external tools
+tool_commands:
+  # Single target
+  gau: "gau --subs {target}"
+  waybackurls: "waybackurls {target}"
+  katana: "katana -u {target} -silent"
+  hakrawler: "hakrawler -url {target} -depth 2 -plain"
+
+  # File input
+  gau_file: "gau --subs --file {input_file}"
+  katana_list: "katana -list {input_file} -silent"
+  httpx_file: "httpx -l {input_file} -json -o {output_file} -silent -status-code -tech-detect -title -follow-redirects"
+  unfurl_file: "cat {input_file} | unfurl --unique keys"
+  nuclei_file: "nuclei -l {input_file} -t cves,technologies,vulnerabilities -json -o {output_file} -silent"
+
 # Plugin settings
 plugins:
   enabled:
