@@ -114,6 +114,13 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
             try: final_data["content_discovery"] = json.load(f)
             except json.JSONDecodeError: logger.error(f"Could not decode content discovery file: {content_file_path}")
 
+    # Aggregate JavaScript analysis results
+    js_endpoints_file_path = os.path.join(results_dir, f"js_endpoints_{scan_id}.json")
+    if os.path.exists(js_endpoints_file_path):
+        with open(js_endpoints_file_path, 'r') as f:
+            try: final_data["js_analysis"] = json.load(f)
+            except json.JSONDecodeError: logger.error(f"Could not decode JS analysis file: {js_endpoints_file_path}")
+
     # Save the final aggregated file
     output_dir = config['recon_output_dir']
     final_output_path = os.path.join(output_dir, config['final_recon_file'])

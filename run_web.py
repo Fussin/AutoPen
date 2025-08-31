@@ -300,6 +300,7 @@ def scan_results(scan_id):
     url_data = {}
     vulnerability_data = []
     content_discovery_data = {}
+    js_analysis_data = {}
     config = load_config()
     # Assuming the results are stored in a directory named after the first target
     # This might need to be more robust if there are multiple targets.
@@ -314,6 +315,7 @@ def scan_results(scan_id):
                     url_data = report_data.get("url_discovery", {})
                     vulnerability_data = report_data.get("vulnerabilities", [])
                     content_discovery_data = report_data.get("content_discovery", {})
+                    js_analysis_data = report_data.get("js_analysis", {})
                 except json.JSONDecodeError:
                     flash('Error reading scan report file.', 'danger')
 
@@ -323,7 +325,8 @@ def scan_results(scan_id):
         grouped_assets=grouped_assets,
         url_data=url_data,
         vulnerabilities=vulnerability_data,
-        content_discovery=content_discovery_data
+        content_discovery=content_discovery_data,
+        js_analysis=js_analysis_data
     )
 
 # --- Main Execution ---

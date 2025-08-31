@@ -60,6 +60,7 @@ tool_commands:
   unfurl_file: "cat {input_file} | unfurl --unique keys"
   nuclei_file: "nuclei -l {input_file} -t cves,technologies,vulnerabilities -json -o {output_file} -silent"
   gobuster: "gobuster dir -u {url} -w {wordlist} -q -o {output_file}"
+  linkfinder: "linkfinder.py -i {url} -o cli"
 
 # Plugin settings
 plugins:

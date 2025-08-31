@@ -192,4 +192,32 @@
     <p>No content discovery results found.</p>
   {% endif %}
 
+  <h3>JavaScript Analysis</h3>
+  {% if js_analysis %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">JavaScript File</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Discovered Endpoints</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for js_file, endpoints in js_analysis.items() %}
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #444; vertical-align: top;">{{ js_file }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">
+              <ul>
+                {% for endpoint in endpoints %}
+                  <li>{{ endpoint }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No endpoints found in JavaScript files.</p>
+  {% endif %}
+
 {% endblock %}
