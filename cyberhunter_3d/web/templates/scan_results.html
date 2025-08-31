@@ -164,4 +164,32 @@
     <p>No parameters found.</p>
   {% endif %}
 
+  <h3>Content Discovery</h3>
+  {% if content_discovery %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Discovered Paths</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for host, paths in content_discovery.items() %}
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #444; vertical-align: top;">{{ host }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">
+              <ul>
+                {% for path in paths %}
+                  <li>{{ path }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No content discovery results found.</p>
+  {% endif %}
+
 {% endblock %}
