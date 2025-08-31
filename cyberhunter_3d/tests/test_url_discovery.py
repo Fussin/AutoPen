@@ -22,9 +22,22 @@ class TestURLDiscoveryPlugins(unittest.TestCase):
                 os.remove(os.path.join(self.results_dir, f))
             os.rmdir(self.results_dir)
 
+    @patch('cyberhunter_3d.core.plugins.impl.url_discovery.load_config')
     @patch('cyberhunter_3d.core.reconnaissance.url_discovery_manager.PluginManager')
     @patch('cyberhunter_3d.web.models.db.session')
-    def test_discover_urls(self, mock_db_session, mock_plugin_manager):
+    def test_discover_urls(self, mock_db_session, mock_plugin_manager, mock_load_config):
+        # --- Mock the config ---
+        mock_load_config.return_value = {
+            "tool_commands": {
+                "gau": "gau --subs {target}",
+                "waybackurls": "waybackurls {target}",
+                "katana": "katana -u {target} -silent",
+                "hakrawler": "hakrawler -url {target} -depth 2 -plain",
+                "gau_file": "gau --subs --file {input_file}",
+                "katana_list": "katana -list {input_file} -silent",
+            }
+        }
+
         # --- Mock the PluginManager and its run_all_plugins method ---
         mock_manager_instance = MagicMock()
         mock_plugin_manager.return_value = mock_manager_instance
