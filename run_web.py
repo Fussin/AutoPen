@@ -278,6 +278,10 @@ def graph_view(scan_id):
         return redirect(url_for('dashboard'))
     return render_template('graph_view.html', scan=scan)
 
+from cyberhunter_3d.core.reconnaissance.utils import load_config
+from cyberhunter_3d.utils.file_utils import get_results_dir
+import json
+
 @app.route('/scan/<int:scan_id>')
 @login_required
 def scan_results(scan_id):
@@ -292,7 +296,32 @@ def scan_results(scan_id):
     for asset in scan.assets:
         grouped_assets[asset.type].append(asset)
 
-    return render_template('scan_results.html', scan=scan, grouped_assets=grouped_assets)
+    # Load the final JSON report to get URL and vulnerability data
+    url_data = {}
+    vulnerability_data = []
+    config = load_config()
+    # Assuming the results are stored in a directory named after the first target
+    # This might need to be more robust if there are multiple targets.
+    if scan.targets:
+        target_domain = scan.targets[0].value
+        results_dir = get_results_dir(target_domain, scan_id)
+        final_report_path = os.path.join(results_dir, config['final_recon_file'])
+        if os.path.exists(final_report_path):
+            with open(final_report_path, 'r') as f:
+                try:
+                    report_data = json.load(f)
+                    url_data = report_data.get("url_discovery", {})
+                    vulnerability_data = report_data.get("vulnerabilities", [])
+                except json.JSONDecodeError:
+                    flash('Error reading scan report file.', 'danger')
+
+    return render_template(
+        'scan_results.html',
+        scan=scan,
+        grouped_assets=grouped_assets,
+        url_data=url_data,
+        vulnerabilities=vulnerability_data
+    )
 
 # --- Main Execution ---
 if __name__ == '__main__':

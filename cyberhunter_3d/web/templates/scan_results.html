@@ -91,4 +91,77 @@
     <p>Results will appear here once the scan is finished.</p>
   {% endif %}
 
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Vulnerabilities</h3>
+  {% if vulnerabilities %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Name</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Severity</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Template ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vuln in vulnerabilities %}
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln.info.name }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln.info.severity|title }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln.host }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln['template-id'] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No vulnerabilities found.</p>
+  {% endif %}
+
+  <h3>Discovered URLs</h3>
+  {% if url_data %}
+    <h4>Alive URLs ({{ url_data.alive_urls|length }})</h4>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for url in url_data.alive_urls %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ url }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h4>Dead URLs ({{ url_data.dead_urls|length }})</h4>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for url in url_data.dead_urls %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ url }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h4>Redirect URLs ({{ url_data.redirect_urls|length }})</h4>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for url in url_data.redirect_urls %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ url }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No URL data found.</p>
+  {% endif %}
+
+  <h3>Discovered Parameters</h3>
+  {% if url_data and url_data.parameters %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for param in url_data.parameters %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ param }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No parameters found.</p>
+  {% endif %}
+
 {% endblock %}
