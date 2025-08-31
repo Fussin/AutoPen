@@ -106,8 +106,9 @@ tool_commands:
 
   # Sensitive Data
   git_exposure_check: "httpx -l {input_file} -path /.git/config -status-code -mc 200"
-  backup_file_check: "nuclei -l {input_file} -t exposures/backups/ -o {output_file}"
-  config_file_check: "nuclei -l {input_file} -t exposures/configs/ -o {output_file}"
+   api_keys_check: "nuclei -l {input_file} -t exposures/api-keys/ -json -o {output_file} -silent"
+   backup_file_check: "nuclei -l {input_file} -t exposures/backups/ -json -o {output_file} -silent"
+   config_file_check: "nuclei -l {input_file} -t exposures/configs/ -json -o {output_file} -silent"
 
   # SSRF/XXE
   ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -o {output_file}" # Assumes interactsh server is configured
