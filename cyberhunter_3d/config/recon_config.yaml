@@ -126,6 +126,10 @@ tool_commands:
 sqlmap:
   tamper_scripts: "space2comment,randomcase,unmagicquotes"
 
+# Reporting and Alerting
+reporting:
+  slack_webhook_url: "" # Add your Slack Incoming Webhook URL here
+
 # Technology to Nuclei template mapping
 tech_to_template_map:
   "WordPress": "technologies/wordpress/"
