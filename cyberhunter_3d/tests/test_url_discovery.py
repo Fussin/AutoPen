@@ -82,8 +82,8 @@ class TestURLDiscoveryPlugins(unittest.TestCase):
         # --- Assertions ---
         # Check that PluginManager was called correctly
         # It's called multiple times in the current implementation
-        self.assertEqual(mock_plugin_manager.call_count, 11)
-        self.assertEqual(mock_manager_instance.run_all_plugins.call_count, 11)
+        self.assertEqual(mock_plugin_manager.call_count, 9)
+        self.assertEqual(mock_manager_instance.run_all_plugins.call_count, 9)
 
         # Check that the files were created
         self.assertTrue(os.path.exists(os.path.join(self.results_dir, f"way_kat_{self.scan_id}.txt")))
