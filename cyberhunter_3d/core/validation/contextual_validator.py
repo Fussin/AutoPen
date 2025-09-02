@@ -1,6 +1,5 @@
 import logging
 from typing import Dict, Any
-
 from ..validation_engine import ValidationHandler
 
 log = logging.getLogger(__name__)
@@ -17,12 +16,10 @@ class ContextualValidator(ValidationHandler):
         to the technologies they are associated with.
         """
         self.tech_map = {
-            # Nuclei template IDs -> required technology
             "apache-struts-rce": "Struts",
             "joomla-rce": "Joomla",
             "wordpress-plugin-xss": "WordPress",
             "confluence-cve-2021-26084": "Confluence",
-            # Generic finding titles
             "Apache Log4j RCE": "Log4j",
         }
 
@@ -32,7 +29,6 @@ class ContextualValidator(ValidationHandler):
         Returns True if the finding seems legitimate, and False if it is likely a false positive.
         """
         # 1. Technology Mismatch Check
-        # Check if the vulnerability is for a technology that isn't on the host.
         finding_signature = self._get_finding_signature(finding)
         required_tech = self.tech_map.get(finding_signature)
         host_techs = finding.get("technologies", [])
@@ -42,31 +38,25 @@ class ContextualValidator(ValidationHandler):
             return False
 
         # 2. Internal IP Check
-        # If a "critical" vulnerability is on a non-routable IP, it might be a misconfiguration or a low-impact finding.
         if finding.get('severity') == 'Critical' and self._is_internal_ip(finding.get('host')):
-            log.info(f"Finding {finding.get('id')} is on an internal IP. Downgrading confidence.")
+            log.info(f"Finding {finding.get('id', '')} is on an internal IP. Downgrading confidence.")
             return False
 
         # 3. Anomaly Check
-        # If the pattern analysis engine flagged this as an anomaly, it might be a false positive.
         if finding.get('is_anomaly'):
-            log.info(f"Finding {finding.get('id')} was flagged as an anomaly. Marking as potential false positive.")
+            log.info(f"Finding {finding.get('id', '')} was flagged as an anomaly. Marking as potential false positive.")
             return False
 
-        # If no specific contextual red flags are found, assume it's valid for now.
         return True
 
     def _get_finding_signature(self, finding: Dict[str, Any]) -> str:
-        """Extracts a consistent signature from a finding (e.g., Nuclei ID or title)."""
-        # This logic should be standardized across the platform.
-        if 'template-id' in finding:
+        """Extracts a consistent signature from a finding."""
+        if 'template-id' in finding: # From Nuclei
             return finding['template-id']
-        return finding.get('vulnerability_name', '') # Assuming a 'vulnerability_name' field
+        return finding.get('vulnerability_name', '')
 
     def _is_internal_ip(self, ip_address: str) -> bool:
-        """
-        Checks if an IP address is in a private range.
-        """
+        """Checks if an IP address is in a private range."""
         if not ip_address:
             return False
         private_ip_ranges = [
@@ -76,9 +66,8 @@ class ContextualValidator(ValidationHandler):
             ('127.0.0.0', '127.255.255.255')
         ]
         try:
-            # Handle domain names by skipping the check
             if not all(c.isdigit() or c == '.' for c in ip_address):
-                return False
+                return False # Not a simple IP address
             ip_addr = list(map(int, ip_address.split('.')))
             for start, end in private_ip_ranges:
                 start_addr = list(map(int, start.split('.')))

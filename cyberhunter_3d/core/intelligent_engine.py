@@ -1,10 +1,9 @@
 import logging
 from typing import List, Dict, Any
-
-from cyberhunter_3d.core.ml.pattern_analysis import PatternAnalysis
-from cyberhunter_3d.core.vulnerability.exploit_chain import ExploitChainDetector
-from cyberhunter_3d.core.validation.contextual_validator import ContextualValidator
-from cyberhunter_3d.core.scoring.contextual_risk_scorer import ContextualRiskScorer
+from .ml.pattern_analysis import PatternAnalysis
+from .vulnerability.exploit_chain import ExploitChainDetector
+from .validation.contextual_validator import ContextualValidator
+from .scoring.contextual_risk_scorer import ContextualRiskScorer
 
 log = logging.getLogger(__name__)
 
@@ -26,66 +25,58 @@ class IntelligentEngine:
         """
         Runs the full intelligent processing pipeline.
         """
-        log.info("Starting Intelligent Processing Engine...")
+        log.info("Starting Intelligent Processing Engine pipeline...")
 
-        # 1. Pattern Analysis
         self._run_pattern_analysis()
-
-        # 2. Exploit Chain Detection
         self._run_exploit_chain_detection()
-
-        # 3. False Positive Reduction
         self._run_false_positive_reduction()
-
-        # 4. Risk Scoring
         self._run_risk_scoring()
-
-        # 5. Vulnerability Prioritization
         self.findings = self._prioritize_vulnerabilities()
 
-        log.info("Intelligent Processing Engine finished.")
+        log.info("Intelligent Processing Engine pipeline finished.")
         return self.findings
 
     def _run_pattern_analysis(self):
         """
-        Analyzes findings for anomalies and trends.
+        Runs the PatternAnalysis module to add anomaly and trend data.
         """
-        log.info("Running Pattern Analysis...")
-        pattern_analyzer = PatternAnalysis(self.findings)
-        self.findings = pattern_analyzer.run()
+        log.info("Running Pattern Analysis module...")
+        if not self.findings: return
+        analyzer = PatternAnalysis(self.findings)
+        self.findings = analyzer.run()
 
     def _run_exploit_chain_detection(self):
         """
-        Identifies multi-vulnerability attack paths.
+        Runs the ExploitChainDetector to find multi-step attack paths.
         """
-        log.info("Running Exploit Chain Detection...")
-        exploit_chain_detector = ExploitChainDetector(self.findings)
-        self.exploit_chains = exploit_chain_detector.run()
+        log.info("Running Exploit Chain Detection module...")
+        if not self.findings: return
+        detector = ExploitChainDetector(self.findings)
+        self.exploit_chains = detector.run()
 
     def _run_false_positive_reduction(self):
         """
-        Reduces false positives using contextual validation.
+        Runs the ContextualValidator to flag likely false positives.
         """
-        log.info("Running False Positive Reduction...")
-        contextual_validator = ContextualValidator()
+        log.info("Running False Positive Reduction module...")
+        if not self.findings: return
+        validator = ContextualValidator()
         for finding in self.findings:
-            # A more robust implementation would integrate this into the main ValidationEngine
-            if not contextual_validator.validate(finding):
+            if not validator.validate(finding):
                 finding['validation_outcome'] = False
 
     def _run_risk_scoring(self):
         """
-        Calculates a contextual risk score for each finding.
+        Runs the ContextualRiskScorer to calculate a nuanced risk score.
         """
-        log.info("Running Risk Scoring...")
-        risk_scorer = ContextualRiskScorer(self.findings, self.exploit_chains)
-        self.findings = risk_scorer.run()
+        log.info("Running Risk Scoring module...")
+        if not self.findings: return
+        scorer = ContextualRiskScorer(self.findings, self.exploit_chains)
+        self.findings = scorer.run()
 
     def _prioritize_vulnerabilities(self) -> List[Dict[str, Any]]:
         """
-        Prioritizes vulnerabilities based on their contextual risk scores.
+        Prioritizes vulnerabilities based on their contextual risk score.
         """
         log.info("Prioritizing vulnerabilities...")
-        # The contextual risk scorer has already added the 'contextual_risk_score' key to each finding.
-        # Now, we just need to sort the findings based on this score.
-        return sorted(self.findings, key=lambda x: x.get('contextual_risk_score', 0), reverse=True)
+        return sorted(self.findings, key=lambda x: x.get('contextual_risk_score', 0.0), reverse=True)

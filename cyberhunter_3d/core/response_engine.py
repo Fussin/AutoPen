@@ -7,7 +7,6 @@ from email.mime.text import MIMEText
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 
-# It's better to handle the case where jira is not installed.
 try:
     from jira import JIRA
 except ImportError:
@@ -23,8 +22,38 @@ class ResponseHandler(ABC):
 
 class JiraTicketHandler(ResponseHandler):
     """Creates a Jira ticket for a validated finding."""
-    # (Existing implementation - no changes needed here)
-    pass
+    def __init__(self):
+        self.jira_client = None
+        if not JIRA:
+            log.info("Jira library not installed. Skipping Jira integration.")
+            return
+        self.jira_url = os.getenv("JIRA_URL")
+        self.jira_user = os.getenv("JIRA_USERNAME")
+        self.jira_token = os.getenv("JIRA_API_TOKEN")
+        self.jira_project = os.getenv("JIRA_PROJECT_KEY")
+        if self.jira_url and self.jira_user and self.jira_token:
+            try:
+                self.jira_client = JIRA(server=self.jira_url, basic_auth=(self.jira_user, self.jira_token))
+            except Exception as e:
+                log.error(f"Failed to connect to Jira: {e}")
+
+    def handle(self, finding: Dict[str, Any]):
+        if not self.jira_client or not self.jira_project:
+            return
+        summary = f"Security Finding: {finding.get('title', 'Untitled Finding')}"
+        description = f"""
+*Severity:* {finding.get('severity', 'N/A')}
+*Confidence:* {finding.get('confidence', 'N/A')}
+*Host:* {finding.get('host', 'N/A')}
+*Description:*
+{finding.get('description', 'No description provided.')}
+"""
+        issue_dict = {'project': {'key': self.jira_project}, 'summary': summary, 'description': description, 'issuetype': {'name': 'Bug'}}
+        try:
+            new_issue = self.jira_client.create_issue(fields=issue_dict)
+            log.info(f"Jira Ticket Created: {new_issue.key}")
+        except Exception as e:
+            log.error(f"Failed to create Jira ticket: {e}")
 
 class SlackNotificationHandler(ResponseHandler):
     """Sends a notification to a Slack channel for a high-risk finding."""
@@ -35,18 +64,15 @@ class SlackNotificationHandler(ResponseHandler):
         if not self.webhook_url:
             return
 
-        summary = f"High-Risk Finding: {finding.get('vulnerability_name', 'Untitled Finding')}"
+        summary = f"High-Risk Finding: {finding.get('vulnerability_name', finding.get('title', 'Untitled Finding'))}"
         message = {
             "text": summary,
             "blocks": [
                 {"type": "header", "text": {"type": "plain_text", "text": ":warning: " + summary}},
                 {"type": "section", "fields": [
                     {"type": "mrkdwn", "text": f"*Host:*\n{finding.get('host', 'N/A')}"},
-                    {"type": "mrkdwn", "text": f"*Risk Score:*\n{finding.get('contextual_risk_score', 'N/A')}"},
-                    {"type": "mrkdwn", "text": f"*Severity:*\n{finding.get('severity', 'N/A')}"},
-                    {"type": "mrkdwn", "text": f"*Chain:*\n{finding.get('chain_name', 'N/A')}"}
-                ]},
-                {"type": "section", "text": {"type": "mrkdwn", "text": f"*Description:*\n{finding.get('description', 'No description provided.')}"}}
+                    {"type": "mrkdwn", "text": f"*Risk Score:*\n{finding.get('contextual_risk_score', 'N/A')}"}
+                ]}
             ]
         }
         try:
@@ -66,23 +92,11 @@ class EmailResponseHandler(ResponseHandler):
         self.sender = os.getenv("EMAIL_SENDER", "cyberhunter@example.com")
 
     def handle(self, finding: Dict[str, Any]):
-        if not all([self.smtp_server, self.smtp_port, self.smtp_user, self.smtp_pass, self.recipient]):
+        if not all([self.smtp_server, self.recipient]):
             return
 
-        summary = f"High-Risk Security Finding: {finding.get('vulnerability_name', 'Untitled Finding')}"
-        body = f"""
-A new high-risk security finding has been identified:
-
-Host: {finding.get('host', 'N/A')}
-Vulnerability: {finding.get('vulnerability_name', 'N/A')}
-Risk Score: {finding.get('contextual_risk_score', 'N/A')}
-Severity: {finding.get('severity', 'N/A')}
-
-Description:
-{finding.get('description', 'No description provided.')}
-
-Please investigate this issue promptly.
-"""
+        summary = f"High-Risk Finding: {finding.get('vulnerability_name', finding.get('title', 'Untitled Finding'))}"
+        body = f"A new high-risk security finding has been identified on host {finding.get('host', 'N/A')}: {summary}"
         msg = MIMEText(body)
         msg['Subject'] = summary
         msg['From'] = self.sender
@@ -90,8 +104,9 @@ Please investigate this issue promptly.
 
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_pass)
+                if self.smtp_user and self.smtp_pass:
+                    server.starttls()
+                    server.login(self.smtp_user, self.smtp_pass)
                 server.sendmail(self.sender, [self.recipient], msg.as_string())
             log.info(f"Email notification sent for finding: {summary}")
         except smtplib.SMTPException as e:
@@ -115,7 +130,7 @@ class ResponseEngine:
         if self.config.get("enable_jira_tickets"):
             self.handlers.append(JiraTicketHandler())
 
-    def run(self) -> List[Dict[str, Any]]:
+    def run(self):
         """
         The main entry point for the response process. Triggers handlers for findings
         that exceed the configured risk threshold.
@@ -131,4 +146,3 @@ class ResponseEngine:
                     log.error(f"Error in response handler {handler.__class__.__name__}: {e}")
 
         log.info("Response process finished.")
-        return self.findings

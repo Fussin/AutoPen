@@ -171,7 +171,6 @@ def submit_finding_feedback(finding_id):
 
     finding = Finding.query.get_or_404(finding_id)
 
-    # To be safe, ensure the finding belongs to a scan owned by the user
     user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
     if finding.scan.user_id != user.id:
         return jsonify({'error': 'Forbidden'}), 403
