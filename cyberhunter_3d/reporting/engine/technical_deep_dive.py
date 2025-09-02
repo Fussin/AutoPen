@@ -27,16 +27,20 @@ class TechnicalDeepDive:
         """
         Formats a single vulnerability with detailed information.
         """
+        cve = vuln.get("cve", "N/A")
+        severity = vuln.get("severity", "Unknown")
+        description = vuln.get("description", f"A {severity} severity vulnerability ({cve}) was discovered. A detailed description of the vulnerability, its impact, and how it can be exploited would be provided here.")
+
         return {
-            "cve": vuln.get("cve"),
-            "severity": vuln.get("severity"),
-            "description": "A detailed description of the vulnerability would go here.",
-            "proof_of_concept": "A detailed proof of concept would go here.",
+            "cve": cve,
+            "severity": severity,
+            "description": description,
+            "proof_of_concept": f"A proof-of-concept demonstrating the exploitability of {cve} would be detailed here.",
             "reproduction_steps": [
-                "Step 1: ...",
-                "Step 2: ...",
-                "Step 3: ..."
+                f"Step 1: Identify the target system component affected by {cve}.",
+                "Step 2: Craft a payload to trigger the vulnerability.",
+                "Step 3: Execute the payload and observe the system's response to confirm successful exploitation."
             ],
-            "code_snippets": "Relevant code snippets would be displayed here.",
-            "request_response": "Sample request/response data would be here."
+            "code_snippets": f"Code snippets related to the vulnerable component and the fix for {cve} would be shown here.",
+            "request_response": f"Sample HTTP request/response pairs demonstrating the exploit for {cve} would be provided here."
         }

@@ -88,8 +88,15 @@ class Exporter:
         remed = self.report_data.get('remediation_guide', {})
         body += f"<h2>{remed.get('title')}</h2>"
         body += "<div class='card'>"
+        body += "<h3>Recommendations</h3>"
         for cve, rec in remed.get('recommendations', {}).items():
-            body += f"<h3>{cve}</h3><p>{rec}</p>"
+            body += f"<h4>{cve}</h4><p>{rec}</p>"
+        body += "<h3>Priority Roadmap</h3>"
+        for item in remed.get('priority_roadmap', []):
+            body += f"<p>{item}</p>"
+        body += "<h3>Patch Timelines</h3>"
+        for cve, timeline in remed.get('patch_timelines', {}).items():
+            body += f"<p><span class='monospace'>{cve}</span>: {timeline}</p>"
         body += "</div>"
 
         return body
