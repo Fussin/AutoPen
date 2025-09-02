@@ -4,7 +4,7 @@ Flask-Login
 Flask-Bcrypt
 pyotp
 qrcode[pil]
-requests
+requests==2.24.0
 PyYAML
 pytest
 boto3
@@ -20,3 +20,4 @@ lightgbm
 pandas
 scikit-learn
 packaging
+django==2.2.16
