@@ -19,7 +19,10 @@ pdfkit
 lightgbm
 pandas
 scikit-learn
+APScheduler
+freezegun
 packaging
 django==2.2.16
 urllib3==1.26.4
 Pillow==9.0.0
+
