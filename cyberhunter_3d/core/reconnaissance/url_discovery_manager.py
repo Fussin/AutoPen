@@ -60,13 +60,7 @@ def discover_urls(domain: str, scan_id: int, app):
             # 3. Liveness & Enrichment Probe
             run_plugin_by_name("URL Processor", context)
 
-            # 4A. Artifact Extraction for Expanded Recon
-            run_plugin_by_name("Artifact Extractor", context)
-
-            # 4B. Expanded Recon using Artifacts
-            run_plugin_by_name("Expanded Reconnaissance", context)
-
-            # 4C. Visual Recon
+            # 4B. Visual Recon
             run_plugin_by_name("Visual Recon", context)
 
             # 5. JavaScript Recursive Analysis
