@@ -1,6 +1,4 @@
-from cyberhunter_3d.web.models import db, Scan, Target, Asset, Alert
-from cyberhunter_3d.core.monitoring.monitor import ContinuousMonitor
-from cyberhunter_3d.core.response_engine import EventEngine
+from cyberhunter_3d.web.models import db, Scan, Target, Asset
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
@@ -217,63 +215,3 @@ def run_execution_phase(scan_id, app):
         finally:
             db.session.commit()
             print(f"Final execution status for scan {scan_id} is {scan.status}.")
-
-        # After the main try/finally, if the scan completed, run monitoring.
-        if scan.status == 'COMPLETED':
-            _run_continuous_monitoring(scan, app)
-
-
-def _run_continuous_monitoring(scan, app):
-    """
-    If monitoring is enabled for the target, run the continuous monitor.
-    """
-    with app.app_context():
-        if not scan.targets:
-            print("No targets found for this scan. Cannot run monitor.")
-            return
-        target = scan.targets[0]
-        if not target.is_monitoring_enabled:
-            print(f"Monitoring not enabled for target {target.value}. Skipping.")
-            return
-
-        print(f"Monitoring is enabled for {target.value}. Looking for baseline scan.")
-        baseline_scan = Scan.query.join(Target).filter(
-            Target.value == target.value,
-            Scan.status == 'COMPLETED',
-            Scan.id != scan.id
-        ).order_by(Scan.created_at.desc()).first()
-
-        if not baseline_scan:
-            print(f"No previous completed scan found for {target.value}. This scan will be the new baseline.")
-            return
-
-        print(f"Found baseline scan {baseline_scan.id}. Running monitor against current scan {scan.id}.")
-        monitor = ContinuousMonitor(baseline_scan_id=baseline_scan.id, current_scan_id=scan.id)
-        changes = monitor.compare_assets()
-
-        if not changes:
-            print("No changes detected by the monitor.")
-            return
-
-        # --- Storing Alerts and Notifying ---
-        alerts_to_notify = []
-        for change in changes:
-            alert = Alert(
-                title=change.get('title', 'Untitled Alert'),
-                description=change.get('description', 'No description.'),
-                severity=change.get('severity', 'Info'),
-                details=change.get('details', {}),
-                scan_id=scan.id
-            )
-            db.session.add(alert)
-
-            notification_event = change.copy()
-            notification_event['type'] = 'alert'
-            alerts_to_notify.append(notification_event)
-
-        db.session.commit()
-        print(f"Created {len(changes)} alerts in the database.")
-
-        print("Sending alerts to notification channels...")
-        event_engine = EventEngine(events=alerts_to_notify)
-        event_engine.run()

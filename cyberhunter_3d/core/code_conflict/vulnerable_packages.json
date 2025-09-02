@@ -1,0 +1,12 @@
+{
+    "django": {
+        "affected_versions": "<2.2.17",
+        "severity": "High",
+        "description": "Django versions before 2.2.17 are vulnerable to SQL injection."
+    },
+    "requests": {
+        "affected_versions": "<2.25.0",
+        "severity": "Medium",
+        "description": "Requests versions before 2.25.0 are vulnerable to a CRLF injection."
+    }
+}
