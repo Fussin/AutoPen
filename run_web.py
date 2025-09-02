@@ -1,6 +1,8 @@
 import os
 import logging
+import atexit
 from flask import Flask
+from cyberhunter_3d.core.scheduler.service import SchedulerService
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from cyberhunter_3d.web.models import db, User, Scan, Asset
@@ -26,6 +28,11 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+    # --- Scheduler Initialization ---
+    if not hasattr(app, 'scheduler_service'):
+        app.scheduler_service = SchedulerService(app)
+        atexit.register(lambda: app.scheduler_service.shutdown())
 
     return app
 
@@ -356,5 +363,7 @@ def scan_results(scan_id):
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database(app.app_context())
+    # Start the scheduler only when running the web app directly
+    app.scheduler_service.start()
     # In a real deployment, use a proper WSGI server like Gunicorn.
     app.run(debug=True, port=5001)

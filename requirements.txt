@@ -19,5 +19,5 @@ pdfkit
 lightgbm
 pandas
 scikit-learn
-pyzipper
-requests
+APScheduler
+freezegun

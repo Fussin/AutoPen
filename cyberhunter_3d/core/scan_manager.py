@@ -218,25 +218,36 @@ def run_execution_phase(scan_id, app):
             db.session.commit()
             print(f"Final execution status for scan {scan_id} is {scan.status}.")
 
-        # After the main try/finally, if the scan completed, run monitoring.
-        if scan.status == 'COMPLETED':
-            _run_continuous_monitoring(scan, app)
+
+def launch_scan(scan_id, app):
+    """
+    Launches a full scan pipeline for a given scan_id.
+    """
+    print(f"--- Launching full scan for scan_id: {scan_id} ---")
+    # The web UI flow has a manual approval step, so it calls these separately.
+    # For autonomous scans, we run them back-to-back.
+    run_discovery_phase(scan_id, app)
+    run_execution_phase(scan_id, app)
+
+    with app.app_context():
+        scan = db.session.get(Scan, scan_id)
+        if scan and scan.status == 'COMPLETED':
+             _run_continuous_monitoring(scan, app)
+
+    print(f"--- Full scan for scan_id: {scan_id} finished ---")
 
 
 def _run_continuous_monitoring(scan, app):
     """
-    If monitoring is enabled for the target, run the continuous monitor.
+    Run the continuous monitor to compare the given scan with its baseline.
     """
     with app.app_context():
         if not scan.targets:
             print("No targets found for this scan. Cannot run monitor.")
             return
         target = scan.targets[0]
-        if not target.is_monitoring_enabled:
-            print(f"Monitoring not enabled for target {target.value}. Skipping.")
-            return
 
-        print(f"Monitoring is enabled for {target.value}. Looking for baseline scan.")
+        print(f"Running continuous monitoring for {target.value}. Looking for baseline scan.")
         baseline_scan = Scan.query.join(Target).filter(
             Target.value == target.value,
             Scan.status == 'COMPLETED',

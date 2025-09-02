@@ -8,7 +8,6 @@ from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
 from cyberhunter_3d.utils.file_utils import get_results_dir
-from cyberhunter_3d.output import run_output_pipeline
 
 def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str, scan_id: int):
     """
@@ -120,10 +119,8 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
     try:
         with open(final_output_path, 'w') as f: json.dump(final_data, f, indent=4)
         logger.info(f"Successfully aggregated results to {final_output_path}")
-        return final_output_path
     except IOError as e:
         logger.error(f"Failed to write final aggregated file: {e}")
-        return None
 
 @click.group()
 def cli():
@@ -138,12 +135,7 @@ def cli():
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
-
 def scan_command(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
-=======
-@click.option("--run-output-pipeline", is_flag=True, help="Run the output and integration pipeline.")
-def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, run_output_pipeline):
-
     """
     Run a new reconnaissance scan.
     """
@@ -181,18 +173,10 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
             sys.exit(1)
         logger.info(f"Reconnaissance complete for {domain}.")
 
-
     aggregate_results({}, domain, logger, results_dir, scan_id)
 
-    # Always aggregate results at the end
-    final_file_path = aggregate_results({}, domain, logger, results_dir, scan_id)
-
-    if not final_file_path:
-        logger.error("Result aggregation failed. Skipping remaining steps.")
-        sys.exit(1)
-
-
     config = load_config()
+    final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
     logger.info(f"All findings have been aggregated into: {final_file_path}")
 
     if upload_to_r2:
@@ -204,47 +188,52 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         logger.info("Generating PDF report...")
         generate_pdf_report(scan_id, domain, app)
 
-    if run_output_pipeline:
-        logger.info("Running output and integration pipeline...")
-        with open(final_file_path, 'r') as f:
-            results = json.load(f)
-
-        output_dir = os.path.join(config['recon_output_dir'], 'output')
-        run_output_pipeline(results, config, output_dir)
-
     logger.info("--- Pipeline Finished ---")
 
 @cli.command(name='monitor')
-@click.option("--target", required=True, help="The target value to update (e.g., example.com).")
-@click.option("--enable", is_flag=True, help="Enable monitoring for the target.")
-@click.option("--disable", is_flag=True, help="Disable monitoring for the target.")
-def monitor_command(target, enable, disable):
+@click.option("--target", required=True, help="The target value to manage.")
+@click.option("--set-schedule", type=click.Choice(['daily', 'weekly', 'monthly']), help="Set the monitoring schedule.")
+@click.option("--remove-schedule", is_flag=True, help="Remove the monitoring schedule for the target.")
+def monitor_command(target, set_schedule, remove_schedule):
     """
-    Enable or disable continuous monitoring for a target.
+    Manage the monitoring schedule for a target.
     """
-    if enable and disable:
-        click.echo("Error: Please use either --enable or --disable, not both.", err=True)
+    if set_schedule and remove_schedule:
+        click.echo("Error: Please use either --set-schedule or --remove-schedule, not both.", err=True)
         sys.exit(1)
-    if not enable and not disable:
-        click.echo("Error: Please specify --enable or --disable.", err=True)
+    if not set_schedule and not remove_schedule:
+        click.echo("Error: Please specify an action, either --set-schedule or --remove-schedule.", err=True)
         sys.exit(1)
 
     from run_web import create_app
-    from cyberhunter_3d.web.models import db, Target
+    from cyberhunter_3d.web.models import db, Target, Schedule
 
     app = create_app()
     with app.app_context():
         target_obj = Target.query.filter_by(value=target).first()
         if not target_obj:
-            click.echo(f"Error: Target '{target}' not found in the database.", err=True)
+            click.echo(f"Error: Target '{target}' not found in the database. A scan must be run on the target first.", err=True)
             sys.exit(1)
 
-        new_status = True if enable else False
-        target_obj.is_monitoring_enabled = new_status
-        db.session.commit()
+        if set_schedule:
+            schedule_obj = target_obj.schedule
+            if schedule_obj:
+                schedule_obj.frequency = set_schedule
+                schedule_obj.is_active = True
+                click.echo(f"Updated schedule for '{target}' to '{set_schedule}'.")
+            else:
+                schedule_obj = Schedule(target_id=target_obj.id, frequency=set_schedule)
+                db.session.add(schedule_obj)
+                click.echo(f"Set new schedule for '{target}' to '{set_schedule}'.")
 
-        status_str = "enabled" if new_status else "disabled"
-        click.echo(f"Successfully {status_str} monitoring for target '{target}'.")
+        elif remove_schedule:
+            if target_obj.schedule:
+                db.session.delete(target_obj.schedule)
+                click.echo(f"Removed monitoring schedule for '{target}'.")
+            else:
+                click.echo(f"No schedule found for '{target}'. Nothing to remove.")
+
+        db.session.commit()
 
 
 if __name__ == "__main__":
