@@ -1,10 +1,8 @@
-import os
 from functools import wraps
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify
 from .models import User, db, Scan, Target, Asset
 from cyberhunter_3d.core.target_parser import parse_targets
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
-from cyberhunter_3d.output import run_output_pipeline
 from concurrent.futures import ThreadPoolExecutor
 from flask import current_app
 
@@ -159,52 +157,3 @@ def get_scan_graph(scan_id):
         graph_definition += f'    {scan_node} --> {asset_node}\n'
 
     return jsonify({'graph_definition': graph_definition})
-
-@api_bp.route('/scans/<int:scan_id>/output/<path:filename>', methods=['GET'])
-@require_api_key
-def get_output_file(scan_id, filename):
-    scan = Scan.query.get_or_404(scan_id)
-    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
-    if scan.user_id != user.id:
-        return jsonify({'error': 'Forbidden'}), 403
-
-    # This is a simplified example; in a real app, you'd get the domain
-    # from the scan object and construct the path more robustly.
-    domain = scan.targets[0].value if scan.targets else 'default'
-
-    # Assuming a structure like: <recon_output_dir>/<domain>_<scan_id>/output/
-    output_dir = os.path.join(
-        current_app.config['RECON_OUTPUT_DIR'],
-        f"{domain}_{scan_id}",
-        'output'
-    )
-
-    return send_from_directory(output_dir, filename, as_attachment=True)
-
-@api_bp.route('/scans/<int:scan_id>/output', methods=['POST'])
-@require_api_key
-def trigger_output_pipeline(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
-    if scan.user_id != user.id:
-        return jsonify({'error': 'Forbidden'}), 403
-
-    if scan.status not in ['COMPLETED', 'PENDING_REVIEW']:
-        return jsonify({'message': 'Scan is not yet complete.'}), 400
-
-    domain = scan.targets[0].value if scan.targets else 'default'
-    results_dir = os.path.join(current_app.config['RECON_OUTPUT_DIR'], f"{domain}_{scan_id}")
-    final_file_path = os.path.join(results_dir, current_app.config['FINAL_RECON_FILE'])
-
-    if not os.path.exists(final_file_path):
-        return jsonify({'error': 'Aggregated results not found.'}), 404
-
-    with open(final_file_path, 'r') as f:
-        results = json.load(f)
-
-    output_dir = os.path.join(results_dir, 'output')
-
-    # This will run in a thread to avoid blocking the request
-    get_executor().submit(run_output_pipeline, results, current_app.config, output_dir)
-
-    return jsonify({'message': 'Output pipeline triggered successfully.'}), 202

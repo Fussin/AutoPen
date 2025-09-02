@@ -3,6 +3,7 @@ This module contains the Code Conflict Analyzer.
 """
 import os
 import re
+import json
 from packaging import version
 
 class Analyzer:
@@ -12,19 +13,19 @@ class Analyzer:
     """
     def __init__(self, codebase_path):
         self.codebase_path = codebase_path
-        # In a real implementation, this would come from a database or a more robust source.
-        self.vulnerable_packages = {
-            "django": {
-                "affected_versions": "<2.2.17",
-                "severity": "High",
-                "description": "Django versions before 2.2.17 are vulnerable to SQL injection."
-            },
-            "requests": {
-                "affected_versions": "<2.25.0",
-                "severity": "Medium",
-                "description": "Requests versions before 2.25.0 are vulnerable to a CRLF injection."
-            }
-        }
+        self.vulnerable_packages = self._load_vulnerabilities()
+
+    def _load_vulnerabilities(self):
+        """
+        Loads the vulnerability database from the JSON file.
+        """
+        db_path = os.path.join(os.path.dirname(__file__), 'vulnerable_packages.json')
+        try:
+            with open(db_path, 'r') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            print(f"Warning: Vulnerability database not found or corrupted at {db_path}")
+            return {}
 
     def analyze(self):
         """
@@ -41,7 +42,6 @@ class Analyzer:
             lines = f.readlines()
 
         # Regex to capture package name and version
-        # Handles lines like: requests==2.24.0, django>=2.0, flask
         req_pattern = re.compile(r'([a-zA-Z0-9_-]+)(?:([<>=!~]{1,2})([0-9a-zA-Z.-]+))?')
 
         for line in lines:
@@ -56,15 +56,11 @@ class Analyzer:
             package_name = match.group(1).lower()
 
             if package_name in self.vulnerable_packages:
-                # We found a potentially vulnerable package, now check the version
                 detected_version_str = match.group(3)
                 if not detected_version_str:
-                    # No version specified, so we can't check. Assume vulnerable.
                     is_vulnerable = True
                 else:
                     detected_version = version.parse(detected_version_str)
-
-                    # For simplicity, we only handle the '<' specifier from our DB
                     vuln_details = self.vulnerable_packages[package_name]
                     affected_spec = vuln_details["affected_versions"]
                     if affected_spec.startswith('<'):
@@ -74,7 +70,6 @@ class Analyzer:
                         else:
                             is_vulnerable = False
                     else:
-                        # Other specifiers not handled in this mock
                         is_vulnerable = False
 
                 if is_vulnerable:

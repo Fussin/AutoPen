@@ -20,6 +20,3 @@ lightgbm
 pandas
 scikit-learn
 packaging
-pyzipper
-requests
-

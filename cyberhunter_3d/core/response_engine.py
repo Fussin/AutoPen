@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 class ResponseHandler(ABC):
     """Abstract base class for response handlers."""
     @abstractmethod
-    def handle(self, event: Dict[str, Any]) -> Optional[str]:
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
         raise NotImplementedError
 
 class JiraTicketHandler(ResponseHandler):
@@ -36,24 +36,19 @@ class JiraTicketHandler(ResponseHandler):
             except Exception as e:
                 log.error(f"Failed to connect to Jira: {e}")
 
-    def handle(self, event: Dict[str, Any]) -> Optional[str]:
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
         if not self.jira_client or not self.jira_project:
             return None
-
-        # This handler is specific to findings, so we check for a 'finding' type marker.
-        if event.get('type') != 'finding':
-            return None
-
-        summary = f"Security Finding: {event.get('title', 'Untitled Finding')}"
+        summary = f"Security Finding: {finding.get('title', 'Untitled Finding')}"
         description = f"""
-*Severity:* {event.get('severity', 'N/A')}
-*Confidence:* {event.get('confidence', 'N/A')}
-*Host:* {event.get('host', 'N/A')}
+*Severity:* {finding.get('severity', 'N/A')}
+*Confidence:* {finding.get('confidence', 'N/A')}
+*Host:* {finding.get('host', 'N/A')}
 *Description:*
-{event.get('description', 'No description provided.')}
+{finding.get('description', 'No description provided.')}
 *Raw Evidence:*
 {{code}}
-{json.dumps(event.get('raw_evidence', []), indent=2)}
+{json.dumps(finding.get('raw_evidence', []), indent=2)}
 {{code}}
 """
         issue_dict = {'project': {'key': self.jira_project}, 'summary': summary, 'description': description, 'issuetype': {'name': 'Bug'}}
@@ -64,50 +59,30 @@ class JiraTicketHandler(ResponseHandler):
             log.error(f"Failed to create Jira ticket: {e}")
             return None
 
-class LogAlertHandler(ResponseHandler):
-    """A simple handler that logs an event to the console."""
-    def handle(self, event: Dict[str, Any]) -> Optional[str]:
-        # This handler is specific to alerts from the monitor
-        if event.get('type') != 'alert':
-            return None
-
-        title = event.get('title', 'Untitled Event')
-        description = event.get('description', 'No description.')
-        log.info(f"--- ALERT HANDLER ---")
-        log.info(f"Title: {title}")
-        log.info(f"Description: {description}")
-        log.info(f"Details: {json.dumps(event.get('details', {}))}")
-        log.info(f"--------------------")
-        return "Logged to console"
-
-
-class EventEngine:
+class ResponseEngine:
     """
-    Takes action on events (e.g., findings, alerts) using a set of handlers.
+    Takes action on validated findings and updates their final disposition.
     """
-    def __init__(self, events: List[Dict[str, Any]]):
-        self.events = events
-        self.handlers: List[ResponseHandler] = [JiraTicketHandler(), LogAlertHandler()]
+    def __init__(self, findings: List[Dict[str, Any]]):
+        self.findings = findings
+        self.handlers: List[ResponseHandler] = [JiraTicketHandler()]
 
     def run(self) -> List[Dict[str, Any]]:
         """
-        The main entry point for the event processing.
+        The main entry point for the response process.
         """
-        log.info(f"Starting event processing for {len(self.events)} events...")
-        for event in self.events:
-            # Filter for events that should be processed (e.g. validated findings)
-            if event.get("status") != "Validated" and event.get("type") == "finding":
-                continue
-
+        validated_findings = [f for f in self.findings if f.get("status") == "Validated"]
+        log.info(f"Starting response process for {len(validated_findings)} validated findings...")
+        for finding in validated_findings:
             dispositions = []
             for handler in self.handlers:
                 try:
-                    result = handler.handle(event)
+                    result = handler.handle(finding)
                     if result:
                         dispositions.append(result)
                 except Exception as e:
                     log.error(f"Error in response handler {handler.__class__.__name__}: {e}")
             if dispositions:
-                event['disposition'] = "; ".join(dispositions)
-        log.info("Event processing finished.")
-        return self.events
+                finding['disposition'] = "; ".join(dispositions)
+        log.info("Response process finished.")
+        return self.findings
