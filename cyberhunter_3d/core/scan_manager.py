@@ -1,6 +1,4 @@
-from cyberhunter_3d.web.models import db, Scan, Target, Asset, Alert
-from cyberhunter_3d.core.monitoring.monitor import ContinuousMonitor
-from cyberhunter_3d.core.response_engine import EventEngine
+from cyberhunter_3d.web.models import db, Scan, Target, Asset
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
@@ -219,6 +217,7 @@ def run_execution_phase(scan_id, app):
             print(f"Final execution status for scan {scan_id} is {scan.status}.")
 
 
+
 def launch_scan(scan_id, app):
     """
     Launches a full scan pipeline for a given scan_id.
@@ -288,3 +287,4 @@ def _run_continuous_monitoring(scan, app):
         print("Sending alerts to notification channels...")
         event_engine = EventEngine(events=alerts_to_notify)
         event_engine.run()
+
