@@ -16,4 +16,6 @@ greynoise
 Pillow
 pytesseract
 pdfkit
-jira
+lightgbm
+pandas
+scikit-learn

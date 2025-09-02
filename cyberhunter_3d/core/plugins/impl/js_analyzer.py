@@ -2,9 +2,6 @@ import logging
 import subprocess
 import os
 import json
-import tempfile
-import shutil
-import requests
 from typing import List, Set
 from ..base import Plugin
 from ..context import ScanContext
@@ -30,7 +27,7 @@ class JavaScriptAnalyzerPlugin(Plugin):
 
     @property
     def provides(self) -> List[str]:
-        return ["api_endpoints", "js_secrets", "new_urls_from_js", "js_vulnerable_libraries"]
+        return ["js_endpoints", "js_secrets", "new_urls_from_js"]
 
     def _run_command(self, command: str) -> str:
         """Runs a command and returns its stdout."""
@@ -102,46 +99,10 @@ class JavaScriptAnalyzerPlugin(Plugin):
                     log.info(f"Trufflehog found {len(secrets)} potential secrets in {js_url}.")
                     all_js_secrets[js_url] = secrets
 
-        # --- Retire.js for vulnerable libraries ---
-        all_vulnerable_libs = {}
-        retirejs_command_template = tool_commands.get("retirejs_scan")
-        if retirejs_command_template:
-            js_temp_dir = tempfile.mkdtemp(dir=results_dir)
-            log.info(f"Downloading JS files to {js_temp_dir} for Retire.js scan...")
-            for js_url in js_files:
-                try:
-                    res = requests.get(js_url, timeout=10)
-                    if res.status_code == 200:
-                        filename = os.path.basename(js_url)
-                        # Sanitize filename
-                        filename = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in ('.', '_')]).rstrip()
-                        if not filename:
-                            filename = f"{hash(js_url)}.js"
-
-                        with open(os.path.join(js_temp_dir, filename), "wb") as f:
-                            f.write(res.content)
-                except requests.RequestException as e:
-                    log.warning(f"Could not download JS file {js_url}: {e}")
-
-            log.info("Running Retire.js scan...")
-            command = retirejs_command_template.format(input_path=js_temp_dir)
-            output = self._run_command(command)
-
-            try:
-                retire_results = json.loads(output)
-                all_vulnerable_libs = retire_results
-                log.info(f"Retire.js found {len(retire_results.get('data', []))} files with issues.")
-            except json.JSONDecodeError:
-                log.warning("Could not decode Retire.js JSON output.")
-
-            shutil.rmtree(js_temp_dir)
-
-
         # --- Set results in context ---
-        context.set("api_endpoints", all_js_endpoints)
+        context.set("js_endpoints", all_js_endpoints)
         context.set("js_secrets", all_js_secrets)
         context.set("new_urls_from_js", list(new_urls_from_js))
-        context.set("js_vulnerable_libraries", all_vulnerable_libs)
 
         # --- Save results to files ---
         js_endpoints_filepath = os.path.join(results_dir, f"js_endpoints_{context.scan_id}.json")
