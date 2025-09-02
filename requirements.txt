@@ -16,7 +16,12 @@ greynoise
 Pillow
 pytesseract
 pdfkit
+mmh3
+shodan
+mmh3
+shodan
 lightgbm
 pandas
 scikit-learn
 packaging
+
