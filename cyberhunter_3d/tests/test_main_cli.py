@@ -10,9 +10,9 @@ class TestMainCLI(unittest.TestCase):
     @patch('cyberhunter_3d.web.models.db.session')
     @patch('cyberhunter_3d.main.run_url_discovery_phase')
     @patch('cyberhunter_3d.main.get_results_dir')
-    @patch('cyberhunter_3d.main.aggregate_results')
+    @patch('cyberhunter_3d.core.session_closure.aggregator')
     @patch('run_web.create_app')
-    def test_url_discovery_cli(self, mock_create_app, mock_aggregate_results, mock_get_results_dir, mock_run_url_discovery_phase, mock_db_session):
+    def test_url_discovery_cli(self, mock_create_app, mock_aggregator, mock_get_results_dir, mock_run_url_discovery_phase, mock_db_session):
         # Setup mocks
         mock_app = MagicMock()
         mock_create_app.return_value = mock_app
@@ -24,7 +24,7 @@ class TestMainCLI(unittest.TestCase):
         # Assertions
         self.assertEqual(result.exit_code, 0)
         mock_run_url_discovery_phase.assert_called_once()
-        mock_aggregate_results.assert_called_once()
+        mock_aggregator.aggregate_results.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()

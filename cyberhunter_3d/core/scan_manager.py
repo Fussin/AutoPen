@@ -9,6 +9,7 @@ from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
 from .specialized_scan_manager import SpecializedScanManager
 from .plugins.context import ScanContext
+from .session_closure import SessionCloser
 
 def run_url_discovery_phase(scan_id, app):
     """
@@ -207,16 +208,31 @@ def run_execution_phase(scan_id, app):
                 f"(including {rdns_found_count} from rDNS and {analytics_found_count} from analytics). "
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
-            scan.status = 'COMPLETED'
             print(f"Scan {scan_id} execution phase complete.")
+            exit_code = 0
 
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")
             scan.status = 'FAILED'
             scan.results = f"Execution failed with error: {e}"
+            exit_code = 1
         finally:
             db.session.commit()
             print(f"Final execution status for scan {scan_id} is {scan.status}.")
+
+            # Since this is run from the web app, we need the domain to initialize the closer.
+            target = Target.query.filter_by(scan_id=scan_id, type='domain').first()
+            if target:
+                session_closer = SessionCloser(
+                    scan_id=scan_id,
+                    app=app,
+                    domain=target.value,
+                    should_upload_to_r2=False, # Web scans currently don't have this option
+                    keep_temp_files=False # Default to cleaning up
+                )
+                session_closer.finalize_session()
+            else:
+                print(f"Could not find domain for scan {scan_id} to finalize session.")
 
 
 def run_specialized_scans(scan_id, app):
