@@ -18,7 +18,6 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
     final_data = {"domain": domain, "hosts": [], "url_discovery": {}, "vulnerabilities": []}
     host_map = {}
 
-    # Helper to load JSON files safely
     def load_json_data(path_key):
         if path_key not in output_paths:
             logger.warning(f"Output path for '{path_key}' not found. Skipping.")
@@ -30,7 +29,6 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
             logger.error(f"Could not read or parse {output_paths[path_key]}: {e}")
             return None
 
-    # Load host-based data sources
     master_subdomains = load_json_data('master_subdomains')
     if not master_subdomains:
         logger.warning("Master subdomains list not found. Skipping host aggregation.")
@@ -85,14 +83,12 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
 
     final_data["hosts"] = list(host_map.values())
 
-    # Helper to load text files safely
     def load_text_data(filename):
         filepath = os.path.join(results_dir, filename)
         try:
             with open(filepath, 'r') as f: return [line.strip() for line in f.readlines()]
         except FileNotFoundError: return []
 
-    # Aggregate URL discovery results
     final_data["url_discovery"] = {
         "alive_urls": load_text_data(f"alive_urls_{scan_id}.txt"),
         "dead_urls": load_text_data(f"dead_urls_{scan_id}.txt"),
@@ -100,28 +96,24 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
         "parameters": load_text_data(f"parameters_{scan_id}.txt"),
     }
 
-    # Aggregate vulnerability scan results
     vuln_file_path = os.path.join(results_dir, f"vulnerabilities_{scan_id}.json")
     if os.path.exists(vuln_file_path):
         with open(vuln_file_path, 'r') as f:
             try: final_data["vulnerabilities"] = json.load(f)
             except json.JSONDecodeError: logger.error(f"Could not decode vulnerabilities file: {vuln_file_path}")
 
-    # Aggregate content discovery results
     content_file_path = os.path.join(results_dir, f"discovered_paths_{scan_id}.json")
     if os.path.exists(content_file_path):
         with open(content_file_path, 'r') as f:
             try: final_data["content_discovery"] = json.load(f)
             except json.JSONDecodeError: logger.error(f"Could not decode content discovery file: {content_file_path}")
 
-    # Aggregate JavaScript analysis results
     js_endpoints_file_path = os.path.join(results_dir, f"js_endpoints_{scan_id}.json")
     if os.path.exists(js_endpoints_file_path):
         with open(js_endpoints_file_path, 'r') as f:
             try: final_data["js_analysis"] = json.load(f)
             except json.JSONDecodeError: logger.error(f"Could not decode JS analysis file: {js_endpoints_file_path}")
 
-    # Save the final aggregated file
     output_dir = config['recon_output_dir']
     final_output_path = os.path.join(output_dir, config['final_recon_file'])
     try:
@@ -130,8 +122,12 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
     except IOError as e:
         logger.error(f"Failed to write final aggregated file: {e}")
 
+@click.group()
+def cli():
+    """CyberHunter 3D CLI"""
+    pass
 
-@click.command()
+@cli.command(name='scan')
 @click.option("-d", "--domain", required=True, help="The target domain for reconnaissance.")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose output.")
 @click.option("--upload-to-r2", is_flag=True, help="Upload results to Cloudflare R2.")
@@ -139,9 +135,9 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
-def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
+def scan_command(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
     """
-    Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
+    Run a new reconnaissance scan.
     """
     log_level = 'DEBUG' if verbose else 'INFO'
     logger = setup_logger('main.log', level=log_level)
@@ -151,10 +147,8 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
     from cyberhunter_3d.web.models import db, Scan, Target
     app = create_app()
     with app.app_context():
-        # For CLI runs, we create a new scan object to track the operation.
         target = Target(value=domain, type='domain')
-        # Assuming user_id=1 for all CLI-initiated scans.
-        scan = Scan(status='RUNNING', user_id=1)
+        scan = Scan(status='RUNNING', user_id=1) # Assuming user_id=1 for CLI
         scan.targets.append(target)
         db.session.add(target)
         db.session.add(scan)
@@ -169,7 +163,6 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         logger.info("URL discovery finished.")
     else:
         logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
-        # Run the full subdomain enumeration pipeline
         output_paths, _, _ = enumerate_subdomains_v2(
             domain=domain,
             scan_id=scan_id,
@@ -180,7 +173,6 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
             sys.exit(1)
         logger.info(f"Reconnaissance complete for {domain}.")
 
-    # Always aggregate results at the end
     aggregate_results({}, domain, logger, results_dir, scan_id)
 
     config = load_config()
@@ -198,6 +190,38 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
 
     logger.info("--- Pipeline Finished ---")
 
+@cli.command(name='monitor')
+@click.option("--target", required=True, help="The target value to update (e.g., example.com).")
+@click.option("--enable", is_flag=True, help="Enable monitoring for the target.")
+@click.option("--disable", is_flag=True, help="Disable monitoring for the target.")
+def monitor_command(target, enable, disable):
+    """
+    Enable or disable continuous monitoring for a target.
+    """
+    if enable and disable:
+        click.echo("Error: Please use either --enable or --disable, not both.", err=True)
+        sys.exit(1)
+    if not enable and not disable:
+        click.echo("Error: Please specify --enable or --disable.", err=True)
+        sys.exit(1)
+
+    from run_web import create_app
+    from cyberhunter_3d.web.models import db, Target
+
+    app = create_app()
+    with app.app_context():
+        target_obj = Target.query.filter_by(value=target).first()
+        if not target_obj:
+            click.echo(f"Error: Target '{target}' not found in the database.", err=True)
+            sys.exit(1)
+
+        new_status = True if enable else False
+        target_obj.is_monitoring_enabled = new_status
+        db.session.commit()
+
+        status_str = "enabled" if new_status else "disabled"
+        click.echo(f"Successfully {status_str} monitoring for target '{target}'.")
+
 
 if __name__ == "__main__":
-    main()
+    cli()
