@@ -20,3 +20,8 @@ mmh3
 shodan
 mmh3
 shodan
+lightgbm
+pandas
+scikit-learn
+packaging
+
