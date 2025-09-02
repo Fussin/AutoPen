@@ -7,6 +7,7 @@ from cyberhunter_3d.output.file_handler import generate_output_files
 from cyberhunter_3d.output.archive import create_archive
 from cyberhunter_3d.output.integrations.slack import send_slack_notification
 from cyberhunter_3d.output.integrations.jira import create_jira_issue
+from cyberhunter_3d.output.integrations.github import create_github_issue
 
 class TestOutputModule(unittest.TestCase):
 
@@ -93,6 +94,17 @@ class TestOutputModule(unittest.TestCase):
         }
         vuln = {"name": "test vuln", "description": "test desc"}
         create_jira_issue(vuln, config)
+        mock_post.assert_called_once()
+
+    @patch("requests.post")
+    def test_create_github_issue(self, mock_post):
+        config = {
+            "token": "fake_token",
+            "owner": "test_owner",
+            "repo": "test_repo"
+        }
+        vuln = {"name": "test vuln", "description": "test desc"}
+        create_github_issue(vuln, config)
         mock_post.assert_called_once()
 
 
