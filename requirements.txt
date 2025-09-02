@@ -16,6 +16,7 @@ greynoise
 Pillow
 pytesseract
 pdfkit
-lightgbm
-pandas
-scikit-learn
+mmh3
+shodan
+mmh3
+shodan

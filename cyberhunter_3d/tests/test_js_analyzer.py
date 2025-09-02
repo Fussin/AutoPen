@@ -22,7 +22,6 @@ class TestJavaScriptAnalyzerPlugin(unittest.TestCase):
     @patch('cyberhunter_3d.core.plugins.impl.js_analyzer.JavaScriptAnalyzerPlugin._run_command')
     @patch('cyberhunter_3d.core.plugins.impl.js_analyzer.load_config')
     def test_javascript_analyzer_plugin(self, mock_load_config, mock_run_command):
-        # Mock config to make the plugin run
         mock_load_config.return_value = {
             "tool_commands": {
                 "subjs": "subjs -i {input_file}",
@@ -30,7 +29,6 @@ class TestJavaScriptAnalyzerPlugin(unittest.TestCase):
             }
         }
 
-        # Mock the command runner to create the output file when linkfinder is called
         def side_effect(command):
             if "linkfinder" in command:
                 output_file = command.split(" -o ")[1]
@@ -39,20 +37,16 @@ class TestJavaScriptAnalyzerPlugin(unittest.TestCase):
             return ""
         mock_run_command.side_effect = side_effect
 
-        # Setup mock context
         js_files = ["http://example.com/script.js"]
         self.context.set("js_files_urls", js_files)
         js_files_list_path = os.path.join(self.results_dir, "js_files.txt")
         with open(js_files_list_path, "w") as f:
             f.write("\n".join(js_files))
 
-        # Run the plugin
         plugin = JavaScriptAnalyzerPlugin()
         plugin.run(self.context)
 
-        # Assert that the command runner was called
         self.assertGreater(mock_run_command.call_count, 0)
-        # Assert that some results were set in the context
         self.assertIsNotNone(self.context.get("js_endpoints"))
         self.assertEqual(len(self.context.get("js_endpoints")['all_js_files']), 1)
 
