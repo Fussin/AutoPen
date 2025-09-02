@@ -2,8 +2,9 @@ import json
 import os
 import sys
 import click
+import concurrent.futures
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
-from cyberhunter_3d.core.scan_manager import run_url_discovery_phase
+from cyberhunter_3d.core.scan_manager import run_url_discovery_phase, run_network_scan_phase, run_vulnerability_scan_phase
 from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
@@ -173,7 +174,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         logger.info("URL discovery finished.")
     else:
         logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
-        # Run the full subdomain enumeration pipeline
+        # Run the subdomain enumeration phase first
         output_paths, _, _ = enumerate_subdomains_v2(
             domain=domain,
             scan_id=scan_id,
@@ -182,7 +183,25 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         if not output_paths:
             logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
             sys.exit(1)
-        logger.info(f"Reconnaissance complete for {domain}.")
+        logger.info(f"Subdomain enumeration complete for {domain}.")
+
+        # Now run the other phases in parallel
+        logger.info("Starting parallel scan phases (URL, Network, Vulnerability)...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_phase = {
+                executor.submit(run_url_discovery_phase, scan_id, app): "URL Discovery",
+                executor.submit(run_network_scan_phase, scan_id, app): "Network Scan",
+                executor.submit(run_vulnerability_scan_phase, scan_id, app): "Vulnerability Scan"
+            }
+
+            for future in concurrent.futures.as_completed(future_to_phase):
+                phase = future_to_phase[future]
+                try:
+                    future.result()
+                    logger.info(f"{phase} phase completed.")
+                except Exception as exc:
+                    logger.error(f'{phase} phase generated an exception: {exc}')
+        logger.info("All parallel scan phases complete.")
 
 
     # Always aggregate results at the end

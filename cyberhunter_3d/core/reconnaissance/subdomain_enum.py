@@ -34,7 +34,12 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
 
         plugin_manager = PluginManager()
-        plugin_manager.run_all_plugins(context)
+
+        # Exclude network scanning plugins from this phase
+        network_plugins = ['Nmap Scan', 'Naabu Scan', 'Masscan Scan']
+        plugins_to_run_names = [p.name for p in plugin_manager.plugins if p.name not in network_plugins]
+
+        plugin_manager.run_all_plugins(context, include_plugins=plugins_to_run_names)
 
         all_subdomains = context.get('subdomains', set())
 

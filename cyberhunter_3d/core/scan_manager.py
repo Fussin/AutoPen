@@ -288,3 +288,59 @@ def _run_continuous_monitoring(scan, app):
         event_engine = EventEngine(events=alerts_to_notify)
         event_engine.run()
 
+
+        # Here you would process the final_context, e.g., save new targets
+        # to the database.
+        print("Specialized scanning complete. Context is now:", final_context.data)
+
+def run_network_scan_phase(scan_id, app):
+    """
+    Performs the network scanning phase of a scan on discovered assets.
+    """
+    with app.app_context():
+        scan = Scan.query.get(scan_id)
+        if not scan:
+            print(f"Error: Scan {scan_id} not found for network scan phase.")
+            return
+
+        domain_target = Target.query.filter_by(scan_id=scan_id, type='domain').first()
+        if not domain_target:
+            print(f"Error: No domain target found for scan {scan_id} to initialize context.")
+            return
+
+        from cyberhunter_3d.utils.file_utils import get_results_dir
+        results_dir = get_results_dir(domain_target.value, scan.id)
+
+        context = ScanContext(
+            target_domain=domain_target.value,
+            scan_id=scan.id,
+            results_dir=results_dir
+        )
+
+        live_hosts = {asset.value for asset in Asset.query.filter_by(scan_id=scan_id, type='live_host').all()}
+        context.set('validated_subdomains', live_hosts)
+
+        plugin_manager = PluginManager()
+        network_plugins = ['Nmap Scan', 'Naabu Scan', 'Masscan Scan']
+        plugin_manager.run_all_plugins(context, include_plugins=network_plugins)
+
+        # Persist results
+        open_ports = context.get('open_ports', {})
+        for host, ports in open_ports.items():
+            asset = Asset.query.filter_by(scan_id=scan_id, value=host).first()
+            if asset:
+                if asset.details:
+                    asset.details['open_ports'] = ports
+                else:
+                    asset.details = {'open_ports': ports}
+        db.session.commit()
+        print(f"Network scan phase for scan {scan_id} complete.")
+
+def run_vulnerability_scan_phase(scan_id, app):
+    """
+    Wrapper for the specialized scanning phase which includes vulnerability scanning.
+    """
+    print(f"Starting vulnerability scan phase for scan {scan_id}.")
+    run_specialized_scans(scan_id, app)
+    print(f"Vulnerability scan phase for scan {scan_id} complete.")
+
