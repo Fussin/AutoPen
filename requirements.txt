@@ -16,15 +16,10 @@ greynoise
 Pillow
 pytesseract
 pdfkit
-mmh3
-shodan
-mmh3
-shodan
 lightgbm
 pandas
 scikit-learn
 packaging
 django==2.2.16
-
-
-
+urllib3==1.26.4
+Pillow==9.0.0

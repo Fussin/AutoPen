@@ -7,8 +7,6 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
-from .specialized_scan_manager import SpecializedScanManager
-from .plugins.context import ScanContext
 
 def run_url_discovery_phase(scan_id, app):
     """
@@ -217,44 +215,3 @@ def run_execution_phase(scan_id, app):
         finally:
             db.session.commit()
             print(f"Final execution status for scan {scan_id} is {scan.status}.")
-
-
-def run_specialized_scans(scan_id, app):
-    """
-    Runs the specialized scanning phase, including artifact extraction and
-    expanded reconnaissance.
-    """
-    with app.app_context():
-        scan = Scan.query.get(scan_id)
-        if not scan:
-            print(f"Error: Scan {scan_id} not found for specialized scanning phase.")
-            return
-
-        # For now, we assume a single domain target for simplicity
-        domain_target = Target.query.filter_by(scan_id=scan_id, type='domain').first()
-        if not domain_target:
-            print(f"Error: No domain target found for scan {scan_id} to initialize context.")
-            return
-
-        # This assumes a results directory structure exists.
-        from cyberhunter_3d.utils.file_utils import get_results_dir
-        results_dir = get_results_dir(domain_target.value, scan.id)
-        os.makedirs(results_dir, exist_ok=True)
-
-        context = ScanContext(
-            target_domain=domain_target.value,
-            scan_id=scan.id,
-            results_dir=results_dir
-        )
-
-        # In a real application, we would populate the context with data from
-        # previous phases, like live URLs. For now, we create a placeholder.
-        # This part needs to be connected to a real data source in a full integration.
-        context.set("live_urls_2xx", [f"http://{domain_target.value}", f"https://{domain_target.value}"])
-
-        manager = SpecializedScanManager(context)
-        final_context = manager.run()
-
-        # Here you would process the final_context, e.g., save new targets
-        # to the database.
-        print("Specialized scanning complete. Context is now:", final_context.data)
