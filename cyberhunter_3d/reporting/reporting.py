@@ -1,5 +1,24 @@
 import json
 import os
+from .engine import ReportEngine
+
+def generate_3d_report(output_dir: str):
+    """
+    Generates a 3D report using the new report engine.
+    """
+    final_recon_path = os.path.join(output_dir, "final_recon_data.json")
+    if not os.path.exists(final_recon_path):
+        print(f"Error: final_recon_data.json not found in {output_dir}")
+        return
+
+    with open(final_recon_path, 'r') as f:
+        data = json.load(f)
+
+    engine = ReportEngine(data)
+    engine.generate()
+    engine.export(output_dir, formats=['json', 'html'])
+    print(f"3D report generated in {output_dir}")
+
 
 def generate_html_report(output_dir: str, report_path: str):
     """

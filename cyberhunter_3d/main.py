@@ -8,6 +8,7 @@ from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
 from cyberhunter_3d.utils.file_utils import get_results_dir
+from cyberhunter_3d.output import run_output_pipeline
 
 def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str, scan_id: int):
     """
@@ -119,8 +120,10 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
     try:
         with open(final_output_path, 'w') as f: json.dump(final_data, f, indent=4)
         logger.info(f"Successfully aggregated results to {final_output_path}")
+        return final_output_path
     except IOError as e:
         logger.error(f"Failed to write final aggregated file: {e}")
+        return None
 
 @click.group()
 def cli():
@@ -135,7 +138,12 @@ def cli():
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
+
 def scan_command(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
+=======
+@click.option("--run-output-pipeline", is_flag=True, help="Run the output and integration pipeline.")
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, run_output_pipeline):
+
     """
     Run a new reconnaissance scan.
     """
@@ -173,10 +181,18 @@ def scan_command(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, u
             sys.exit(1)
         logger.info(f"Reconnaissance complete for {domain}.")
 
+
     aggregate_results({}, domain, logger, results_dir, scan_id)
 
+    # Always aggregate results at the end
+    final_file_path = aggregate_results({}, domain, logger, results_dir, scan_id)
+
+    if not final_file_path:
+        logger.error("Result aggregation failed. Skipping remaining steps.")
+        sys.exit(1)
+
+
     config = load_config()
-    final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
     logger.info(f"All findings have been aggregated into: {final_file_path}")
 
     if upload_to_r2:
@@ -187,6 +203,14 @@ def scan_command(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, u
         from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
         logger.info("Generating PDF report...")
         generate_pdf_report(scan_id, domain, app)
+
+    if run_output_pipeline:
+        logger.info("Running output and integration pipeline...")
+        with open(final_file_path, 'r') as f:
+            results = json.load(f)
+
+        output_dir = os.path.join(config['recon_output_dir'], 'output')
+        run_output_pipeline(results, config, output_dir)
 
     logger.info("--- Pipeline Finished ---")
 

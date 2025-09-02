@@ -1,0 +1,5 @@
+{
+    "A01:2021-Broken Access Control": "Implement proper access control checks at every level of the application.",
+    "A02:2021-Cryptographic Failures": "Encrypt all sensitive data at rest and in transit. Use strong, up-to-date cryptographic algorithms.",
+    "default": "Follow security best practices and consult with a security professional."
+}
