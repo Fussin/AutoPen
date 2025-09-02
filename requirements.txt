@@ -19,3 +19,5 @@ pdfkit
 lightgbm
 pandas
 scikit-learn
+pyzipper
+requests
