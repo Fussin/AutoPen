@@ -3,7 +3,12 @@ import os
 import json
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
+
+from cyberhunter_3d.main import cli
+from cyberhunter_3d.web.models import Target, Schedule
+
 from cyberhunter_3d.main import main
+
 
 class TestMainCLI(unittest.TestCase):
 
@@ -25,6 +30,7 @@ class TestMainCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         mock_run_url_discovery_phase.assert_called_once()
         mock_aggregate_results.assert_called_once()
+
 
     @patch('cyberhunter_3d.web.models.db.session')
     @patch('cyberhunter_3d.main.enumerate_subdomains_v2')
@@ -54,6 +60,56 @@ class TestMainCLI(unittest.TestCase):
         mock_run_network_scan_phase.assert_called_once()
         mock_run_vulnerability_scan_phase.assert_called_once()
         mock_aggregate_results.assert_called_once()
+
+        self.assertTrue(mock_session.commit.called)
+
+    @patch('run_web.create_app')
+    @patch('cyberhunter_3d.web.models.db.session')
+    def test_monitor_command_set_schedule(self, mock_session, mock_create_app):
+        mock_app = MagicMock()
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = None
+        mock_context.__exit__.return_value = None
+        mock_app.app_context.return_value = mock_context
+        mock_create_app.return_value = mock_app
+
+        mock_target = Target(value='example.com')
+        mock_target.schedule = None
+
+        with patch('cyberhunter_3d.web.models.Target.query') as mock_query:
+            mock_query.filter_by.return_value.first.return_value = mock_target
+
+            result = self.runner.invoke(cli, ['monitor', '--target', 'example.com', '--set-schedule', 'daily'])
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertTrue(mock_session.add.called)
+            self.assertTrue(mock_session.commit.called)
+            self.assertIn("Set new schedule for 'example.com' to 'daily'", result.output)
+
+    @patch('run_web.create_app')
+    @patch('cyberhunter_3d.web.models.db.session')
+    def test_monitor_command_remove_schedule(self, mock_session, mock_create_app):
+        mock_app = MagicMock()
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = None
+        mock_context.__exit__.return_value = None
+        mock_app.app_context.return_value = mock_context
+        mock_create_app.return_value = mock_app
+
+        mock_target = Target(value='example.com')
+        mock_target.schedule = Schedule(target_id=1, frequency='daily')
+
+        with patch('cyberhunter_3d.web.models.Target.query') as mock_query:
+            mock_query.filter_by.return_value.first.return_value = mock_target
+
+            result = self.runner.invoke(cli, ['monitor', '--target', 'example.com', '--remove-schedule'])
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertTrue(mock_session.delete.called)
+            self.assertTrue(mock_session.commit.called)
+            self.assertIn("Removed monitoring schedule for 'example.com'", result.output)
+
+
 
 if __name__ == '__main__':
     unittest.main()
