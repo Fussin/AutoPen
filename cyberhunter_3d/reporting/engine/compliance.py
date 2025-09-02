@@ -1,6 +1,8 @@
 """
 This module generates the compliance section of the report.
 """
+import json
+import os
 
 class Compliance:
     """
@@ -9,15 +11,19 @@ class Compliance:
     def __init__(self, data):
         self.data = data
         self.vulnerabilities = self.data.get("vulnerabilities", [])
-        # In a real implementation, this mapping would be more sophisticated.
-        self.cve_to_owasp = {
-            "CVE-2023-1234": "A01:2021-Broken Access Control",
-            "CVE-2023-5678": "A02:2021-Cryptographic Failures",
-        }
-        self.cve_to_cwe = {
-            "CVE-2023-1234": "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')",
-            "CVE-2023-5678": "CWE-312: Cleartext Storage of Sensitive Information",
-        }
+        self.mappings_dir = os.path.join(os.path.dirname(__file__), 'mappings')
+        self.cve_to_owasp = self._load_mapping('cve_to_owasp.json')
+        self.cve_to_cwe = self._load_mapping('cve_to_cwe.json')
+
+    def _load_mapping(self, filename):
+        """
+        Loads a mapping from a JSON file.
+        """
+        try:
+            with open(os.path.join(self.mappings_dir, filename), 'r') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
 
     def generate(self):
         """

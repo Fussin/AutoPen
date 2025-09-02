@@ -12,7 +12,11 @@ class TestReportEngine(unittest.TestCase):
         self.recon_data = {
             "domain": "example.com",
             "vulnerabilities": [
-                {"cve": "CVE-2023-1234", "severity": "High"},
+                {
+                    "cve": "CVE-2023-1234",
+                    "severity": "High",
+                    "description": "This is a test description for CVE-2023-1234."
+                },
                 {"cve": "CVE-2023-5678", "severity": "Medium"}
             ]
         }
@@ -27,17 +31,30 @@ class TestReportEngine(unittest.TestCase):
         # 1. Instantiate the ReportEngine
         engine = ReportEngine(self.recon_data)
 
-        # 2. Run the generate method
+        # 2. Run the generate method and verify its output
         report = engine.generate()
+
+        # Executive Dashboard Assertions
         self.assertIn('executive_dashboard', report)
         self.assertEqual(report['executive_dashboard']['kpi_metrics']['total_vulnerabilities'], 2)
         self.assertEqual(report['executive_dashboard']['kpi_metrics']['high_vulnerabilities'], 1)
+
+        # Technical Deep Dive Assertions
         self.assertIn('technical_deep_dive', report)
         self.assertEqual(len(report['technical_deep_dive']['vulnerabilities']), 2)
+        self.assertEqual(report['technical_deep_dive']['vulnerabilities'][0]['description'], "This is a test description for CVE-2023-1234.")
+        self.assertIn("A Medium severity vulnerability", report['technical_deep_dive']['vulnerabilities'][1]['description'])
+
+        # Compliance Assertions
         self.assertIn('compliance', report)
         self.assertIn('CVE-2023-1234', report['compliance']['owasp_top_10'])
+
+        # Remediation Guide Assertions
         self.assertIn('remediation_guide', report)
         self.assertIn('CVE-2023-5678', report['remediation_guide']['recommendations'])
+        self.assertEqual(len(report['remediation_guide']['priority_roadmap']), 2)
+        self.assertIn("Priority 1: Address CVE-2023-1234 (High)", report['remediation_guide']['priority_roadmap'][0])
+        self.assertIn('CVE-2023-1234', report['remediation_guide']['patch_timelines'])
 
 
         # 3. Run the export method
@@ -58,6 +75,8 @@ class TestReportEngine(unittest.TestCase):
             html_data = f.read()
             self.assertIn("<h1>3D Security Report</h1>", html_data)
             self.assertIn("CVE: CVE-2023-1234 (High)", html_data)
+            self.assertIn("This is a test description for CVE-2023-1234.", html_data)
+            self.assertIn("Priority 1: Address CVE-2023-1234 (High)", html_data)
 
 
 if __name__ == '__main__':
