@@ -142,8 +142,7 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
-@click.option("--run-output-pipeline", is_flag=True, help="Run the output and integration pipeline.")
-def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, run_output_pipeline):
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
     """
     Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
     """
@@ -202,14 +201,6 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
         logger.info("Generating PDF report...")
         generate_pdf_report(scan_id, domain, app)
-
-    if run_output_pipeline:
-        logger.info("Running output and integration pipeline...")
-        with open(final_file_path, 'r') as f:
-            results = json.load(f)
-
-        output_dir = os.path.join(config['recon_output_dir'], 'output')
-        run_output_pipeline(results, config, output_dir)
 
     logger.info("--- Pipeline Finished ---")
 

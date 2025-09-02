@@ -6,6 +6,10 @@ from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
+import os
+import json
+from cyberhunter_3d.output import run_output_pipeline
+from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
 
 def run_url_discovery_phase(scan_id, app):
@@ -130,6 +134,26 @@ def run_discovery_phase(scan_id, app):
             print(f"Final discovery status for scan {scan_id} is {scan.status}.")
 
 
+def _get_results_for_scan(scan_id):
+    """Helper to aggregate results from the database for a given scan."""
+    subdomain_assets = Asset.query.filter_by(scan_id=scan_id, type='subdomain').all()
+    live_host_assets = Asset.query.filter_by(scan_id=scan_id, type='live_host').all()
+    live_hosts = {asset.value for asset in live_host_assets}
+    vuln_assets = Asset.query.filter_by(scan_id=scan_id, type='vulnerability').all()
+
+    results = {
+        "domain": Scan.query.get(scan_id).targets[0].value,
+        "hosts": [],
+        "vulnerabilities": [asset.details for asset in vuln_assets],
+        "url_discovery": {} # This would need to be populated from the DB if needed
+    }
+
+    for asset in subdomain_assets:
+        is_alive = asset.value in live_hosts
+        results['hosts'].append({'host': asset.value, 'alive': is_alive})
+
+    return results
+
 def run_execution_phase(scan_id, app):
     """
     Performs the intensive execution phase of a scan on assets that have
@@ -207,6 +231,14 @@ def run_execution_phase(scan_id, app):
             )
             scan.status = 'COMPLETED'
             print(f"Scan {scan_id} execution phase complete.")
+
+            # Automatically run the output pipeline
+            print(f"Running output pipeline for scan {scan_id}...")
+            results = _get_results_for_scan(scan_id)
+            config = load_config()
+            output_dir = os.path.join(config['recon_output_dir'], f"{results['domain']}_{scan_id}", 'output')
+            run_output_pipeline(results, config, output_dir)
+            print(f"Output pipeline for scan {scan_id} complete.")
 
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")

@@ -84,28 +84,79 @@ class TestOutputModule(unittest.TestCase):
         send_slack_notification("test message", config)
         mock_post.assert_called_once_with(config["webhook_url"], json={"text": "test message"})
 
+    @patch("requests.get")
     @patch("requests.post")
-    def test_create_jira_issue(self, mock_post):
+    def test_create_jira_issue_no_duplicate(self, mock_post, mock_get):
+        # Simulate no duplicate found
+        mock_get.return_value.json.return_value = {"total": 0}
+
         config = {
             "url": "http://fake.jira.url",
             "user": "user",
             "token": "token",
             "project_key": "PROJ"
         }
-        vuln = {"name": "test vuln", "description": "test desc"}
+        vuln = {"name": "test vuln", "description": "test desc", "risk_level": "High"}
         create_jira_issue(vuln, config)
-        mock_post.assert_called_once()
 
+        mock_get.assert_called_once()
+        mock_post.assert_called_once()
+        # Check that priority is set correctly
+        self.assertEqual(mock_post.call_args.kwargs['json']['fields']['priority']['name'], 'High')
+
+    @patch("requests.get")
     @patch("requests.post")
-    def test_create_github_issue(self, mock_post):
+    def test_create_jira_issue_with_duplicate(self, mock_post, mock_get):
+        # Simulate duplicate found
+        mock_get.return_value.json.return_value = {"total": 1}
+
+        config = {
+            "url": "http://fake.jira.url",
+            "user": "user",
+            "token": "token",
+            "project_key": "PROJ"
+        }
+        vuln = {"name": "test vuln", "description": "test desc", "risk_level": "High"}
+        create_jira_issue(vuln, config)
+
+        mock_get.assert_called_once()
+        mock_post.assert_not_called()
+
+    @patch("requests.get")
+    @patch("requests.post")
+    def test_create_github_issue_no_duplicate(self, mock_post, mock_get):
+        # Simulate no duplicate found
+        mock_get.return_value.json.return_value = {"total_count": 0}
+
         config = {
             "token": "fake_token",
             "owner": "test_owner",
             "repo": "test_repo"
         }
-        vuln = {"name": "test vuln", "description": "test desc"}
+        vuln = {"name": "test vuln", "description": "test desc", "risk_level": "Critical"}
         create_github_issue(vuln, config)
+
+        mock_get.assert_called_once()
         mock_post.assert_called_once()
+        # Check that labels are set correctly
+        self.assertIn("P1-Critical", mock_post.call_args.kwargs['json']['labels'])
+
+    @patch("requests.get")
+    @patch("requests.post")
+    def test_create_github_issue_with_duplicate(self, mock_post, mock_get):
+        # Simulate duplicate found
+        mock_get.return_value.json.return_value = {"total_count": 1}
+
+        config = {
+            "token": "fake_token",
+            "owner": "test_owner",
+            "repo": "test_repo"
+        }
+        vuln = {"name": "test vuln", "description": "test desc", "risk_level": "Critical"}
+        create_github_issue(vuln, config)
+
+        mock_get.assert_called_once()
+        mock_post.assert_not_called()
 
 
 if __name__ == '__main__':
