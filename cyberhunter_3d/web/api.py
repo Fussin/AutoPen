@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import Blueprint, request, jsonify
-from .models import User, db, Scan, Target, Asset
+from .models import User, db, Scan, Target, Asset, Finding
 from cyberhunter_3d.core.target_parser import parse_targets
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from concurrent.futures import ThreadPoolExecutor
@@ -157,3 +157,35 @@ def get_scan_graph(scan_id):
         graph_definition += f'    {scan_node} --> {asset_node}\n'
 
     return jsonify({'graph_definition': graph_definition})
+
+@api_bp.route('/findings/<int:finding_id>/feedback', methods=['POST'])
+@require_api_key
+def submit_finding_feedback(finding_id):
+    """
+    Allows submitting feedback for a finding, which is crucial for the
+    ML model's retraining loop.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Missing request body'}), 400
+
+    finding = Finding.query.get_or_404(finding_id)
+
+    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
+    if finding.scan.user_id != user.id:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    if 'validation_outcome' in data and isinstance(data['validation_outcome'], bool):
+        finding.validation_outcome = data['validation_outcome']
+
+    if 'disposition' in data and isinstance(data['disposition'], str):
+        finding.disposition = data['disposition']
+
+    db.session.commit()
+
+    return jsonify({
+        'message': f'Feedback submitted successfully for finding {finding_id}',
+        'finding_id': finding.id,
+        'validation_outcome': finding.validation_outcome,
+        'disposition': finding.disposition
+    })

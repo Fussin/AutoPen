@@ -218,7 +218,21 @@ def run_execution_phase(scan_id, app):
             exit_code = 1
         finally:
             db.session.commit()
-            print(f"Final execution status for scan {scan_id} is {scan.status}.")
+            print(f"Final execution status for scan {scan_id} is {scan.status}."
+
+            # Since this is run from the web app, we need the domain to initialize the closer.
+            target = Target.query.filter_by(scan_id=scan_id, type='domain').first()
+            if target:
+                session_closer = SessionCloser(
+                    scan_id=scan_id,
+                    app=app,
+                    domain=target.value,
+                    should_upload_to_r2=False, # Web scans currently don't have this option
+                    keep_temp_files=False # Default to cleaning up
+                )
+                session_closer.finalize_session()
+            else:
+                print(f"Could not find domain for scan {scan_id} to finalize session.")
 
             # Since this is run from the web app, we need the domain to initialize the closer.
             target = Target.query.filter_by(scan_id=scan_id, type='domain').first()
@@ -235,27 +249,99 @@ def run_execution_phase(scan_id, app):
                 print(f"Could not find domain for scan {scan_id} to finalize session.")
 
 
-def run_specialized_scans(scan_id, app):
+
+def launch_scan(scan_id, app):
     """
-    Runs the specialized scanning phase, including artifact extraction and
-    expanded reconnaissance.
+    Launches a full scan pipeline for a given scan_id.
+    """
+    print(f"--- Launching full scan for scan_id: {scan_id} ---")
+    # The web UI flow has a manual approval step, so it calls these separately.
+    # For autonomous scans, we run them back-to-back.
+    run_discovery_phase(scan_id, app)
+    run_execution_phase(scan_id, app)
+
+    with app.app_context():
+        scan = db.session.get(Scan, scan_id)
+        if scan and scan.status == 'COMPLETED':
+             _run_continuous_monitoring(scan, app)
+
+    print(f"--- Full scan for scan_id: {scan_id} finished ---")
+
+
+def _run_continuous_monitoring(scan, app):
+    """
+    Run the continuous monitor to compare the given scan with its baseline.
+    """
+    with app.app_context():
+        if not scan.targets:
+            print("No targets found for this scan. Cannot run monitor.")
+            return
+        target = scan.targets[0]
+
+        print(f"Running continuous monitoring for {target.value}. Looking for baseline scan.")
+        baseline_scan = Scan.query.join(Target).filter(
+            Target.value == target.value,
+            Scan.status == 'COMPLETED',
+            Scan.id != scan.id
+        ).order_by(Scan.created_at.desc()).first()
+
+        if not baseline_scan:
+            print(f"No previous completed scan found for {target.value}. This scan will be the new baseline.")
+            return
+
+        print(f"Found baseline scan {baseline_scan.id}. Running monitor against current scan {scan.id}.")
+        monitor = ContinuousMonitor(baseline_scan_id=baseline_scan.id, current_scan_id=scan.id)
+        changes = monitor.compare_assets()
+
+        if not changes:
+            print("No changes detected by the monitor.")
+            return
+
+        # --- Storing Alerts and Notifying ---
+        alerts_to_notify = []
+        for change in changes:
+            alert = Alert(
+                title=change.get('title', 'Untitled Alert'),
+                description=change.get('description', 'No description.'),
+                severity=change.get('severity', 'Info'),
+                details=change.get('details', {}),
+                scan_id=scan.id
+            )
+            db.session.add(alert)
+
+            notification_event = change.copy()
+            notification_event['type'] = 'alert'
+            alerts_to_notify.append(notification_event)
+
+        db.session.commit()
+        print(f"Created {len(changes)} alerts in the database.")
+
+        print("Sending alerts to notification channels...")
+        event_engine = EventEngine(events=alerts_to_notify)
+        event_engine.run()
+
+
+        # Here you would process the final_context, e.g., save new targets
+        # to the database.
+        print("Specialized scanning complete. Context is now:", final_context.data)
+
+def run_network_scan_phase(scan_id, app):
+    """
+    Performs the network scanning phase of a scan on discovered assets.
     """
     with app.app_context():
         scan = Scan.query.get(scan_id)
         if not scan:
-            print(f"Error: Scan {scan_id} not found for specialized scanning phase.")
+            print(f"Error: Scan {scan_id} not found for network scan phase.")
             return
 
-        # For now, we assume a single domain target for simplicity
         domain_target = Target.query.filter_by(scan_id=scan_id, type='domain').first()
         if not domain_target:
             print(f"Error: No domain target found for scan {scan_id} to initialize context.")
             return
 
-        # This assumes a results directory structure exists.
         from cyberhunter_3d.utils.file_utils import get_results_dir
         results_dir = get_results_dir(domain_target.value, scan.id)
-        os.makedirs(results_dir, exist_ok=True)
 
         context = ScanContext(
             target_domain=domain_target.value,
@@ -263,14 +349,31 @@ def run_specialized_scans(scan_id, app):
             results_dir=results_dir
         )
 
-        # In a real application, we would populate the context with data from
-        # previous phases, like live URLs. For now, we create a placeholder.
-        # This part needs to be connected to a real data source in a full integration.
-        context.set("live_urls_2xx", [f"http://{domain_target.value}", f"https://{domain_target.value}"])
+        live_hosts = {asset.value for asset in Asset.query.filter_by(scan_id=scan_id, type='live_host').all()}
+        context.set('validated_subdomains', live_hosts)
 
-        manager = SpecializedScanManager(context)
-        final_context = manager.run()
+        plugin_manager = PluginManager()
+        network_plugins = ['Nmap Scan', 'Naabu Scan', 'Masscan Scan']
+        plugin_manager.run_all_plugins(context, include_plugins=network_plugins)
 
-        # Here you would process the final_context, e.g., save new targets
-        # to the database.
-        print("Specialized scanning complete. Context is now:", final_context.data)
+        # Persist results
+        open_ports = context.get('open_ports', {})
+        for host, ports in open_ports.items():
+            asset = Asset.query.filter_by(scan_id=scan_id, value=host).first()
+            if asset:
+                if asset.details:
+                    asset.details['open_ports'] = ports
+                else:
+                    asset.details = {'open_ports': ports}
+        db.session.commit()
+        print(f"Network scan phase for scan {scan_id} complete.")
+
+def run_vulnerability_scan_phase(scan_id, app):
+    """
+    Wrapper for the specialized scanning phase which includes vulnerability scanning.
+    """
+    print(f"Starting vulnerability scan phase for scan {scan_id}.")
+    run_specialized_scans(scan_id, app)
+    print(f"Vulnerability scan phase for scan {scan_id} complete.")
+
+
