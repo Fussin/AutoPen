@@ -23,6 +23,9 @@ class TriageEngine:
         The main entry point for the triage process.
         """
         log.info("Starting Triage Engine...")
+
+        # In a real run, this would be populated by the SpecializedScanManager
+
         raw_results = self.context.get("specialized_scan_results", {})
 
         self._normalize_results(raw_results)
@@ -105,9 +108,17 @@ class TriageEngine:
                 "raw_evidence": [norm_finding["details"]],
                 "finding_signature": signature,
                 "asset_context": norm_finding["asset_context"],
+
                 "confidence": self.confidence_model.predict(norm_finding),
                 "validation_outcome": None,
                 "disposition": None,
+
+                # These will be populated by later stages
+                "confidence": self.confidence_model.predict(norm_finding),
+                "validation_outcome": None,
+                "disposition": None,
+                # These fields are useful for the next stages but not part of the DB model
+
                 "host": host,
                 "vulnerability_type": norm_finding["vulnerability_type"],
                 "tags": {norm_finding["source_tool"]}

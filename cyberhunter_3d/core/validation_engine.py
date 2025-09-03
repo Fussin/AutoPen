@@ -14,7 +14,12 @@ class ValidationHandler(ABC):
 
 class TimeBasedSQLiHandler(ValidationHandler):
     """
+
     Validates time-based SQL injection vulnerabilities.
+
+    Validates time-based SQL injection vulnerabilities by re-testing with a
+    safe, time-delay payload.
+
     """
     def validate(self, finding: Dict[str, Any]) -> bool:
         nuclei_evidence = next((ev for ev in finding.get("raw_evidence", []) if ev.get("template-id")), None)
@@ -43,7 +48,12 @@ class TimeBasedSQLiHandler(ValidationHandler):
 
 class ValidationEngine:
     """
+
     The Validation Engine updates findings with their validation outcome.
+
+    The Validation Engine is responsible for safely validating high-impact,
+    high-confidence findings and updating them with the validation outcome.
+
     """
     def __init__(self, findings: List[Dict[str, Any]]):
         self.findings = findings
@@ -54,9 +64,16 @@ class ValidationEngine:
 
     def run(self) -> List[Dict[str, Any]]:
         """
+
         Iterates through findings, attempts to validate them, and updates them.
         """
         log.info(f"Starting validation for {len(self.findings)} findings...")
+
+        Iterates through findings, attempts to validate them, and updates
+        their status and validation_outcome fields.
+        """
+        log.info(f"Starting validation process for {len(self.findings)} findings...")
+
         for finding in self.findings:
             if finding.get('confidence', 0.0) < self.confidence_threshold:
                 finding['status'] = 'Validation Skipped (Low Confidence)'
