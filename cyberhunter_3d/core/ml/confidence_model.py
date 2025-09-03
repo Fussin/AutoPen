@@ -32,32 +32,20 @@ class ConfidenceModel:
         """
         Converts raw finding data into features suitable for the model.
         """
+        df_copy = findings_df.copy()
         categorical_features = ['severity', 'finding_signature', 'ctx_source_tool']
 
         # Ensure columns exist, fill NaNs
-
         for col in categorical_features:
-            if col not in findings_df.columns:
-                findings_df[col] = 'missing'
-        findings_df[categorical_features] = findings_df[categorical_features].fillna('missing')
+            if col not in df_copy.columns:
+                df_copy[col] = 'missing'
+        df_copy[categorical_features] = df_copy[categorical_features].fillna('missing')
 
+        # Convert to category dtype, which lightgbm can handle
         for col in categorical_features:
-            if is_training:
-                le = LabelEncoder()
-                findings_df[col] = le.fit_transform(findings_df[col].astype(str))
-                self.label_encoders[col] = le
-            else:
-                if col in self.label_encoders:
-                    le = self.label_encoders[col]
-                    known_labels = list(le.classes_)
-                    findings_df[col] = findings_df[col].astype(str).apply(lambda x: x if x in known_labels else 'missing')
-                    if 'missing' not in le.classes_:
-                        le.classes_ = np.append(le.classes_, 'missing')
-                    findings_df[col] = le.transform(findings_df[col])
-                else:
-                    findings_df[col] = -1
+            df_copy[col] = df_copy[col].astype('category')
 
-        return findings_df[categorical_features]
+        return df_copy[categorical_features]
 
     def train(self, findings_data: List[Dict[str, Any]]):
         """
@@ -65,11 +53,7 @@ class ConfidenceModel:
         """
         log.info(f"Starting confidence model training with {len(findings_data)} records.")
         training_data = [f for f in findings_data if f.get('validation_outcome') is not None]
-
-        if len(training_data) < 10:
-
         if len(training_data) < 10: # Lowered for easier testing
-
             log.warning(f"Not enough validated findings ({len(training_data)}) to train a model. Need at least 10.")
             return
 
@@ -97,14 +81,8 @@ class ConfidenceModel:
             return 0.5
 
         df = pd.DataFrame([finding_data])
-
-        if 'asset_context' in df.columns and not df['asset_context'].isnull().all():
-            asset_context_df = pd.json_normalize(df['asset_context']).add_prefix('ctx_')
-            df = pd.concat([df.drop('asset_context', axis=1), asset_context_df], axis=1)
-
         asset_context_df = pd.json_normalize(df['asset_context']).add_prefix('ctx_')
         df = pd.concat([df.drop('asset_context', axis=1), asset_context_df], axis=1)
-
 
         X = self._preprocess_features(df, is_training=False)
 

@@ -59,7 +59,7 @@ class APITestCase(unittest.TestCase):
 
         # Verify the scan was created in the DB within an app context
         with app.app_context():
-            scan = Scan.query.get(scan_id)
+            scan = db.session.get(Scan, scan_id)
             self.assertIsNotNone(scan)
             self.assertEqual(scan.user_id, self.test_user.id)
 
@@ -147,7 +147,7 @@ class APITestCase(unittest.TestCase):
 
         # 4. Verify the assets in the database
         with app.app_context():
-            scan = Scan.query.get(scan_id)
+            scan = db.session.get(Scan, scan_id)
             self.assertIsNotNone(scan)
             self.assertEqual(scan.status, 'PENDING_REVIEW')
 

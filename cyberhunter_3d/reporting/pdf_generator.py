@@ -1,7 +1,7 @@
 import pdfkit
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import render_template
 from ..core.reconnaissance.utils import load_config
 from ..utils.file_utils import get_results_dir
@@ -29,7 +29,7 @@ def generate_pdf_report(scan_id, domain, app):
     report_context = {
         "domain": domain,
         "scan_id": scan_id,
-        "report_date": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
+        "report_date": datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'),
         "vulnerabilities": report_data.get("vulnerabilities", []),
         "content_discovery": report_data.get("content_discovery", {}),
         "js_analysis": report_data.get("js_analysis", {}),

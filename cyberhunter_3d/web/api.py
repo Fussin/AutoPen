@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import Blueprint, request, jsonify
-from .models import User, db, Scan, Target, Asset, Finding
+from .models import User, db, Scan, Target, Asset
 from cyberhunter_3d.core.target_parser import parse_targets
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from concurrent.futures import ThreadPoolExecutor
@@ -157,6 +157,7 @@ def get_scan_graph(scan_id):
         graph_definition += f'    {scan_node} --> {asset_node}\n'
 
     return jsonify({'graph_definition': graph_definition})
+
 
 @api_bp.route('/findings/<int:finding_id>/feedback', methods=['POST'])
 @require_api_key

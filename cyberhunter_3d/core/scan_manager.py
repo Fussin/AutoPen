@@ -6,21 +6,14 @@ from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
-import os
-import json
-from cyberhunter_3d.output import run_output_pipeline
-from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
-from .specialized_scan_manager import SpecializedScanManager
-from .plugins.context import ScanContext
-from .session_closure import SessionCloser
 
 def run_url_discovery_phase(scan_id, app):
     """
     Performs the URL discovery and vulnerability scanning phase.
     """
     with app.app_context():
-        scan = Scan.query.get(scan_id)
+        scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for URL discovery phase.")
             return
@@ -53,7 +46,7 @@ def run_discovery_phase(scan_id, app):
     It persists discovered assets and sets the scan status to PENDING_REVIEW.
     """
     with app.app_context():
-        scan = Scan.query.get(scan_id)
+        scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for discovery phase.")
             return
@@ -138,6 +131,7 @@ def run_discovery_phase(scan_id, app):
 
 
 
+
 def run_execution_phase(scan_id, app, scanner='naabu'):
 
 def _get_results_for_scan(scan_id):
@@ -159,6 +153,7 @@ def _get_results_for_scan(scan_id):
         results['hosts'].append({'host': asset.value, 'alive': is_alive})
 
     return results
+
 
 def run_execution_phase(scan_id, app):
 
@@ -236,7 +231,9 @@ def run_execution_phase(scan_id, app):
                 f"(including {rdns_found_count} from rDNS and {analytics_found_count} from analytics). "
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
+            scan.status = 'COMPLETED'
             print(f"Scan {scan_id} execution phase complete.")
+
             exit_code = 0
 
 
@@ -249,13 +246,16 @@ def run_execution_phase(scan_id, app):
             print(f"Output pipeline for scan {scan_id} complete.")
 
 
+
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")
             scan.status = 'FAILED'
             scan.results = f"Execution failed with error: {e}"
-            exit_code = 1
         finally:
             db.session.commit()
+
+            print(f"Final execution status for scan {scan_id} is {scan.status}.")
+
             print(f"Final execution status for scan {scan_id} is {scan.status}."
 
             # Since this is run from the web app, we need the domain to initialize the closer.
