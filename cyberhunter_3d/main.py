@@ -19,6 +19,9 @@ from cyberhunter_3d.core.session_closure import SessionCloser
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
+@click.option("--keep-temp-files", is_flag=True, help="Keep temporary files after the scan.")
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, keep_temp_files):
+
 
 
 def scan_command(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
@@ -28,6 +31,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
 
 @click.option("--keep-temp-files", is_flag=True, help="Keep temporary files after the scan.")
 def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, keep_temp_files):
+
 
     """
     Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
@@ -66,6 +70,37 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
                 logger.error("Reconnaissance pipeline did not produce any output.")
                 raise RuntimeError("Reconnaissance pipeline failed.")
             logger.info(f"Reconnaissance complete for {domain}.")
+
+
+        if generate_report:
+            from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
+            logger.info("Generating PDF report...")
+            generate_pdf_report(scan_id, domain, app)
+
+    except Exception as e:
+        logger.error(f"An error occurred during the scan: {e}", exc_info=True)
+        exit_code = 1
+        with app.app_context():
+            scan = Scan.query.get(scan_id)
+            if scan:
+                scan.status = 'FAILED'
+                scan.results = f"Scan failed with error: {e}"
+                db.session.commit()
+    finally:
+        if scan_id:
+            logger.info("--- Initiating Session Closure ---")
+            session_closer = SessionCloser(
+                scan_id=scan_id,
+                app=app,
+                domain=domain,
+                output_paths=output_paths if 'output_paths' in locals() else {},
+                should_upload_to_r2=upload_to_r2,
+                keep_temp_files=keep_temp_files
+            )
+            session_closer.finalize_session()
+
+        logger.info("--- Pipeline Finished ---")
+
 
 
     if url_discovery:
@@ -183,6 +218,7 @@ def monitor_command(target, set_schedule, remove_schedule):
                 click.echo(f"No schedule found for '{target}'. Nothing to remove.")
 
         db.session.commit()
+
 
 
 

@@ -32,6 +32,7 @@ class TestMainCLI(unittest.TestCase):
         mock_aggregator.aggregate_results.assert_called_once()
 
 
+
     @patch('cyberhunter_3d.web.models.db.session')
     @patch('cyberhunter_3d.main.enumerate_subdomains_v2')
     @patch('cyberhunter_3d.main.run_url_discovery_phase')
@@ -60,6 +61,7 @@ class TestMainCLI(unittest.TestCase):
         mock_run_network_scan_phase.assert_called_once()
         mock_run_vulnerability_scan_phase.assert_called_once()
         mock_aggregate_results.assert_called_once()
+
 
         self.assertTrue(mock_session.commit.called)
 

@@ -234,6 +234,20 @@ def run_execution_phase(scan_id, app):
             else:
                 print(f"Could not find domain for scan {scan_id} to finalize session.")
 
+            # Since this is run from the web app, we need the domain to initialize the closer.
+            target = Target.query.filter_by(scan_id=scan_id, type='domain').first()
+            if target:
+                session_closer = SessionCloser(
+                    scan_id=scan_id,
+                    app=app,
+                    domain=target.value,
+                    should_upload_to_r2=False, # Web scans currently don't have this option
+                    keep_temp_files=False # Default to cleaning up
+                )
+                session_closer.finalize_session()
+            else:
+                print(f"Could not find domain for scan {scan_id} to finalize session.")
+
 
 
 def launch_scan(scan_id, app):
