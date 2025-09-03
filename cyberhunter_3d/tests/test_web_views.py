@@ -71,9 +71,14 @@ class TestWebView(unittest.TestCase):
             self.assertIn(b'Vulnerabilities', response.data)
             self.assertIn(b'Test Vuln', response.data)
 
+
+        # Clean up mock files
+        shutil.rmtree(results_dir)
+
             # Clean up mock files
             if os.path.exists(results_dir):
                 shutil.rmtree(results_dir)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,6 @@
 from cyberhunter_3d.web.models import db, Scan, Target, Asset
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
-from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
+from cyberhunter_3d.core.reconnaissance.network_scan import scan_network
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
@@ -137,6 +137,9 @@ def run_discovery_phase(scan_id, app):
             print(f"Final discovery status for scan {scan_id} is {scan.status}.")
 
 
+
+def run_execution_phase(scan_id, app, scanner='naabu'):
+
 def _get_results_for_scan(scan_id):
     """Helper to aggregate results from the database for a given scan."""
     subdomain_assets = Asset.query.filter_by(scan_id=scan_id, type='subdomain').all()
@@ -158,6 +161,7 @@ def _get_results_for_scan(scan_id):
     return results
 
 def run_execution_phase(scan_id, app):
+
     """
     Performs the intensive execution phase of a scan on assets that have
     already been discovered and approved. This includes port scanning and
@@ -183,9 +187,9 @@ def run_execution_phase(scan_id, app):
                 Asset.type.in_(['ip_address', 'cidr'])
             ).all()
             for target in ip_targets:
-                print(f"Port scanning '{target.value}'...")
-                ip_scan_assets = scan_ip_target(target.value)
-                for asset_data in ip_scan_assets:
+                print(f"Port scanning '{target.value}' with {scanner}...")
+                network_scan_assets = scan_network(target.value, scanner=scanner)
+                for asset_data in network_scan_assets:
                     if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
                         db.session.add(Asset(type=asset_data['type'], value=asset_data['value'], details=asset_data.get('details'), scan_id=scan.id))
             db.session.commit()
