@@ -120,8 +120,7 @@ class Finding(db.Model):
     disposition = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
-        return f'<Finding {self.title} ({self.severity})>'
-
+        return f'<Finding {self.title} ({self.severity})>
 
 
 

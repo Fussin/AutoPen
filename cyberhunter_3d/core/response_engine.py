@@ -5,7 +5,9 @@ import requests
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 
+
 # It's better to handle the case where jira is not installed.
+
 try:
     from jira import JIRA
 except ImportError:
@@ -24,7 +26,9 @@ class JiraTicketHandler(ResponseHandler):
     def __init__(self):
         self.jira_client = None
         if not JIRA:
+
             log.info("Jira library not installed. Skipping Jira integration.")
+
             return
         self.jira_url = os.getenv("JIRA_URL")
         self.jira_user = os.getenv("JIRA_USERNAME")

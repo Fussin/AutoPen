@@ -35,6 +35,7 @@ class ConfidenceModel:
         categorical_features = ['severity', 'finding_signature', 'ctx_source_tool']
 
         # Ensure columns exist, fill NaNs
+
         for col in categorical_features:
             if col not in findings_df.columns:
                 findings_df[col] = 'missing'
@@ -64,7 +65,11 @@ class ConfidenceModel:
         """
         log.info(f"Starting confidence model training with {len(findings_data)} records.")
         training_data = [f for f in findings_data if f.get('validation_outcome') is not None]
+
+        if len(training_data) < 10:
+
         if len(training_data) < 10: # Lowered for easier testing
+
             log.warning(f"Not enough validated findings ({len(training_data)}) to train a model. Need at least 10.")
             return
 
@@ -92,8 +97,14 @@ class ConfidenceModel:
             return 0.5
 
         df = pd.DataFrame([finding_data])
+
+        if 'asset_context' in df.columns and not df['asset_context'].isnull().all():
+            asset_context_df = pd.json_normalize(df['asset_context']).add_prefix('ctx_')
+            df = pd.concat([df.drop('asset_context', axis=1), asset_context_df], axis=1)
+
         asset_context_df = pd.json_normalize(df['asset_context']).add_prefix('ctx_')
         df = pd.concat([df.drop('asset_context', axis=1), asset_context_df], axis=1)
+
 
         X = self._preprocess_features(df, is_training=False)
 
