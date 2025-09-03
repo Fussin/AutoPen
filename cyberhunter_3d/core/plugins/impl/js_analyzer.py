@@ -56,6 +56,9 @@ class JavaScriptAnalyzerPlugin(Plugin):
 
         results_dir = context.results_dir
         js_files_list_path = os.path.join(results_dir, "js_files.txt")
+        with open(js_files_list_path, "w") as f:
+            for js_file in js_files:
+                f.write(f"{js_file}\n")
 
         config = load_config()
         tool_commands = config.get("tool_commands", {})
