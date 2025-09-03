@@ -178,10 +178,21 @@ def submit_finding_feedback(finding_id):
     if 'validation_outcome' in data and isinstance(data['validation_outcome'], bool):
         finding.validation_outcome = data['validation_outcome']
 
+
     if 'disposition' in data and isinstance(data['disposition'], str):
         finding.disposition = data['disposition']
 
+
+    if 'disposition' in data and isinstance(data['disposition'], str):
+        finding.disposition = data['disposition']
+
+
+
     db.session.commit()
+
+
+    db.session.commit()
+
 
     return jsonify({
         'message': f'Feedback submitted successfully for finding {finding_id}',
@@ -189,3 +200,6 @@ def submit_finding_feedback(finding_id):
         'validation_outcome': finding.validation_outcome,
         'disposition': finding.disposition
     })
+
+
+

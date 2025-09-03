@@ -23,6 +23,10 @@ from cyberhunter_3d.core.session_closure import SessionCloser
 def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, keep_temp_files):
 
 
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
+
+
+
 
 def scan_command(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
 
@@ -70,6 +74,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
                 logger.error("Reconnaissance pipeline did not produce any output.")
                 raise RuntimeError("Reconnaissance pipeline failed.")
             logger.info(f"Reconnaissance complete for {domain}.")
+
 
 
         if generate_report:
@@ -209,6 +214,18 @@ def monitor_command(target, set_schedule, remove_schedule):
                 schedule_obj = Schedule(target_id=target_obj.id, frequency=set_schedule)
                 db.session.add(schedule_obj)
                 click.echo(f"Set new schedule for '{target}' to '{set_schedule}'.")
+
+
+        elif remove_schedule:
+            if target_obj.schedule:
+                db.session.delete(target_obj.schedule)
+                click.echo(f"Removed monitoring schedule for '{target}'.")
+            else:
+                click.echo(f"No schedule found for '{target}'. Nothing to remove.")
+
+        db.session.commit()
+
+
 
         elif remove_schedule:
             if target_obj.schedule:
