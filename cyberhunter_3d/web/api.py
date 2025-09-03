@@ -1,7 +1,6 @@
-import os
 from functools import wraps
-from flask import Blueprint, request, jsonify, send_from_directory
-from .models import User, db, Scan, Target, Asset
+from flask import Blueprint, request, jsonify
+from .models import User, db, Scan, Target, Asset, Finding
 from cyberhunter_3d.core.target_parser import parse_targets
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from concurrent.futures import ThreadPoolExecutor
@@ -159,23 +158,38 @@ def get_scan_graph(scan_id):
 
     return jsonify({'graph_definition': graph_definition})
 
-@api_bp.route('/scans/<int:scan_id>/output/<path:filename>', methods=['GET'])
+@api_bp.route('/findings/<int:finding_id>/feedback', methods=['POST'])
 @require_api_key
-def get_output_file(scan_id, filename):
-    scan = Scan.query.get_or_404(scan_id)
+def submit_finding_feedback(finding_id):
+    """
+    Allows submitting feedback for a finding, which is crucial for the
+    ML model's retraining loop.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Missing request body'}), 400
+
+    finding = Finding.query.get_or_404(finding_id)
+
     user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
-    if scan.user_id != user.id:
+    if finding.scan.user_id != user.id:
         return jsonify({'error': 'Forbidden'}), 403
 
-    # This is a simplified example; in a real app, you'd get the domain
-    # from the scan object and construct the path more robustly.
-    domain = scan.targets[0].value if scan.targets else 'default'
+    if 'validation_outcome' in data and isinstance(data['validation_outcome'], bool):
+        finding.validation_outcome = data['validation_outcome']
 
-    # Assuming a structure like: <recon_output_dir>/<domain>_<scan_id>/output/
-    output_dir = os.path.join(
-        current_app.config['RECON_OUTPUT_DIR'],
-        f"{domain}_{scan_id}",
-        'output'
-    )
+    if 'disposition' in data and isinstance(data['disposition'], str):
+        finding.disposition = data['disposition']
+
 
     return send_from_directory(output_dir, filename, as_attachment=True)
+
+    db.session.commit()
+
+    return jsonify({
+        'message': f'Feedback submitted successfully for finding {finding_id}',
+        'finding_id': finding.id,
+        'validation_outcome': finding.validation_outcome,
+        'disposition': finding.disposition
+    })
+
