@@ -56,9 +56,6 @@ class JavaScriptAnalyzerPlugin(Plugin):
 
         results_dir = context.results_dir
         js_files_list_path = os.path.join(results_dir, "js_files.txt")
-        with open(js_files_list_path, "w") as f:
-            for js_file in js_files:
-                f.write(f"{js_file}\n")
 
         config = load_config()
         tool_commands = config.get("tool_commands", {})
@@ -108,12 +105,14 @@ class JavaScriptAnalyzerPlugin(Plugin):
         context.set("new_urls_from_js", list(new_urls_from_js))
 
         # --- Save results to files ---
-        js_endpoints_filepath = os.path.join(results_dir, f"js_endpoints_{context.scan_id}.json")
+        filename_template = config.get("output_filenames", {}).get("js_endpoints", "js_endpoints_{scan_id}.json")
+        js_endpoints_filepath = os.path.join(results_dir, filename_template.format(scan_id=context.scan_id))
         with open(js_endpoints_filepath, "w") as f:
             json.dump(all_js_endpoints, f, indent=4)
         log.info(f"JavaScript endpoint analysis results saved to {js_endpoints_filepath}")
 
-        js_secrets_filepath = os.path.join(results_dir, f"js_secrets_{context.scan_id}.json")
+        filename_template = config.get("output_filenames", {}).get("js_secrets", "js_secrets_{scan_id}.json")
+        js_secrets_filepath = os.path.join(results_dir, filename_template.format(scan_id=context.scan_id))
         with open(js_secrets_filepath, "w") as f:
             json.dump(all_js_secrets, f, indent=4)
         log.info(f"JavaScript secret analysis results saved to {js_secrets_filepath}")

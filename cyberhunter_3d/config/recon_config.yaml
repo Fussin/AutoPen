@@ -82,7 +82,9 @@ tool_commands:
   trufflehog_file: "trufflehog filesystem {url} --json"
 
   # Vulnerability Scanning
-  nuclei_scan: "nuclei -l {input_file} -t cves/,misconfiguration/,technologies/ -json -o {output_file} -silent"
+  nuclei_scan: "nuclei -l {input_file} -t {nuclei_templates} -json -o {output_file} -silent"
+  nuclei_takeover_scan: "nuclei -l {input_file} -t http/takeovers/ -json -silent"
+  naabu_scan: "naabu -l {input_file} -top-ports {top_ports} -json -silent"
   dalfox_scan: "dalfox file {input_file} -o {output_file}"
   sqlmap_scan: "sqlmap -m {input_file} --batch --output-dir={output_dir} --risk=3 --level=5"
   dirsearch_scan: "dirsearch -L {input_file} --json-report={output_file}"
@@ -111,6 +113,19 @@ tool_commands:
   # SSRF/XXE
   ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -o {output_file}" # Assumes interactsh server is configured
   xxe_test: "nuclei -l {input_file} -t xxe/ -o {output_file}"
+
+# Filenames for output artifacts
+output_filenames:
+  discovered_paths: "discovered_paths_{scan_id}.json"
+  js_endpoints: "js_endpoints_{scan_id}.json"
+  js_secrets: "js_secrets_{scan_id}.json"
+  httpx_results: "results.json"
+  vulnerabilities: "vulnerabilities_{scan_id}.json"
+
+# External service configurations
+external_services:
+  nvd_api:
+    base_url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
 # Plugin settings
 plugins:

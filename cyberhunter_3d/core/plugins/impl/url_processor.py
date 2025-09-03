@@ -56,7 +56,7 @@ class URLProcessorPlugin(Plugin):
 
         # Define file paths
         all_urls_file = os.path.join(results_dir, "all_urls.txt")
-        httpx_results_file = os.path.join(results_dir, "results.json")
+        httpx_results_file = os.path.join(results_dir, config.get("output_filenames", {}).get("httpx_results", "results.json"))
         live_urls_2xx_file = os.path.join(results_dir, "2xx.txt")
         parameterized_urls_file = os.path.join(results_dir, "p.txt")
         js_files_urls_file = os.path.join(results_dir, "js_files.txt")

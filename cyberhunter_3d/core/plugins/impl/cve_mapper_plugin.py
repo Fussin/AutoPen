@@ -5,6 +5,7 @@ import logging
 from typing import List, Dict
 from ..base import Plugin
 from ..context import ScanContext
+from ...reconnaissance.utils import load_config
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +59,9 @@ class CveMapperPlugin(Plugin):
             log.warning("NVD_API_KEY not set. Skipping CVE query.")
             return []
 
-        base_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+        config = load_config()
+        base_url = config.get("external_services", {}).get("nvd_api", {}).get("base_url", "https://services.nvd.nist.gov/rest/json/cves/2.0")
+
         params = {"cpeName": cpe, "resultsPerPage": 5}
         headers = {"apiKey": api_key}
 

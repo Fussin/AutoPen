@@ -77,7 +77,8 @@ class ContentDiscoveryPlugin(Plugin):
             context.set("discovered_paths", all_discovered_paths)
 
             # Save results to a file for aggregation
-            discovered_paths_filepath = os.path.join(results_dir, f"discovered_paths_{scan_id}.json")
+            filename_template = config.get("output_filenames", {}).get("discovered_paths", "discovered_paths_{scan_id}.json")
+            discovered_paths_filepath = os.path.join(results_dir, filename_template.format(scan_id=scan_id))
             with open(discovered_paths_filepath, "w") as f:
                 json.dump(all_discovered_paths, f, indent=4)
             log.info(f"Discovered paths results saved to {discovered_paths_filepath}")

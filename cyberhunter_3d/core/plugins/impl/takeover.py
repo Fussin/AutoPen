@@ -47,9 +47,9 @@ class TakeoverPlugin(Plugin):
 
         vulnerabilities = []
         try:
-            nuclei_path = self.config['tools']['nuclei']
-            command = [nuclei_path, "-l", target_file, "-t", "http/takeovers/", "-json", "-silent"]
-            result = run_command(command, "", log)
+            command_template = self.config['tool_commands']['nuclei_takeover_scan']
+            command = command_template.format(input_file=target_file)
+            result = run_command(command.split(), "", log)
 
             for line in result.strip().split('\n'):
                 if line:

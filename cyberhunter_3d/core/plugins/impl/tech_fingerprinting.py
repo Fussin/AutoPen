@@ -50,8 +50,10 @@ class TechFingerprintingPlugin(Plugin):
         context.set("tech_fingerprints", tech_fingerprints)
         log.info(f"Fingerprinted technologies for {len(tech_fingerprints)} hosts.")
 
-        naabu_cmd = [naabu_path, "-l", "\n".join(live_hosts), "-top-ports", "100", "-json", "-silent"]
-        naabu_output = run_command(naabu_cmd, context.target_domain, log)
+        command_template = self.config['tool_commands']['naabu_scan']
+        # This is a simplification. A real implementation might need to handle different top-ports values.
+        command = command_template.format(input_file="\n".join(live_hosts), top_ports="100")
+        naabu_output = run_command(command.split(), context.target_domain, log)
 
         open_ports = self._parse_naabu_output(naabu_output)
         context.set("open_ports", open_ports)
