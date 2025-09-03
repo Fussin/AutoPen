@@ -214,7 +214,7 @@ def run_execution_phase(scan_id, app):
             scan.results = f"Execution failed with error: {e}"
         finally:
             db.session.commit()
-            print(f"Final execution status for scan {scan_id} is {scan.status}.")
+            print(f"Final execution status for scan {scan_id} is {scan.status}."
 
 
 
@@ -343,4 +343,5 @@ def run_vulnerability_scan_phase(scan_id, app):
     print(f"Starting vulnerability scan phase for scan {scan_id}.")
     run_specialized_scans(scan_id, app)
     print(f"Vulnerability scan phase for scan {scan_id} complete.")
+
 
