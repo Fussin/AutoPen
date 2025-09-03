@@ -1,4 +1,4 @@
-import unittest
+oximport unittest
 import os
 import json
 import shutil
@@ -63,7 +63,12 @@ class TestReporting(unittest.TestCase):
             self.assertTrue(os.path.exists(pdf_path))
 
             # Clean up
+
             shutil.rmtree(results_dir)
+
+            if os.path.exists(results_dir):
+                shutil.rmtree(results_dir)
+
 
 if __name__ == '__main__':
     unittest.main()

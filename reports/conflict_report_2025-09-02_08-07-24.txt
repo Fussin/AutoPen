@@ -1,0 +1,31 @@
+--- Code Conflict Report ---
+
+#1: Vulnerable Dependency [UNKNOWN]
+  File: requirements.txt
+  Dependency: requests
+    Detected Version: 2.24.0
+    Affected Versions: >= 0, < 2.25.0
+  Description: CRLF injection in requests
+
+#2: Vulnerable Dependency [UNKNOWN]
+  File: requirements.txt
+  Dependency: django
+    Detected Version: 2.2.16
+    Affected Versions: >= 0, < 2.2.17
+  Description: SQL injection in Django
+
+#3: Vulnerable Dependency [UNKNOWN]
+  File: requirements.txt
+  Dependency: urllib3
+    Detected Version: 1.26.4
+    Affected Versions: >= 0, < 1.26.5
+  Description: urllib3 allows CRLF injection
+
+#4: Vulnerable Dependency [UNKNOWN]
+  File: requirements.txt
+  Dependency: pillow
+    Detected Version: 9.0.0
+    Affected Versions: >= 0, < 9.0.1
+  Description: Pillow vulnerable to buffer overflow
+
+--- End of Report ---
