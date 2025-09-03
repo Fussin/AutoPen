@@ -43,8 +43,9 @@ class TestConfidenceModel(unittest.TestCase):
             df[['severity', 'finding_signature', 'ctx_source_tool']], is_training=True
         )
 
-        self.assertTrue(pd.api.types.is_numeric_dtype(features_df['severity']))
-        self.assertEqual(len(self.confidence_model.label_encoders), 3)
+        self.assertTrue(pd.api.types.is_categorical_dtype(features_df['severity']))
+        # The label_encoders dict is no longer used, so we can remove this check
+        # self.assertEqual(len(self.confidence_model.label_encoders), 3)
 
     def test_train_creates_model_file(self):
         self.assertFalse(os.path.exists(self.model_path))

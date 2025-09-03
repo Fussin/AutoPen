@@ -25,7 +25,7 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
     log.info(f"Starting V3 Plugin-Based Reconnaissance for: {domain}")
 
     with app.app_context():
-        scan = Scan.query.get(scan_id)
+        scan = db.session.get(Scan, scan_id)
         if not scan:
             log.error(f"Scan with ID {scan_id} not found.")
             return {}
@@ -34,12 +34,7 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
 
         plugin_manager = PluginManager()
-
-        # Exclude network scanning plugins from this phase
-        network_plugins = ['Nmap Scan', 'Naabu Scan', 'Masscan Scan']
-        plugins_to_run_names = [p.name for p in plugin_manager.plugins if p.name not in network_plugins]
-
-        plugin_manager.run_all_plugins(context, include_plugins=plugins_to_run_names)
+        plugin_manager.run_all_plugins(context)
 
         all_subdomains = context.get('subdomains', set())
 
