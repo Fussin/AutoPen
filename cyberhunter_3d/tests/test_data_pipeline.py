@@ -13,6 +13,16 @@ class TestDataPipeline(unittest.TestCase):
             'data_pipeline': {
                 'in_scope_rules': '*.example.com',
                 'out_of_scope_rules': 'dev.example.com'
+
+            },
+            'hackerone': {
+                'api_user': 'test_user',
+                'api_key': 'test_key'
+            },
+            'bugcrowd': {
+                'api_user': 'test_user',
+                'api_key': 'test_key'
+
             }
         }
 
@@ -71,6 +81,7 @@ class TestDataPipeline(unittest.TestCase):
         self.assertEqual(prioritized_queue.popleft(), ("test.example.com", "domain"))
         self.assertEqual(prioritized_queue.popleft(), ("192.168.1.1", "ip_address"))
 
+
     @patch('cyberhunter_3d.core.data_pipeline.get_subdomains_from_crtsh')
     def test_fetch_autonomous_targets(self, mock_get_subdomains):
         """Test the autonomous target fetching method."""
@@ -104,6 +115,31 @@ class TestDataPipeline(unittest.TestCase):
             "api.autonomous.com",
             "www.autonomous.com" # Duplicate
         ]
+
+    @patch('cyberhunter_3d.core.data_pipeline.get_bugcrowd_programs')
+    @patch('cyberhunter_3d.core.data_pipeline.get_hackerone_scopes')
+    def test_run_autonomous_mode(self, mock_get_h1_scopes, mock_get_bc_scopes):
+        """Test the end-to-end autonomous run with both HackerOne and Bugcrowd."""
+        mock_h1_programs = [
+            {
+                'name': 'h1-program',
+                'targets': ['h1.example.com'],
+                'in_scope_rules': '*.example.com',
+                'out_of_scope_rules': ''
+            }
+        ]
+        mock_bc_programs = [
+            {
+                'name': 'bc-program',
+                'targets': ['bc.example.com'],
+                'in_scope_rules': '*.example.com',
+                'out_of_scope_rules': ''
+            }
+        ]
+        mock_get_h1_scopes.return_value = mock_h1_programs
+        mock_get_bc_scopes.return_value = mock_bc_programs
+
+
         pipeline = DataPipeline(config=self.mock_config)
         seed_domain = "autonomous.com"
 
@@ -112,11 +148,20 @@ class TestDataPipeline(unittest.TestCase):
         # Check that dynamic scope was generated and used
         self.assertTrue(pipeline.scope_validator.is_in_scope("www.autonomous.com"))
 
+
         # Check the final processed queue
         result_list = list(result_queue)
         self.assertEqual(len(result_list), 2)
         self.assertIn(("www.autonomous.com", "domain"), result_list)
         self.assertIn(("api.autonomous.com", "domain"), result_list)
+
+        mock_get_h1_scopes.assert_called_once_with('test_user', 'test_key')
+        mock_get_bc_scopes.assert_called_once_with('test_user', 'test_key')
+
+        self.assertEqual(len(programs), 2)
+        self.assertEqual(programs[0]['name'], 'h1-program')
+        self.assertEqual(programs[1]['name'], 'bc-program')
+
 
 if __name__ == '__main__':
     unittest.main()

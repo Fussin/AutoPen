@@ -4,7 +4,12 @@ from typing import Deque, List, Tuple
 from .target_parser import parse_targets
 from .scope_validator import ScopeValidator
 from .reconnaissance.utils import load_config
+
 from .feeds.crtsh_client import get_subdomains_from_crtsh
+
+from .feeds.hackerone_client import get_hackerone_scopes
+from .feeds.bugcrowd_client import get_bugcrowd_programs
+
 
 
 class DataPipeline:
@@ -28,6 +33,16 @@ class DataPipeline:
 
         self.scope_validator = ScopeValidator(in_scope_rules, out_of_scope_rules)
         self.processed_targets_queue: Deque[Tuple[str, str]] = deque()
+
+
+        hackerone_config = config.get('hackerone', {})
+        self.h1_user = hackerone_config.get('api_user')
+        self.h1_key = hackerone_config.get('api_key')
+
+        bugcrowd_config = config.get('bugcrowd', {})
+        self.bc_user = bugcrowd_config.get('api_user')
+        self.bc_key = bugcrowd_config.get('api_key')
+
 
     def run(self, raw_targets: List[str]) -> Deque[Tuple[str, str]]:
         """
@@ -132,9 +147,13 @@ class DataPipeline:
 
         :param seed_domain: The domain to use for generating the scope.
         """
+
         print(f"Generating dynamic scope for seed: {seed_domain}")
         # A simple dynamic scope: the domain and all its subdomains.
         in_scope_rule = f"*.{seed_domain}\n{seed_domain}"
+
+        Runs the pipeline in autonomous mode by fetching targets from HackerOne and Bugcrowd.
+
 
         # For this simple case, we assume no out-of-scope rules are
         # dynamically generated, but this could be expanded.
@@ -145,6 +164,7 @@ class DataPipeline:
 
     def run_autonomous(self, seed_domain: str) -> Deque[Tuple[str, str]]:
         """
+
         Runs the pipeline in autonomous mode.
 
         1. Generates a dynamic scope from the seed domain.
@@ -162,3 +182,24 @@ class DataPipeline:
 
         # Step 3: Run the standard pipeline on the fetched targets
         return self.run(raw_targets)
+
+        all_programs = []
+
+        if self.h1_user and self.h1_key:
+            print("Fetching programs from HackerOne...")
+            h1_programs = get_hackerone_scopes(self.h1_user, self.h1_key)
+            all_programs.extend(h1_programs)
+            print(f"Found {len(h1_programs)} programs on HackerOne.")
+        else:
+            print("HackerOne API user or key not configured. Skipping.")
+
+        if self.bc_user and self.bc_key:
+            print("Fetching programs from Bugcrowd...")
+            bc_programs = get_bugcrowd_programs(self.bc_user, self.bc_key)
+            all_programs.extend(bc_programs)
+            print(f"Found {len(bc_programs)} programs on Bugcrowd.")
+        else:
+            print("Bugcrowd API user or key not configured. Skipping.")
+
+        return all_programs
+
