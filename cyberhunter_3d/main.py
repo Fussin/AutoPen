@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import click
+from cyberhunter_3d.core.data_pipeline import DataPipeline
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.scan_manager import run_url_discovery_phase
 from cyberhunter_3d.core.reconnaissance.utils import load_config
@@ -136,7 +137,8 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
 @click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
 @click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
 @click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
-def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report):
+@click.option("--autonomous", is_flag=True, help="Run the data pipeline in autonomous mode for the given domain.")
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, autonomous):
     """
     Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
     """
@@ -144,10 +146,22 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
     logger = setup_logger('main.log', level=log_level)
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
 
+
     # Run pre-scan health checks
     if not run_health_checks():
         logger.critical("Pre-scan health checks failed. Aborting scan.")
         sys.exit(1)
+
+    if autonomous:
+        logger.info(f"Starting autonomous pipeline run for seed domain: {domain}")
+        pipeline = DataPipeline()
+        processed_targets = pipeline.run_autonomous(seed_domain=domain)
+        logger.info(f"Autonomous pipeline finished. Found {len(processed_targets)} targets.")
+        for target_value, target_type in processed_targets:
+            logger.info(f"  - Type: {target_type}, Value: {target_value}")
+        logger.info("--- Autonomous Run Finished ---")
+        return
+
 
     from run_web import create_app
     from cyberhunter_3d.web.models import db, Scan, Target
