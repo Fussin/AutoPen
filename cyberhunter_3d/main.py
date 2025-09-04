@@ -128,44 +128,12 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
     except IOError as e:
         logger.error(f"Failed to write final aggregated file: {e}")
 
-
-@click.command()
-@click.option("-d", "--domain", required=True, help="The target domain for reconnaissance.")
-@click.option("-v", "--verbose", is_flag=True, help="Enable verbose output.")
-@click.option("--upload-to-r2", is_flag=True, help="Upload results to Cloudflare R2.")
-@click.option("--save-to-db", is_flag=True, help="Save the scan results to the database.")
-@click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
-@click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
-@click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
-@click.option("--autonomous", is_flag=True, help="Run the data pipeline in autonomous mode for the given domain.")
-def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, autonomous):
+def initiate_scan(domain: str, app, logger, url_discovery: bool, upload_to_r2: bool, generate_report: bool):
     """
-    Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
+    Initiates a scan for a single domain.
     """
-    log_level = 'DEBUG' if verbose else 'INFO'
-    logger = setup_logger('main.log', level=log_level)
-    logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
-
-
-    # Run pre-scan health checks
-    if not run_health_checks():
-        logger.critical("Pre-scan health checks failed. Aborting scan.")
-        sys.exit(1)
-
-    if autonomous:
-        logger.info(f"Starting autonomous pipeline run for seed domain: {domain}")
-        pipeline = DataPipeline()
-        processed_targets = pipeline.run_autonomous(seed_domain=domain)
-        logger.info(f"Autonomous pipeline finished. Found {len(processed_targets)} targets.")
-        for target_value, target_type in processed_targets:
-            logger.info(f"  - Type: {target_type}, Value: {target_value}")
-        logger.info("--- Autonomous Run Finished ---")
-        return
-
-
-    from run_web import create_app
     from cyberhunter_3d.web.models import db, Scan, Target
-    app = create_app()
+    logger.info(f"Initiating scan for domain: {domain}")
     with app.app_context():
         # For CLI runs, we create a new scan object to track the operation.
         target = Target(value=domain, type='domain')
@@ -196,7 +164,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
             )
             if not output_paths:
                 logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
-                sys.exit(1)
+                return
             logger.info(f"Reconnaissance complete for {domain}.")
             scan_events = context.scan_events if context else []
 
@@ -217,11 +185,73 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
             generate_pdf_report(scan_id, domain, app)
 
     except CriticalError as e:
-        logger.critical(f"A critical error occurred: {e}. The pipeline will now exit.")
-        sys.exit(1)
+        logger.critical(f"A critical error occurred during scan for {domain}: {e}.")
     except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
+        logger.error(f"An unexpected error occurred during scan for {domain}: {e}")
+
+@click.command()
+@click.option("-d", "--domain", required=False, help="The target domain for reconnaissance.")
+@click.option("-v", "--verbose", is_flag=True, help="Enable verbose output.")
+@click.option("--upload-to-r2", is_flag=True, help="Upload results to Cloudflare R2.")
+@click.option("--save-to-db", is_flag=True, help="Save the scan results to the database.")
+@click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
+@click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
+@click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
+@click.option("--autonomous", is_flag=True, help="Run the data pipeline in autonomous mode for the given domain.")
+def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, autonomous):
+    """
+    Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
+    """
+    log_level = 'DEBUG' if verbose else 'INFO'
+    logger = setup_logger('main.log', level=log_level)
+    logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
+
+
+    # Run pre-scan health checks
+    if not run_health_checks():
+        logger.critical("Pre-scan health checks failed. Aborting scan.")
         sys.exit(1)
+
+    if autonomous:
+        logger.info("Starting autonomous pipeline run...")
+        from run_web import create_app
+        app = create_app()
+
+        pipeline = DataPipeline()
+        programs = pipeline.run_autonomous()
+
+        logger.info(f"Autonomous pipeline will scan {len(programs)} programs.")
+
+        for program in programs:
+            program_name = program.get('name', 'unknown-program')
+            logger.info(f"Processing program: {program_name}")
+
+            in_scope_rules = program.get('in_scope_rules', '')
+            out_of_scope_rules = program.get('out_of_scope_rules', '')
+
+            program_pipeline = DataPipeline(
+                in_scope_rules=in_scope_rules,
+                out_of_scope_rules=out_of_scope_rules
+            )
+
+            validated_targets = program_pipeline.run(program.get('targets', []))
+
+            logger.info(f"Found {len(validated_targets)} in-scope targets for {program_name}.")
+
+            for target, _ in validated_targets:
+                initiate_scan(target, app, logger, url_discovery, upload_to_r2, generate_report)
+
+        logger.info("--- Autonomous Run Finished ---")
+        return
+
+    if not domain:
+        logger.error("A domain must be provided if not running in autonomous mode.")
+        sys.exit(1)
+
+
+    from run_web import create_app
+    app = create_app()
+    initiate_scan(domain, app, logger, url_discovery, upload_to_r2, generate_report)
 
     logger.info("--- Pipeline Finished ---")
 
