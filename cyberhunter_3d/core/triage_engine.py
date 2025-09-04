@@ -99,8 +99,6 @@ class TriageEngine:
                 description = "An unclassified finding was reported."
 
             finding_dict = {
-                "scan_id": self.context.get("scan_id"),
-                "target_domain": self.context.get("target_domain"),
                 "title": title,
                 "severity": norm_finding['severity'],
                 "status": "New",

@@ -4,6 +4,10 @@
     <h2>Dashboard</h2>
     <div>
       <span style="margin-right: 1em;">Welcome, {{ current_user.username }}!</span>
+<<<<<<< HEAD
+      <a href="{{ url_for('user_journey.show_user_journey') }}" class="button" style="background-color: #17a2b8;">View Workflow</a>
+=======
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
       <a href="{{ url_for('profile') }}" class="button">Profile</a>
       <a href="{{ url_for('logout') }}" class="button" style="background-color: #d9534f; margin-left: 1em;">Logout</a>
     </div>

@@ -29,7 +29,6 @@ class Scan(db.Model):
     Scan model to track a reconnaissance job.
     """
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=True)
     status = db.Column(db.String(20), nullable=False, default='QUEUED')
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -108,6 +107,8 @@ class Finding(db.Model):
 
     def __repr__(self):
         return f'<Finding {self.title} ({self.severity})>'
+<<<<<<< HEAD
+=======
 
 class Alert(db.Model):
     """
@@ -123,3 +124,4 @@ class Alert(db.Model):
 
     def __repr__(self):
         return f'<Alert {self.id} for Finding {self.finding_id}>'
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147

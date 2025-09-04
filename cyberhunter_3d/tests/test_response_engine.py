@@ -1,12 +1,21 @@
 import unittest
+<<<<<<< HEAD
+import json
+from unittest.mock import patch, MagicMock
+from cyberhunter_3d.core.response_engine import ResponseEngine, JiraTicketHandler
+=======
 from unittest.mock import patch, MagicMock
 from cyberhunter_3d.core.response_engine import ResponseEngine
 from run_web import app
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
 
 class TestResponseEngineEvents(unittest.TestCase):
 
     def setUp(self):
         self.validated_finding = {
+<<<<<<< HEAD
+            "title": "Test Vulnerability", "status": "Validated",
+=======
             "scan_id": 1,
             "target_domain": "example.com",
             "title": "Test Vulnerability",
@@ -20,9 +29,29 @@ class TestResponseEngineEvents(unittest.TestCase):
             "title": "Critical Vulnerability",
             "status": "Validated",
             "severity": "Critical",
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
             "disposition": None
         }
 
+<<<<<<< HEAD
+    @patch.object(JiraTicketHandler, 'handle', return_value="Ticket-123")
+    def test_engine_updates_disposition(self, mock_jira_handle):
+        """
+        Tests that the engine correctly updates the disposition field after a
+        handler takes action.
+        """
+        findings = [self.validated_finding, self.unvalidated_finding]
+        engine = ResponseEngine(findings)
+        results = engine.run()
+
+        # Handler should only be called for the validated finding
+        mock_jira_handle.assert_called_once_with(self.validated_finding)
+
+        # Check that the disposition was updated correctly
+        self.assertEqual(results[0]['disposition'], "Ticket-123")
+        # Check that the unvalidated finding was not modified
+        self.assertIsNone(results[1].get('disposition'))
+=======
     def test_critical_finding_event(self):
         """
         Verify the correct handlers are called for a CRITICAL_FINDING_DETECTED event.
@@ -68,6 +97,7 @@ class TestResponseEngineEvents(unittest.TestCase):
             engine.all_handlers['slack'].handle.assert_not_called()
             engine.all_handlers['jira'].handle.assert_not_called()
             engine.all_handlers['sms'].handle.assert_not_called()
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
 
 if __name__ == '__main__':
     unittest.main()

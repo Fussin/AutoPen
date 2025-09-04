@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}User Journey Map - CyberHunter 3D{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>User Journey Map</h2>
+        <a href="{{ url_for('dashboard') }}" class="button">Back to Dashboard</a>
+    </div>
+    <p>This map outlines the conceptual user flow and the new autonomous capabilities of the CyberHunter 3D platform.</p>
+
+    <div class="card">
+        <div class="card-header">
+            Platform Workflow
+        </div>
+        <div class="card-body" style="background-color: #333; padding: 2em;">
+            <pre class="mermaid">
+                graph TD
+                    subgraph "1. LOGIN"
+                        A[3D Holographic Portal] --> B[Biometric Scan] --> C[Dashboard]
+                    end
+
+                    subgraph "2. TARGET INPUT (Manual or Automated)"
+                        direction LR
+                        D[Manual Input] --> F(Start Scan)
+                        E[Automated H1 Feed] --> F
+                    end
+
+                    subgraph "3. SCAN CONFIGURATION (AI-Powered)"
+                        F --> G{AI Profile Selector}
+                        G -- "User selects 'Full'" --> H[Full Plugin Set]
+                        G -- "User selects 'Passive' or Automated" --> I[Passive Plugin Set]
+                    end
+
+                    subgraph "4. SCAN & ANALYSIS (Autonomous)"
+                        J[Plugin-Based Scan]
+                        H --> J
+                        I --> J
+                        J --> K[Triage Engine]
+                        K -- "Severity & Confidence Rules" --> L{Auto-Triaged Findings}
+                    end
+
+                    subgraph "5. NOTIFICATION (Autonomous)"
+                        L --> M[Response Engine]
+                        M --> N[Log to notifications.log]
+                        M --> O[Create Jira Ticket]
+                    end
+
+                    subgraph "6. REVIEW"
+                       O --> P[Human Review in Jira]
+                       N --> P
+                    end
+            </pre>
+        </div>
+    </div>
+</div>
+{% endblock %}

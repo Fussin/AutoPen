@@ -7,7 +7,6 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
-from cyberhunter_3d.core.notifications.notification_manager import NotificationManager
 
 def run_url_discovery_phase(scan_id, app):
     """
@@ -17,13 +16,17 @@ def run_url_discovery_phase(scan_id, app):
         scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for URL discovery phase.")
-            return None
+            return
 
         for target in scan.targets:
             # Assuming the main target for URL discovery is the 'domain' type
             if target.type == 'domain':
+<<<<<<< HEAD
+                discover_urls(target.value, scan_id, app)
+=======
                 return discover_urls(target.value, scan_id, app)
         return None
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
 
 def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
     """Helper to create a new asset if it is in scope and doesn't already exist."""
@@ -54,11 +57,6 @@ def run_discovery_phase(scan_id, app):
             return
 
         try:
-            notification_manager = NotificationManager()
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has started the discovery phase."
-            )
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} discovery phase started.")
@@ -126,10 +124,13 @@ def run_discovery_phase(scan_id, app):
 
             scan.results = f"Discovery phase complete. Found {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
             scan.status = 'PENDING_REVIEW'
+<<<<<<< HEAD
+=======
             notification_manager.send_notification(
                 "slack",
                 f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed the discovery phase. {in_scope_count} new assets found."
             )
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
             print(f"Scan {scan_id} discovery phase complete.")
 
         except Exception as e:
@@ -154,11 +155,6 @@ def run_execution_phase(scan_id, app):
             return
 
         try:
-            notification_manager = NotificationManager()
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has started the execution phase."
-            )
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} execution phase started.")
@@ -222,10 +218,13 @@ def run_execution_phase(scan_id, app):
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
             scan.status = 'COMPLETED'
+<<<<<<< HEAD
+=======
             notification_manager.send_notification(
                 "slack",
                 f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed successfully."
             )
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
             print(f"Scan {scan_id} execution phase complete.")
 
         except Exception as e:
