@@ -8,7 +8,7 @@ from cyberhunter_3d.core.scan_manager import run_url_discovery_phase
 from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
-from cyberhunter_3d.utils.file_utils import get_results_dir
+from cyberhunter_3d.utils.file_utils import get_results_dir, create_scan_results_structure
 from cyberhunter_3d.core.error_handler import handle_module_errors, CriticalError
 from cyberhunter_3d.core.health_checker import run_health_checks
 
@@ -128,9 +128,69 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
     except IOError as e:
         logger.error(f"Failed to write final aggregated file: {e}")
 
+def initiate_scan(domain: str, app, logger, url_discovery: bool, upload_to_r2: bool, generate_report: bool):
+    """
+    Initiates a scan for a single domain.
+    """
+    from cyberhunter_3d.web.models import db, Scan, Target
+    logger.info(f"Initiating scan for domain: {domain}")
+    with app.app_context():
+        # For CLI runs, we create a new scan object to track the operation.
+        target = Target(value=domain, type='domain')
+        # Assuming user_id=1 for all CLI-initiated scans.
+        scan = Scan(status='RUNNING', user_id=1)
+        scan.targets.append(target)
+        db.session.add(target)
+        db.session.add(scan)
+        db.session.commit()
+        scan_id = scan.id
+
+    results_dir = get_results_dir(domain, scan_id)
+    create_scan_results_structure(results_dir)
+
+    try:
+        scan_events = []
+        if url_discovery:
+            logger.info(f"Starting URL discovery for: {domain}")
+            run_url_discovery_phase(scan_id, app)
+            logger.info("URL discovery finished.")
+        else:
+            logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
+            # Run the full subdomain enumeration pipeline
+            output_paths, context, _ = enumerate_subdomains_v2(
+                domain=domain,
+                scan_id=scan_id,
+                app=app
+            )
+            if not output_paths:
+                logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
+                return
+            logger.info(f"Reconnaissance complete for {domain}.")
+            scan_events = context.scan_events if context else []
+
+        # Always aggregate results at the end
+        aggregate_results({}, domain, logger, results_dir, scan_id, scan_events=scan_events)
+
+        config = load_config()
+        final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
+        logger.info(f"All findings have been aggregated into: {final_file_path}")
+
+        if upload_to_r2:
+            logger.info("R2 upload flag is set. Initiating upload...")
+            upload_to_r2(logger, file_path=final_file_path)
+
+        if generate_report:
+            from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
+            logger.info("Generating PDF report...")
+            generate_pdf_report(scan_id, domain, app)
+
+    except CriticalError as e:
+        logger.critical(f"A critical error occurred during scan for {domain}: {e}.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during scan for {domain}: {e}")
 
 @click.command()
-@click.option("-d", "--domain", required=True, help="The target domain for reconnaissance.")
+@click.option("-d", "--domain", required=False, help="The target domain for reconnaissance.")
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose output.")
 @click.option("--upload-to-r2", is_flag=True, help="Upload results to Cloudflare R2.")
 @click.option("--save-to-db", is_flag=True, help="Save the scan results to the database.")
@@ -153,74 +213,45 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         sys.exit(1)
 
     if autonomous:
-        logger.info(f"Starting autonomous pipeline run for seed domain: {domain}")
+        logger.info("Starting autonomous pipeline run...")
+        from run_web import create_app
+        app = create_app()
+
         pipeline = DataPipeline()
-        processed_targets = pipeline.run_autonomous(seed_domain=domain)
-        logger.info(f"Autonomous pipeline finished. Found {len(processed_targets)} targets.")
-        for target_value, target_type in processed_targets:
-            logger.info(f"  - Type: {target_type}, Value: {target_value}")
+        programs = pipeline.run_autonomous()
+
+        logger.info(f"Autonomous pipeline will scan {len(programs)} programs.")
+
+        for program in programs:
+            program_name = program.get('name', 'unknown-program')
+            logger.info(f"Processing program: {program_name}")
+
+            in_scope_rules = program.get('in_scope_rules', '')
+            out_of_scope_rules = program.get('out_of_scope_rules', '')
+
+            program_pipeline = DataPipeline(
+                in_scope_rules=in_scope_rules,
+                out_of_scope_rules=out_of_scope_rules
+            )
+
+            validated_targets = program_pipeline.run(program.get('targets', []))
+
+            logger.info(f"Found {len(validated_targets)} in-scope targets for {program_name}.")
+
+            for target, _ in validated_targets:
+                initiate_scan(target, app, logger, url_discovery, upload_to_r2, generate_report)
+
         logger.info("--- Autonomous Run Finished ---")
         return
 
+    if not domain:
+        logger.error("A domain must be provided if not running in autonomous mode.")
+        sys.exit(1)
+
 
     from run_web import create_app
-    from cyberhunter_3d.web.models import db, Scan, Target
     app = create_app()
-    with app.app_context():
-        # For CLI runs, we create a new scan object to track the operation.
-        target = Target(value=domain, type='domain')
-        # Assuming user_id=1 for all CLI-initiated scans.
-        scan = Scan(status='RUNNING', user_id=1)
-        scan.targets.append(target)
-        db.session.add(target)
-        db.session.add(scan)
-        db.session.commit()
-        scan_id = scan.id
-
-    results_dir = get_results_dir(domain, scan_id)
-
-    try:
-        scan_events = []
-        if url_discovery:
-            logger.info(f"Starting URL discovery for: {domain}")
-            run_url_discovery_phase(scan_id, app)
-            logger.info("URL discovery finished.")
-        else:
-            logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
-            # Run the full subdomain enumeration pipeline
-            output_paths, context, _ = enumerate_subdomains_v2(
-                domain=domain,
-                scan_id=scan_id,
-                app=app
-            )
-            if not output_paths:
-                logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
-                sys.exit(1)
-            logger.info(f"Reconnaissance complete for {domain}.")
-            scan_events = context.scan_events if context else []
-
-        # Always aggregate results at the end
-        aggregate_results({}, domain, logger, results_dir, scan_id, scan_events=scan_events)
-
-        config = load_config()
-        final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
-        logger.info(f"All findings have been aggregated into: {final_file_path}")
-
-        if upload_to_r2:
-            logger.info("R2 upload flag is set. Initiating upload...")
-            upload_to_r2(logger, file_path=final_file_path)
-
-        if generate_report:
-            from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
-            logger.info("Generating PDF report...")
-            generate_pdf_report(scan_id, domain, app)
-
-    except CriticalError as e:
-        logger.critical(f"A critical error occurred: {e}. The pipeline will now exit.")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
-        sys.exit(1)
+    initiate_scan(domain, app, logger, url_discovery, upload_to_r2, generate_report)
 
     logger.info("--- Pipeline Finished ---")
 

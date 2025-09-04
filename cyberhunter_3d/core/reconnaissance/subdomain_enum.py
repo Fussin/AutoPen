@@ -2,8 +2,10 @@ import logging
 from ..plugins.manager import PluginManager
 from ..plugins.context import ScanContext
 from cyberhunter_3d.utils.file_utils import save_to_json, get_results_dir
-from ...web.models import Scan, Asset, db
+from ..ai.scan_config_selector import AIScanConfigSelector
+from ...web.models import Scan, Asset, Finding, db
 from ..error_handler import handle_module_errors, CriticalError
+from ..triage_engine import TriageEngine
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +38,16 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
         context.add_event("INFO", "Starting V3 Plugin-Based Reconnaissance.")
 
+        # AI-Powered Scan Configuration
+        ai_selector = AIScanConfigSelector()
+        # Use the scan_type from the database to drive the AI's decision
+        target_info = {'scan_type': scan.scan_type}
+        recommended_plugins = ai_selector.select_plugins(target_info)
+
+        context.add_event("INFO", f"AI recommended plugins: {recommended_plugins}")
+
         plugin_manager = PluginManager()
-        plugin_manager.run_all_plugins(context)
+        plugin_manager.run_all_plugins(context, include_plugins=recommended_plugins)
 
         all_subdomains = context.get('subdomains', set())
 
@@ -68,6 +78,31 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
                 value=sub
             )
             db.session.add(asset)
+
+        # --- Automated Triage ---
+        log.info(f"Scan {scan_id}: Starting automated triage process...")
+        context.add_event("INFO", "Starting automated triage process...")
+        triage_engine = TriageEngine(context)
+        triaged_findings = triage_engine.run()
+
+        for finding_data in triaged_findings:
+            # The TriageEngine may return keys not in the DB model, so we filter
+            db_finding = Finding(
+                scan_id=scan_id,
+                title=finding_data.get('title'),
+                severity=finding_data.get('severity'),
+                confidence=finding_data.get('confidence'),
+                status=finding_data.get('status'),
+                description=finding_data.get('description'),
+                raw_evidence=finding_data.get('raw_evidence'),
+                finding_signature=finding_data.get('finding_signature'),
+                asset_context=finding_data.get('asset_context'),
+                validation_outcome=finding_data.get('validation_outcome'),
+                disposition=finding_data.get('disposition'),
+            )
+            db.session.add(db_finding)
+        log.info(f"Scan {scan_id}: Saved {len(triaged_findings)} findings to the database.")
+        context.add_event("INFO", f"Saved {len(triaged_findings)} findings to the database.")
 
         scan.status = 'COMPLETED'
         db.session.commit()

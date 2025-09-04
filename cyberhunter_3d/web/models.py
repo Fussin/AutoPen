@@ -34,6 +34,10 @@ class Scan(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    # The profile for the scan, e.g., 'passive', 'full'
+    scan_type = db.Column(db.String(50), nullable=False, default='passive')
+    # An identifier for the origin of the scan, e.g., 'h1-program-name'
+    source = db.Column(db.String(255), nullable=True, index=True)
     targets = db.relationship('Target', backref='scan', lazy=True, cascade="all, delete-orphan")
     results = db.Column(db.Text, nullable=True)
 
@@ -109,6 +113,7 @@ class Finding(db.Model):
     def __repr__(self):
         return f'<Finding {self.title} ({self.severity})>'
 
+
 class Alert(db.Model):
     """
     Alert model for dashboard notifications.
@@ -123,3 +128,19 @@ class Alert(db.Model):
 
     def __repr__(self):
         return f'<Alert {self.id} for Finding {self.finding_id}>'
+
+class ScanProgress(db.Model):
+    """
+    Model to track the progress of individual modules within a scan.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    module_name = db.Column(db.String(100), nullable=False)
+    progress = db.Column(db.Integer, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('scan_id', 'module_name', name='_scan_module_uc'),)
+
+    def __repr__(self):
+        return f'<ScanProgress {self.scan_id} - {self.module_name}: {self.progress}%>'
+

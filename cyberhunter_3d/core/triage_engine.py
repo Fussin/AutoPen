@@ -29,9 +29,28 @@ class TriageEngine:
         self._normalize_results(raw_results)
         self._run_correlation_rules()
         self._deduplicate_and_finalize()
+        self._perform_automated_triage()
 
         log.info(f"Triage complete. Generated {len(self.triaged_findings)} final findings.")
         return list(self.triaged_findings.values())
+
+    def _perform_automated_triage(self):
+        """
+        Applies a set of rules to automatically triage findings based on
+        their severity and confidence score.
+        """
+        log.info("Performing automated triage...")
+        triaged_count = 0
+        for key, finding in self.triaged_findings.items():
+            is_critical_or_high = finding.get('severity') in ['Critical', 'High']
+            is_high_confidence = finding.get('confidence', 0.0) > 0.8
+
+            if is_critical_or_high and is_high_confidence:
+                finding['status'] = 'Triaged'
+                finding['disposition'] = 'Action Required'
+                triaged_count += 1
+
+        log.info(f"Automatically triaged {triaged_count} findings.")
 
     def _normalize_results(self, raw_results: Dict):
         """
