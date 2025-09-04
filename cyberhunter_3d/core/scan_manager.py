@@ -17,12 +17,13 @@ def run_url_discovery_phase(scan_id, app):
         scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for URL discovery phase.")
-            return
+            return None
 
         for target in scan.targets:
             # Assuming the main target for URL discovery is the 'domain' type
             if target.type == 'domain':
-                discover_urls(target.value, scan_id, app)
+                return discover_urls(target.value, scan_id, app)
+        return None
 
 def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
     """Helper to create a new asset if it is in scope and doesn't already exist."""
