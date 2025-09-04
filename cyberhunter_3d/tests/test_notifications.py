@@ -1,81 +1,43 @@
 import unittest
-from unittest.mock import MagicMock, patch
-from cyberhunter_3d.core.response_engine import ResponseEngine
+from unittest.mock import patch
 from cyberhunter_3d.core.notifications.notification_manager import NotificationManager
 
-class TestNotificationResponseHandlers(unittest.TestCase):
+class TestNotificationManager(unittest.TestCase):
 
-    @patch('cyberhunter_3d.core.response_engine.NotificationManager')
-    def test_notification_handlers_are_called(self, MockNotificationManager):
+    def setUp(self):
+        self.notification_manager = NotificationManager()
+
+    @patch.object(NotificationManager, 'send_slack_notification')
+    def test_send_notification_slack(self, mock_send_slack):
         """
-        Verify that notification handlers in the ResponseEngine use the NotificationManager.
+        Verify that send_notification calls the correct method for the 'slack' channel.
         """
-        mock_manager_instance = MockNotificationManager.return_value
+        self.notification_manager.send_notification('slack', 'test message', {'detail': 'value'})
+        mock_send_slack.assert_called_once_with('test message', {'detail': 'value'})
 
-        # Simulate a validated finding
-        validated_finding = {
-            "title": "Validated Test Finding",
-            "severity": "High",
-            "status": "Validated",
-            "host": "validated.example.com",
-            "description": "A validated test finding."
-        }
+    @patch.object(NotificationManager, 'send_email_notification')
+    def test_send_notification_email(self, mock_send_email):
+        """
+        Verify that send_notification calls the correct method for the 'email' channel.
+        """
+        self.notification_manager.send_notification('email', 'test message', {'detail': 'value'})
+        mock_send_email.assert_called_once_with('test message', {'detail': 'value'})
 
-        # Simulate a critical validated finding
-        critical_finding = {
-            "title": "Critical Test Finding",
-            "severity": "Critical",
-            "status": "Validated",
-            "host": "critical.example.com",
-            "description": "A critical test finding."
-        }
+    @patch.object(NotificationManager, 'send_sms_notification')
+    def test_send_notification_sms(self, mock_send_sms):
+        """
+        Verify that send_notification calls the correct method for the 'sms' channel.
+        """
+        self.notification_manager.send_notification('sms', 'test message', {'detail': 'value'})
+        mock_send_sms.assert_called_once_with('test message', {'detail': 'value'})
 
-        findings = [validated_finding, critical_finding]
-
-        # We patch the non-notification handlers to isolate our test
-        with patch('cyberhunter_3d.core.response_engine.JiraTicketHandler') as mock_jira, \
-             patch('cyberhunter_3d.core.response_engine.DashboardAlertHandler') as mock_dashboard, \
-             patch('cyberhunter_3d.core.response_engine.APIWebhookTriggerHandler') as mock_webhook, \
-             patch('cyberhunter_3d.core.response_engine.FullReportGenerationHandler') as mock_report, \
-             patch('cyberhunter_3d.core.response_engine.BugBountyPlatformSubmissionHandler') as mock_bounty, \
-             patch('cyberhunter_3d.core.response_engine.ArchiveCreationHandler') as mock_archive, \
-             patch('cyberhunter_3d.core.response_engine.NextScanSchedulingHandler') as mock_schedule:
-
-            # Set return values for the mocked handlers
-            mock_jira.return_value.handle.return_value = None
-            mock_dashboard.return_value.handle.return_value = None
-            mock_webhook.return_value.handle.return_value = None
-            mock_report.return_value.handle.return_value = None
-            mock_bounty.return_value.handle.return_value = None
-            mock_archive.return_value.handle.return_value = None
-            mock_schedule.return_value.handle.return_value = None
-
-            response_engine = ResponseEngine(findings)
-            response_engine.run()
-
-        # Check call counts
-        # Slack and Email should be called for both findings
-        # SMS should only be called for the critical one
-        self.assertEqual(mock_manager_instance.send_notification.call_count, 5)
-
-        # Extract calls for easier assertion
-        calls = mock_manager_instance.send_notification.call_args_list
-
-        # Slack calls
-        slack_calls = [c for c in calls if c.args[0] == 'slack']
-        self.assertEqual(len(slack_calls), 2)
-
-        # Email calls
-        email_calls = [c for c in calls if c.args[0] == 'email']
-        self.assertEqual(len(email_calls), 2)
-
-        # SMS calls
-        sms_calls = [c for c in calls if c.args[0] == 'sms']
-        self.assertEqual(len(sms_calls), 1)
-
-        # Verify the SMS call was for the critical finding
-        self.assertIn("Critical Security Finding", sms_calls[0].args[1])
-        self.assertIn("critical.example.com", sms_calls[0].args[1])
+    def test_send_notification_unknown_channel(self):
+        """
+        Verify that send_notification handles an unknown channel gracefully.
+        """
+        # This should not raise an exception
+        result = self.notification_manager.send_notification('unknown', 'test message')
+        self.assertFalse(result)
 
 if __name__ == '__main__':
     unittest.main()

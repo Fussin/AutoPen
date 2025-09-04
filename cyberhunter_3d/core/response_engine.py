@@ -244,40 +244,76 @@ class NextScanSchedulingHandler(ResponseHandler):
 
 class ResponseEngine:
     """
-    Takes action on validated findings and updates their final disposition.
+    Takes action on validated findings based on event types.
     """
-    def __init__(self, findings: List[Dict[str, Any]]):
-        self.findings = findings
+    def __init__(self):
         notification_manager = NotificationManager()
-        self.handlers: List[ResponseHandler] = [
-            JiraTicketHandler(),
-            SlackNotificationHandler(notification_manager),
-            EmailAlertHandler(notification_manager),
-            SMSAlertHandler(notification_manager),
-            DashboardAlertHandler(),
-            APIWebhookTriggerHandler(),
-            FullReportGenerationHandler(),
-            BugBountyPlatformSubmissionHandler(),
-            ArchiveCreationHandler(),
-            NextScanSchedulingHandler(),
-        ]
 
-    def run(self) -> List[Dict[str, Any]]:
+        # Initialize all handlers
+        self.all_handlers = {
+            "jira": JiraTicketHandler(),
+            "slack": SlackNotificationHandler(notification_manager),
+            "email": EmailAlertHandler(notification_manager),
+            "sms": SMSAlertHandler(notification_manager),
+            "dashboard": DashboardAlertHandler(),
+            "webhook": APIWebhookTriggerHandler(),
+            "report": FullReportGenerationHandler(),
+            "bug_bounty": BugBountyPlatformSubmissionHandler(),
+            "archive": ArchiveCreationHandler(),
+            "schedule": NextScanSchedulingHandler(),
+        }
+
+        # Map event types to handlers
+        self.event_handlers = {
+            'CRITICAL_FINDING_DETECTED': [
+                self.all_handlers["slack"],
+                self.all_handlers["email"],
+                self.all_handlers["sms"],
+                self.all_handlers["dashboard"],
+                self.all_handlers["jira"],
+            ],
+            'SCAN_MILESTONE_REACHED': [
+                self.all_handlers["slack"],
+                self.all_handlers["dashboard"],
+                self.all_handlers["webhook"],
+            ],
+            'SCAN_COMPLETION': [
+                self.all_handlers["report"],
+                self.all_handlers["bug_bounty"],
+                self.all_handlers["archive"],
+                self.all_handlers["schedule"],
+            ]
+        }
+
+    def run(self, findings: List[Dict[str, Any]], event_type: str) -> List[Dict[str, Any]]:
         """
         The main entry point for the response process.
         """
-        validated_findings = [f for f in self.findings if f.get("status") == "Validated"]
-        log.info(f"Starting response process for {len(validated_findings)} validated findings...")
-        for finding in validated_findings:
+        handlers_for_event = self.event_handlers.get(event_type)
+        if not handlers_for_event:
+            log.warning(f"No handlers found for event type: {event_type}")
+            return findings
+
+        log.info(f"Running response process for event '{event_type}' on {len(findings)} findings...")
+        for finding in findings:
             dispositions = []
-            for handler in self.handlers:
+            for handler in handlers_for_event:
                 try:
                     result = handler.handle(finding)
                     if result:
                         dispositions.append(result)
                 except Exception as e:
                     log.error(f"Error in response handler {handler.__class__.__name__}: {e}")
+
             if dispositions:
-                finding['disposition'] = "; ".join(dispositions)
-        log.info("Response process finished.")
-        return self.findings
+                if 'disposition' not in finding or not finding['disposition']:
+                    finding['disposition'] = ""
+
+                new_dispositions = "; ".join(dispositions)
+                if finding['disposition']:
+                    finding['disposition'] += f"; {new_dispositions}"
+                else:
+                    finding['disposition'] = new_dispositions
+
+        log.info(f"Response process for event '{event_type}' finished.")
+        return findings
