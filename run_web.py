@@ -184,12 +184,10 @@ def run_full_scan(scan_id, app):
     run_url_discovery_phase(scan_id, app)
 
 from cyberhunter_3d.web.views.dashboard import dashboard_bp
-from cyberhunter_3d.web.views.user_journey import user_journey_bp
 
 # Register the API blueprint
 app.register_blueprint(api_bp)
 app.register_blueprint(dashboard_bp)
-app.register_blueprint(user_journey_bp)
 
 @app.route('/sync-hackerone', methods=['POST'])
 @login_required
@@ -203,6 +201,7 @@ def sync_hackerone():
 def submit_targets():
     targets_text = request.form.get('targets', '')
     target_file = request.files.get('target_file')
+    scan_type = request.form.get('scan_type', 'passive') # Default to 'passive'
 
     raw_targets = []
 
@@ -230,7 +229,7 @@ def submit_targets():
         return redirect(url_for('dashboard'))
 
     # 4. Create Scan and Target objects in DB
-    new_scan = Scan(user_id=current_user.id, status='QUEUED')
+    new_scan = Scan(user_id=current_user.id, status='QUEUED', scan_type=scan_type)
     db.session.add(new_scan)
 
     # We need to flush to get the new_scan.id before creating targets
