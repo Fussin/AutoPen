@@ -35,6 +35,8 @@ class Scan(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     # The profile for the scan, e.g., 'passive', 'full'
     scan_type = db.Column(db.String(50), nullable=False, default='passive')
+    # An identifier for the origin of the scan, e.g., 'h1-program-name'
+    source = db.Column(db.String(255), nullable=True, index=True)
     targets = db.relationship('Target', backref='scan', lazy=True, cascade="all, delete-orphan")
     results = db.Column(db.Text, nullable=True)
 
