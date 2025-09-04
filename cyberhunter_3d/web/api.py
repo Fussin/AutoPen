@@ -158,30 +158,47 @@ def get_scan_graph(scan_id):
 
     return jsonify({'graph_definition': graph_definition})
 
+from .models import ScanProgress, Finding
+
 @api_bp.route('/monitoring/status', methods=['GET'])
 def get_monitoring_status():
     """
-    Provides mock data for the 3D monitoring view.
-    In a real application, this would fetch real-time data from the scan manager.
+    Provides real-time data for the 3D monitoring view.
     """
-    mock_data = {
-        "scan_progress": [
-            {"name": "Subdomain Discovery", "progress": 65},
-            {"name": "URL Collection", "progress": 85},
-            {"name": "XSS Testing", "progress": 40},
-            {"name": "SQL Injection", "progress": 70},
-            {"name": "Network Scanning", "progress": 100}
-        ],
-        "vulnerability_feed": [
-            {"severity": "CRITICAL", "title": "XSS found in example.com/search"},
-            {"severity": "HIGH", "title": "SQL Injection in api.example.com/user"},
-            {"severity": "MEDIUM", "title": "CORS misconfiguration on *.example.com"},
-            {"severity": "LOW", "title": "Information disclosure /backup.sql"}
-        ],
-        "scanner_stats": {
-            "active": 127,
-            "queue": 1847,
-            "completed": 3492
-        }
+    # Scanner Stats
+    active_scans = Scan.query.filter_by(status='RUNNING').count()
+    queued_scans = Scan.query.filter_by(status='QUEUED').count()
+    completed_scans = Scan.query.filter_by(status='COMPLETED').count()
+
+    scanner_stats = {
+        "active": active_scans,
+        "queue": queued_scans,
+        "completed": completed_scans
     }
-    return jsonify(mock_data)
+
+    # Vulnerability Feed (most recent 5 findings)
+    vulnerability_feed = []
+    recent_findings = Finding.query.order_by(Finding.created_at.desc()).limit(5).all()
+    for finding in recent_findings:
+        vulnerability_feed.append({
+            "severity": finding.severity.upper(),
+            "title": finding.title
+        })
+
+    # Scan Progress (for the most recent running scan)
+    scan_progress = []
+    latest_running_scan = Scan.query.filter_by(status='RUNNING').order_by(Scan.created_at.desc()).first()
+    if latest_running_scan:
+        progress_entries = ScanProgress.query.filter_by(scan_id=latest_running_scan.id).all()
+        for entry in progress_entries:
+            scan_progress.append({
+                "name": entry.module_name,
+                "progress": entry.progress
+            })
+
+    data = {
+        "scan_progress": scan_progress,
+        "vulnerability_feed": vulnerability_feed,
+        "scanner_stats": scanner_stats
+    }
+    return jsonify(data)
