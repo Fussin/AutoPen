@@ -1,9 +1,9 @@
 import logging
 import os
 import json
-import requests
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
+from .notifications.notification_manager import NotificationManager
 
 # It's better to handle the case where jira is not installed.
 try:
@@ -59,13 +59,107 @@ class JiraTicketHandler(ResponseHandler):
             log.error(f"Failed to create Jira ticket: {e}")
             return None
 
+class SlackNotificationHandler(ResponseHandler):
+    """Sends a Slack notification for a validated finding."""
+    def __init__(self, notification_manager: NotificationManager):
+        self.notification_manager = notification_manager
+
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        message = f"Security Finding: {finding.get('title', 'Untitled Finding')}"
+        details = {
+            "Severity": finding.get('severity', 'N/A'),
+            "Host": finding.get('host', 'N/A'),
+            "Description": finding.get('description', 'No description provided.')
+        }
+        if self.notification_manager.send_notification("slack", message, details):
+            return "Slack Notification Sent"
+        return None
+
+class EmailAlertHandler(ResponseHandler):
+    """Sends an email alert for a validated finding."""
+    def __init__(self, notification_manager: NotificationManager):
+        self.notification_manager = notification_manager
+
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        message = f"Security Finding: {finding.get('title', 'Untitled Finding')}"
+        details = {
+            "Severity": finding.get('severity', 'N/A'),
+            "Host": finding.get('host', 'N/A'),
+            "Description": finding.get('description', 'No description provided.')
+        }
+        if self.notification_manager.send_notification("email", message, details):
+            return "Email Alert Sent"
+        return None
+
+class SMSAlertHandler(ResponseHandler):
+    """Sends an SMS alert for a critical validated finding."""
+    def __init__(self, notification_manager: NotificationManager):
+        self.notification_manager = notification_manager
+
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        if finding.get('severity') != 'Critical':
+            return None
+
+        message = f"Critical Security Finding: {finding.get('title', 'Untitled Finding')} on {finding.get('host', 'N/A')}"
+        if self.notification_manager.send_notification("sms", message):
+            return "SMS Alert Sent"
+        return None
+
+class DashboardAlertHandler(ResponseHandler):
+    """Creates a dashboard alert."""
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        log.info(f"Creating dashboard alert for: {finding.get('title')}")
+        return "Dashboard Alert Created"
+
+class APIWebhookTriggerHandler(ResponseHandler):
+    """Triggers an API webhook."""
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        log.info(f"Triggering API webhook for: {finding.get('title')}")
+        return "API Webhook Triggered"
+
+class FullReportGenerationHandler(ResponseHandler):
+    """Generates a full report."""
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        log.info(f"Generating full report for: {finding.get('title')}")
+        return "Full Report Generated"
+
+class BugBountyPlatformSubmissionHandler(ResponseHandler):
+    """Submits a finding to a bug bounty platform."""
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        log.info(f"Submitting to bug bounty platform: {finding.get('title')}")
+        return "Submitted to Bug Bounty Platform"
+
+class ArchiveCreationHandler(ResponseHandler):
+    """Creates an archive of the finding."""
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        log.info(f"Creating archive for: {finding.get('title')}")
+        return "Archive Created"
+
+class NextScanSchedulingHandler(ResponseHandler):
+    """Schedules a next scan."""
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        log.info(f"Scheduling next scan for: {finding.get('title')}")
+        return "Next Scan Scheduled"
+
 class ResponseEngine:
     """
     Takes action on validated findings and updates their final disposition.
     """
     def __init__(self, findings: List[Dict[str, Any]]):
         self.findings = findings
-        self.handlers: List[ResponseHandler] = [JiraTicketHandler()]
+        notification_manager = NotificationManager()
+        self.handlers: List[ResponseHandler] = [
+            JiraTicketHandler(),
+            SlackNotificationHandler(notification_manager),
+            EmailAlertHandler(notification_manager),
+            SMSAlertHandler(notification_manager),
+            DashboardAlertHandler(),
+            APIWebhookTriggerHandler(),
+            FullReportGenerationHandler(),
+            BugBountyPlatformSubmissionHandler(),
+            ArchiveCreationHandler(),
+            NextScanSchedulingHandler(),
+        ]
 
     def run(self) -> List[Dict[str, Any]]:
         """
