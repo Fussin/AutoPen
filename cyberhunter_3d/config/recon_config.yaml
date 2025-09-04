@@ -145,3 +145,12 @@ plugins:
     - "Subdomain Takeover"
     - "Cloud Enumeration"
     - "CVE Mapper"
+
+# Data Pipeline Settings
+data_pipeline:
+  in_scope_rules: |
+    *.example.com
+    another.net
+  out_of_scope_rules: |
+    api.example.com
+    *.dev.example.com
