@@ -33,10 +33,6 @@ class Scan(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    # The profile for the scan, e.g., 'passive', 'full'
-    scan_type = db.Column(db.String(50), nullable=False, default='passive')
-    # An identifier for the origin of the scan, e.g., 'h1-program-name'
-    source = db.Column(db.String(255), nullable=True, index=True)
     targets = db.relationship('Target', backref='scan', lazy=True, cascade="all, delete-orphan")
     results = db.Column(db.Text, nullable=True)
 
@@ -111,3 +107,21 @@ class Finding(db.Model):
 
     def __repr__(self):
         return f'<Finding {self.title} ({self.severity})>'
+<<<<<<< HEAD
+=======
+
+class Alert(db.Model):
+    """
+    Alert model for dashboard notifications.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    finding_id = db.Column(db.Integer, db.ForeignKey('finding.id'), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    finding = db.relationship('Finding', backref='alerts')
+
+    def __repr__(self):
+        return f'<Alert {self.id} for Finding {self.finding_id}>'
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147

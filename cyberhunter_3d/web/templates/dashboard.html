@@ -4,7 +4,10 @@
     <h2>Dashboard</h2>
     <div>
       <span style="margin-right: 1em;">Welcome, {{ current_user.username }}!</span>
+<<<<<<< HEAD
       <a href="{{ url_for('user_journey.show_user_journey') }}" class="button" style="background-color: #17a2b8;">View Workflow</a>
+=======
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
       <a href="{{ url_for('profile') }}" class="button">Profile</a>
       <a href="{{ url_for('logout') }}" class="button" style="background-color: #d9534f; margin-left: 1em;">Logout</a>
     </div>
@@ -37,15 +40,6 @@
         </small>
       </div>
     </div>
-
-    <label for="scan_type" style="margin-top: 1em;">Scan Type</label>
-    <select id="scan_type" name="scan_type" style="padding: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px;">
-      <option value="passive">Passive (Fast, Recommended for initial scans)</option>
-      <option value="full">Full (Slow, Comprehensive, may be noisy)</option>
-    </select>
-    <small style="color: #bbb; display: block; margin-top: 0.5em;">
-      'Passive' runs non-intrusive checks. 'Full' enables all plugins, including active enumeration and vulnerability scanning.
-    </small>
 
     <button type="submit" class="button" style="margin-top: 1.5em;">Start Scan</button>
   </form>

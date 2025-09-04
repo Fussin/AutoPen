@@ -172,9 +172,17 @@ executor = ThreadPoolExecutor(max_workers=2)
 app.executor = executor
 
 from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_url_discovery_phase
+<<<<<<< HEAD
 from cyberhunter_3d.core.scheduler import sync_hackerone_programs
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+=======
+from cyberhunter_3d.core.plugins.context import ScanContext
+from cyberhunter_3d.core.triage_engine import TriageEngine
+from cyberhunter_3d.core.validation_engine import ValidationEngine
+from cyberhunter_3d.core.response_engine import ResponseEngine
+from cyberhunter_3d.core.db_utils import save_findings_to_db
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
 
 def run_full_scan(scan_id, app):
     """Runs both discovery and URL discovery phases."""
@@ -183,8 +191,46 @@ def run_full_scan(scan_id, app):
     # Wait for the discovery phase to complete
     future.result()
 
+<<<<<<< HEAD
     # Run the URL discovery phase
     run_url_discovery_phase(scan_id, app)
+=======
+    # URL Discovery & Vulnerability Scanning Phase
+    url_discovery_context = run_url_discovery_phase(scan_id, app)
+    if not url_discovery_context:
+        log.error(f"URL discovery phase failed for scan {scan_id}. Aborting.")
+        return
+
+    # Triage, Validation, and Response
+    specialized_scan_results = url_discovery_context.get("specialized_scan_results", {})
+
+    triage_context = ScanContext(
+        scan_id=scan_id,
+        target_domain=url_discovery_context.get("target_domain")
+    )
+    triage_context.set("specialized_scan_results", specialized_scan_results)
+
+    triage_engine = TriageEngine(triage_context)
+    findings = triage_engine.run()
+
+    validation_engine = ValidationEngine(findings)
+    validated_findings = validation_engine.run()
+
+    response_engine = ResponseEngine()
+
+    # Process critical findings
+    critical_findings = [f for f in validated_findings if f.get('severity') == 'Critical']
+    if critical_findings:
+        response_engine.run(critical_findings, 'CRITICAL_FINDING_DETECTED')
+
+    # Process scan completion
+    response_engine.run(validated_findings, 'SCAN_COMPLETION')
+
+    # Save findings to the database
+    save_findings_to_db(validated_findings, app)
+
+    log.info(f"Full scan and processing for scan {scan_id} completed.")
+>>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
 
 from cyberhunter_3d.web.views.dashboard import dashboard_bp
 from cyberhunter_3d.web.views.user_journey import user_journey_bp
@@ -206,7 +252,6 @@ def sync_hackerone():
 def submit_targets():
     targets_text = request.form.get('targets', '')
     target_file = request.files.get('target_file')
-    scan_type = request.form.get('scan_type', 'passive') # Default to 'passive'
 
     raw_targets = []
 
@@ -234,7 +279,7 @@ def submit_targets():
         return redirect(url_for('dashboard'))
 
     # 4. Create Scan and Target objects in DB
-    new_scan = Scan(user_id=current_user.id, status='QUEUED', scan_type=scan_type)
+    new_scan = Scan(user_id=current_user.id, status='QUEUED')
     db.session.add(new_scan)
 
     # We need to flush to get the new_scan.id before creating targets
@@ -362,19 +407,5 @@ def scan_results(scan_id):
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database(app.app_context())
-
-    # --- Scheduler Setup ---
-    # In a production environment, you might want a more robust scheduler setup,
-    # but for this self-contained app, a background scheduler is fine.
-    scheduler = BackgroundScheduler(daemon=True)
-    # Run the sync job every 24 hours
-    scheduler.add_job(sync_hackerone_programs, 'interval', hours=24, args=[app])
-    scheduler.start()
-    log.info("Scheduler started. HackerOne sync job scheduled to run every 24 hours.")
-
-    # Shut down the scheduler when exiting the app
-    atexit.register(lambda: scheduler.shutdown())
-
     # In a real deployment, use a proper WSGI server like Gunicorn.
-    # The reloader can cause the scheduler to run twice, so disable it for production.
-    app.run(debug=True, port=5001, use_reloader=False)
+    app.run(debug=True, port=5001)
