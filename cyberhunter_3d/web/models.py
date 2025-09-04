@@ -33,6 +33,8 @@ class Scan(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    # The profile for the scan, e.g., 'passive', 'full'
+    scan_type = db.Column(db.String(50), nullable=False, default='passive')
     targets = db.relationship('Target', backref='scan', lazy=True, cascade="all, delete-orphan")
     results = db.Column(db.Text, nullable=True)
 
