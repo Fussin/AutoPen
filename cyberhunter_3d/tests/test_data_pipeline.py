@@ -81,10 +81,11 @@ class TestDataPipeline(unittest.TestCase):
         self.assertEqual(prioritized_queue.popleft(), ("test.example.com", "domain"))
         self.assertEqual(prioritized_queue.popleft(), ("192.168.1.1", "ip_address"))
 
+    @patch('cyberhunter_3d.core.data_pipeline.get_diodb_programs')
     @patch('cyberhunter_3d.core.data_pipeline.get_bugcrowd_programs')
     @patch('cyberhunter_3d.core.data_pipeline.get_hackerone_scopes')
-    def test_run_autonomous_mode(self, mock_get_h1_scopes, mock_get_bc_scopes):
-        """Test the end-to-end autonomous run with both HackerOne and Bugcrowd."""
+    def test_run_autonomous_mode(self, mock_get_h1_scopes, mock_get_bc_scopes, mock_get_diodb_programs):
+        """Test the end-to-end autonomous run with all three data sources."""
         mock_h1_programs = [
             {
                 'name': 'h1-program',
@@ -101,8 +102,17 @@ class TestDataPipeline(unittest.TestCase):
                 'out_of_scope_rules': ''
             }
         ]
+        mock_diodb_programs = [
+            {
+                'name': 'diodb-program',
+                'targets': ['diodb.example.com'],
+                'in_scope_rules': '*.example.com',
+                'out_of_scope_rules': ''
+            }
+        ]
         mock_get_h1_scopes.return_value = mock_h1_programs
         mock_get_bc_scopes.return_value = mock_bc_programs
+        mock_get_diodb_programs.return_value = mock_diodb_programs
 
         pipeline = DataPipeline(config=self.mock_config)
 
@@ -110,10 +120,12 @@ class TestDataPipeline(unittest.TestCase):
 
         mock_get_h1_scopes.assert_called_once_with('test_user', 'test_key')
         mock_get_bc_scopes.assert_called_once_with('test_user', 'test_key')
+        mock_get_diodb_programs.assert_called_once()
 
-        self.assertEqual(len(programs), 2)
+        self.assertEqual(len(programs), 3)
         self.assertEqual(programs[0]['name'], 'h1-program')
         self.assertEqual(programs[1]['name'], 'bc-program')
+        self.assertEqual(programs[2]['name'], 'diodb-program')
 
 if __name__ == '__main__':
     unittest.main()
