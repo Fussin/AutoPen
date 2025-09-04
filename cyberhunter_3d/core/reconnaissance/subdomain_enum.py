@@ -1,134 +1,114 @@
-import concurrent.futures
-import json
-from typing import Set, List, Dict
+import logging
+from ..plugins.manager import PluginManager
+from ..plugins.context import ScanContext
+from cyberhunter_3d.utils.file_utils import save_to_json, get_results_dir
+from ...web.models import Scan, Asset, db
+from ..error_handler import handle_module_errors, CriticalError
+from ..triage_engine import TriageEngine
+from ..response_engine import ResponseEngine
 
-import subprocess
-import tempfile
-import os
-from .utils import get_logger
-from .passive_engine import run_passive_enumeration
-from .active_engine import run_active_enumeration
-from .permutation_engine import run_permutation_enumeration
-from .js_engine import run_js_enumeration, run_github_dorking
-from .visual_recon import run_visual_recon
-from .tech_fingerprinting import run_tech_fingerprinting
-from .cloud_asset_enum import find_cloud_assets
 
-logger = get_logger(__name__)
+log = logging.getLogger(__name__)
 
-def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
+def perform_delta_scan(master_subdomains: set, previous_subdomains: set, logger) -> dict:
+    if not previous_subdomains:
+        logger.info("No previous subdomains found. Skipping delta scan.")
+        return {}
+
+    new_subdomains = master_subdomains - previous_subdomains
+    removed_subdomains = previous_subdomains - master_subdomains
+
+    logger.info(f"Delta scan found {len(new_subdomains)} new and {len(removed_subdomains)} removed subdomains.")
+
+    return {"new": new_subdomains, "removed": removed_subdomains}
+
+@handle_module_errors(retries=2, fallback_return=({}, None, None), error_severity=CriticalError)
+def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
     """
-    Runs the full V2 reconnaissance pipeline.
+    Orchestrates the subdomain enumeration process using the new plugin architecture.
     """
-    logger.info(f"Starting V2 reconnaissance for: {domain}")
+    log.info(f"Starting V3 Plugin-Based Reconnaissance for: {domain}")
 
-    raw_subdomains = set()
+    with app.app_context():
+        scan = db.session.get(Scan, scan_id)
+        if not scan:
+            log.error(f"Scan with ID {scan_id} not found.")
+            return {}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        # Submit each engine to the executor
-        passive_future = executor.submit(run_passive_enumeration, domain)
-        # active_future = executor.submit(run_active_enumeration, domain)
-        # permutation_future = executor.submit(run_permutation_enumeration, domain)
-        # js_future = executor.submit(run_js_enumeration, domain)
+        results_dir = get_results_dir(domain, scan_id)
+        context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
+        context.add_event("INFO", "Starting V3 Plugin-Based Reconnaissance.")
 
-        # Gather results as they complete
-        passive_results = passive_future.result()
-        raw_subdomains.update(passive_results)
+        plugin_manager = PluginManager()
+        plugin_manager.run_all_plugins(context)
 
-        # For now, we will run the other engines sequentially on the results of the passive scan
-        active_results = run_active_enumeration(domain)
-        raw_subdomains.update(active_results)
+        all_subdomains = context.get('subdomains', set())
 
-        permutation_results = run_permutation_enumeration(domain, passive_results)
-        raw_subdomains.update(permutation_results)
+        final_results = {
+            "target": domain,
+            "scan_id": scan_id,
+            "all_subdomains": list(all_subdomains),
+            "validated_subdomains": list(context.get('validated_subdomains', set())),
+            "cloud_assets": context.get('cloud_assets', []),
+            "tech_fingerprints": context.get('tech_fingerprints', {}),
+            "open_ports": context.get('open_ports', {}),
+            "takeover_vulnerabilities": context.get('takeover_vulnerabilities', []),
+            "cve_results": context.get('cve_results', {}),
+            "secrets": context.get('secrets', []),
+        }
 
-    logger.info(f"Total raw subdomains found from all engines: {len(raw_subdomains)}")
+        master_filepath = save_to_json(
+            f"final_results_{scan_id}.json",
+            final_results,
+            results_dir
+        )
 
-    # Step 1: DNS Resolution and Validation
-    logger.info("Starting DNS resolution and validation...")
-    master_subdomains = resolve_and_validate(raw_subdomains)
-    logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
-
-    # Create output directory if it doesn't exist
-    output_dir = config['recon_output_dir']
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save to master_subdomains.txt
-    master_subdomains_file = os.path.join(output_dir, config['master_subdomains_file'])
-    with open(master_subdomains_file, 'w') as f:
-        for sub in master_subdomains:
-            f.write(f"{sub}\n")
-
-    # Step 2: Live Host Detection and Visual Recon
-    live_hosts, screenshots = run_visual_recon(master_subdomains)
-    print(f"Found {len(live_hosts)} live hosts.")
-    print(f"Screenshots saved in: {screenshots}")
-
-    # Step 3: JS/Code Analysis
-    js_findings = run_js_enumeration(live_hosts)
-
-    # Step 4: Technology Fingerprinting and Port Scanning
-    tech_results = run_tech_fingerprinting(live_hosts)
-
-    # Step 5: Cloud Asset Identification
-    cloud_assets = find_cloud_assets(master_subdomains)
-
-    # Step 6: GitHub Dorking
-    github_findings = run_github_dorking(master_subdomains)
-
-    # Step 7: Consolidate all information into the final JSON structure
-    final_recon_data = {
-        'domain': domain,
-        'master_subdomains': list(master_subdomains),
-        'live_hosts': list(live_hosts),
-        'screenshots': screenshots,
-        'technology_and_ports': tech_results,
-        'js_findings': list(js_findings),
-        'cloud_assets': cloud_assets,
-        'github_findings': github_findings,
-    }
-
-    final_recon_file = os.path.join(output_dir, config['final_recon_file'])
-    with open(final_recon_file, 'w') as f_out:
-        json.dump(final_recon_data, f_out, indent=4)
-
-    # For now, just return the valid subdomains as assets
-    assets = [{'type': 'subdomain', 'value': sub} for sub in master_subdomains]
-
-    return assets
+        for sub in all_subdomains:
+            asset = Asset(
+                scan_id=scan_id,
+                target_id=scan.targets[0].id,
+                type='subdomain',
+                value=sub
+            )
+            db.session.add(asset)
 
 
-def resolve_and_validate(subdomains: Set[str]) -> Set[str]:
-    """
-    Resolves a set of subdomains and filters out non-resolving ones.
-    """
-    if not subdomains:
-        return set()
+        # --- Automated Triage ---
+        log.info(f"Scan {scan_id}: Starting automated triage process...")
+        context.add_event("INFO", "Starting automated triage process...")
+        triage_engine = TriageEngine(context)
+        triaged_findings = triage_engine.run()
 
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as tmp_file:
-        input_filename = tmp_file.name
-        for sub in subdomains:
-            tmp_file.write(f"{sub}\n")
+        # --- Automated Response ---
+        log.info(f"Scan {scan_id}: Starting automated response process...")
+        context.add_event("INFO", "Starting automated response process...")
+        response_engine = ResponseEngine(triaged_findings)
+        final_findings = response_engine.run()
 
-    resolved_subdomains = set()
-    try:
-        # Use puredns to resolve and validate the subdomains
-        puredns_command = [
-            'puredns', 'resolve', input_filename,
-            '-r', '/usr/share/seclists/Discovery/DNS/resolvers.txt',
-            '--quiet'
-        ]
-        result = subprocess.run(puredns_command, capture_output=True, text=True, check=True)
+        for finding_data in final_findings:
+            # The TriageEngine may return keys not in the DB model, so we filter
+            db_finding = Finding(
+                scan_id=scan_id,
+                title=finding_data.get('title'),
+                severity=finding_data.get('severity'),
+                confidence=finding_data.get('confidence'),
+                status=finding_data.get('status'),
+                description=finding_data.get('description'),
+                raw_evidence=finding_data.get('raw_evidence'),
+                finding_signature=finding_data.get('finding_signature'),
+                asset_context=finding_data.get('asset_context'),
+                validation_outcome=finding_data.get('validation_outcome'),
+                disposition=finding_data.get('disposition'),
+            )
+            db.session.add(db_finding)
+        log.info(f"Scan {scan_id}: Saved {len(triaged_findings)} findings to the database.")
+        context.add_event("INFO", f"Saved {len(triaged_findings)} findings to the database.")
 
-        for line in result.stdout.strip().split('\n'):
-            if line:
-                resolved_subdomains.add(line)
 
-    except FileNotFoundError:
-        print("Error: 'puredns' not found. Please ensure it is installed and in your PATH.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error running puredns for resolution: {e}\nOutput: {e.stderr}")
-    finally:
-        os.remove(input_filename)
+        scan.status = 'COMPLETED'
+        db.session.commit()
 
-    return resolved_subdomains
+        log.info(f"Scan {scan_id} for {domain} completed. Found {len(all_subdomains)} subdomains.")
+        context.add_event("INFO", f"Scan completed. Found {len(all_subdomains)} subdomains.")
+
+        return {"master_results_list": master_filepath}, context, None

@@ -3,7 +3,8 @@
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <h2>Scan Results for #{{ scan.id }}</h2>
     <div>
-      <a href="{{ url_for('graph_view', scan_id=scan.id) }}" class="button">View Graph</a>
+      <a href="{{ url_for('download_report', scan_id=scan.id) }}" class="button">Download Report (PDF)</a>
+      <a href="{{ url_for('graph_view', scan_id=scan.id) }}" class="button" style="margin-left: 1em;">View Graph</a>
       <a href="{{ url_for('dashboard') }}" class="button" style="margin-left: 1em;">Back to Dashboard</a>
     </div>
   </div>
@@ -38,54 +39,186 @@
   <hr style="border-color: #444; margin: 2em 0;">
 
   <h3>Discovered Assets</h3>
-  {% if scan.assets %}
-    {# Group assets by type for organized display #}
-    {% set subdomains = scan.assets|selectattr('type', 'equalto', 'subdomain')|list %}
-    {% set hosts = scan.assets|selectattr('type', 'equalto', 'host_with_open_ports')|list %}
-
-    {% if subdomains %}
-      <h4>Subdomains</h4>
-      <ul>
-        {% for asset in subdomains %}
-          <li>{{ asset.value }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-
-    {% if hosts %}
-      <h4>Hosts with Open Ports</h4>
-      <table style="width: 100%; border-collapse: collapse;">
+  {% if grouped_assets %}
+    {% for asset_type, assets in grouped_assets.items()|sort %}
+      <h4>{{ asset_type.replace('_', ' ')|title }} ({{ assets|length }})</h4>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
         <thead>
-          <tr>
-            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host IP</th>
-            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Open Ports</th>
-          </tr>
+          <!-- Custom headers for specific asset types -->
+          {% if asset_type == 'vulnerability' %}
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Vulnerability Name</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Severity</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Template ID</th>
+            </tr>
+          {% elif asset_type == 'technology' %}
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Details</th>
+            </tr>
+          {% else %}
+            <!-- Default header for simple assets -->
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Value</th>
+            </tr>
+          {% endif %}
         </thead>
         <tbody>
-          {% for host in hosts %}
+          {% for asset in assets %}
             <tr>
-              <td style="padding: 8px; border-bottom: 1px solid #444; vertical-align: top;">{{ host.value }}</td>
-              <td style="padding: 8px; border-bottom: 1px solid #444;">
-                <table style="width: 100%; font-size: 0.9em;">
-                  {% for port in host.details.ports %}
-                    <tr>
-                      <td><strong>{{ port.portid }}/{{ port.protocol }}</strong></td>
-                      <td>{{ port.service_name }}</td>
-                      <td><em>{{ port.service_product }} {{ port.service_version }}</em></td>
-                    </tr>
-                  {% endfor %}
-                </table>
-              </td>
+              <!-- Custom cells for specific asset types -->
+              {% if asset_type == 'vulnerability' %}
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.name }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details.info.severity|title }}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.details['template-id'] }}</td>
+              {% elif asset_type == 'technology' %}
+                 <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+                 <td style="padding: 8px; border-bottom: 1px solid #444;">
+                    <pre style="background: #2b2b2b; padding: 1em; border-radius: 4px; white-space: pre-wrap;"><code>{{ asset.details | tojson(indent=2) }}</code></pre>
+                 </td>
+              {% else %}
+                <td style="padding: 8px; border-bottom: 1px solid #444;">{{ asset.value }}</td>
+              {% endif %}
             </tr>
           {% endfor %}
         </tbody>
       </table>
-    {% endif %}
-
-  {% elif scan.status == 'COMPLETED' %}
-    <p>Scan completed, but no in-scope assets were discovered.</p>
+    {% endfor %}
+  {% elif scan.status == 'COMPLETED' or scan.status == 'PENDING_REVIEW' %}
+    <p>Scan finished, but no in-scope assets were discovered.</p>
   {% else %}
     <p>Results will appear here once the scan is finished.</p>
+  {% endif %}
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Vulnerabilities</h3>
+  {% if vulnerabilities %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Name</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Severity</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Template ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vuln in vulnerabilities %}
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln.info.name }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln.info.severity|title }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln.host }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ vuln['template-id'] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No vulnerabilities found.</p>
+  {% endif %}
+
+  <h3>Discovered URLs</h3>
+  {% if url_data %}
+    <h4>Alive URLs ({{ url_data.alive_urls|length }})</h4>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for url in url_data.alive_urls %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ url }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h4>Dead URLs ({{ url_data.dead_urls|length }})</h4>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for url in url_data.dead_urls %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ url }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h4>Redirect URLs ({{ url_data.redirect_urls|length }})</h4>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for url in url_data.redirect_urls %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ url }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No URL data found.</p>
+  {% endif %}
+
+  <h3>Discovered Parameters</h3>
+  {% if url_data and url_data.parameters %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <tbody>
+        {% for param in url_data.parameters %}
+          <tr><td style="padding: 8px; border-bottom: 1px solid #444;">{{ param }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No parameters found.</p>
+  {% endif %}
+
+  <h3>Content Discovery</h3>
+  {% if content_discovery %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Host</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Discovered Paths</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for host, paths in content_discovery.items() %}
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #444; vertical-align: top;">{{ host }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">
+              <ul>
+                {% for path in paths %}
+                  <li>{{ path }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No content discovery results found.</p>
+  {% endif %}
+
+  <h3>JavaScript Analysis</h3>
+  {% if js_analysis %}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 2em;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">JavaScript File</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Discovered Endpoints</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for js_file, endpoints in js_analysis.items() %}
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #444; vertical-align: top;">{{ js_file }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">
+              <ul>
+                {% for endpoint in endpoints %}
+                  <li>{{ endpoint }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No endpoints found in JavaScript files.</p>
   {% endif %}
 
 {% endblock %}

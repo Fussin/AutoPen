@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  cyberhunter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cyberhunter:latest
+    volumes:
+      - ./recon_results:/home/appuser/app/recon_results
+      - ./screenshots:/home/appuser/app/screenshots
+    environment:
+      - CF_R2_ACCOUNT_ID=${CF_R2_ACCOUNT_ID}
+      - CF_R2_ACCESS_KEY_ID=${CF_R2_ACCESS_KEY_ID}
+      - CF_R2_SECRET_ACCESS_KEY=${CF_R2_SECRET_ACCESS_KEY}
+      - CF_R2_BUCKET=${CF_R2_BUCKET}
+    # To run the container and pass arguments to the script:
+    # docker-compose run --rm cyberhunter -d example.com --upload-to-r2

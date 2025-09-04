@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}New Dashboard - CyberHunter 3D{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Interactive Dashboard</h2>
+    <p>This is the new interactive dashboard for viewing scan results.</p>
+
+    <div class="card">
+        <div class="card-header">
+            Scans
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Scan ID</th>
+                        <th>Status</th>
+                        <th>Targets</th>
+                        <th>Created At</th>
+                        <th>Critical Vulns</th>
+                        <th>High Vulns</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody id="scans-table-body">
+                    <!-- Scans will be loaded here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/api/v1/scans', {
+        headers: {
+            'X-API-Key': '{{ current_user.api_key }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const tableBody = document.getElementById('scans-table-body');
+        data.forEach(scan => {
+            const row = `
+                <tr>
+                    <td>${scan.id}</td>
+                    <td>${scan.status}</td>
+                    <td>${scan.targets.join(', ')}</td>
+                    <td>${new Date(scan.created_at).toLocaleString()}</td>
+                    <td>${scan.critical_vulnerabilities}</td>
+                    <td>${scan.high_vulnerabilities}</td>
+                    <td><a href="/dashboard/v2/scan/${scan.id}" class="btn btn-primary btn-sm">View Details</a></td>
+                </tr>
+            `;
+            tableBody.innerHTML += row;
+        });
+    })
+    .catch(error => console.error('Error fetching scans:', error));
+});
+</script>
+{% endblock %}
