@@ -6,6 +6,7 @@ pyotp
 qrcode[pil]
 requests
 PyYAML
+aiodns
 pytest
 boto3
 playwright
@@ -19,3 +20,4 @@ pdfkit
 lightgbm
 pandas
 scikit-learn
+
