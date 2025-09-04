@@ -13,6 +13,10 @@ class TestDataPipeline(unittest.TestCase):
             'data_pipeline': {
                 'in_scope_rules': '*.example.com',
                 'out_of_scope_rules': 'dev.example.com'
+            },
+            'hackerone': {
+                'api_user': 'test_user',
+                'api_key': 'test_key'
             }
         }
 
@@ -23,6 +27,8 @@ class TestDataPipeline(unittest.TestCase):
         # Check that the rules from the mock config were loaded
         self.assertEqual(len(pipeline.scope_validator.in_scope_patterns), 1)
         self.assertEqual(len(pipeline.scope_validator.out_of_scope_patterns), 1)
+        self.assertEqual(pipeline.h1_user, 'test_user')
+        self.assertEqual(pipeline.h1_key, 'test_key')
 
     @patch('cyberhunter_3d.core.data_pipeline.load_config')
     def test_pipeline_initialization_loads_default_config(self, mock_load_config):
@@ -71,52 +77,26 @@ class TestDataPipeline(unittest.TestCase):
         self.assertEqual(prioritized_queue.popleft(), ("test.example.com", "domain"))
         self.assertEqual(prioritized_queue.popleft(), ("192.168.1.1", "ip_address"))
 
-    @patch('cyberhunter_3d.core.data_pipeline.get_subdomains_from_crtsh')
-    def test_fetch_autonomous_targets(self, mock_get_subdomains):
-        """Test the autonomous target fetching method."""
-        mock_get_subdomains.return_value = ["sub1.example.com", "sub2.example.com"]
-        pipeline = DataPipeline(config=self.mock_config)
-        targets = pipeline._fetch_autonomous_targets("example.com")
-        mock_get_subdomains.assert_called_once_with("example.com")
-        self.assertIn("sub1.example.com", targets)
-        self.assertIn("sub2.example.com", targets)
-        self.assertIn("example.com", targets) # Seed domain should be included
-        self.assertEqual(len(targets), 3)
-
-    def test_generate_dynamic_scope(self):
-        """Test the dynamic scope generation."""
-        pipeline = DataPipeline(config=self.mock_config)
-        seed_domain = "new-scope.com"
-        pipeline._generate_dynamic_scope(seed_domain)
-
-        # Check that the validator was replaced with one with the new rules
-        self.assertTrue(pipeline.scope_validator.is_in_scope("test.new-scope.com"))
-        self.assertTrue(pipeline.scope_validator.is_in_scope("new-scope.com"))
-        self.assertFalse(pipeline.scope_validator.is_in_scope("another.com"))
-        # Check that the original config rules are gone
-        self.assertFalse(pipeline.scope_validator.is_in_scope("test.example.com"))
-
-    @patch('cyberhunter_3d.core.data_pipeline.DataPipeline._fetch_autonomous_targets')
-    def test_run_autonomous_mode(self, mock_fetch_targets):
+    @patch('cyberhunter_3d.core.data_pipeline.get_hackerone_scopes')
+    def test_run_autonomous_mode(self, mock_get_h1_scopes):
         """Test the end-to-end autonomous run."""
-        mock_fetch_targets.return_value = [
-            "www.autonomous.com",
-            "api.autonomous.com",
-            "www.autonomous.com" # Duplicate
+        mock_programs = [
+            {
+                'name': 'test-program',
+                'targets': ['a.example.com', 'b.example.com'],
+                'in_scope_rules': '*.example.com',
+                'out_of_scope_rules': ''
+            }
         ]
+        mock_get_h1_scopes.return_value = mock_programs
+
         pipeline = DataPipeline(config=self.mock_config)
-        seed_domain = "autonomous.com"
 
-        result_queue = pipeline.run_autonomous(seed_domain)
+        programs = pipeline.run_autonomous()
 
-        # Check that dynamic scope was generated and used
-        self.assertTrue(pipeline.scope_validator.is_in_scope("www.autonomous.com"))
-
-        # Check the final processed queue
-        result_list = list(result_queue)
-        self.assertEqual(len(result_list), 2)
-        self.assertIn(("www.autonomous.com", "domain"), result_list)
-        self.assertIn(("api.autonomous.com", "domain"), result_list)
+        mock_get_h1_scopes.assert_called_once_with('test_user', 'test_key')
+        self.assertEqual(len(programs), 1)
+        self.assertEqual(programs[0]['name'], 'test-program')
 
 if __name__ == '__main__':
     unittest.main()

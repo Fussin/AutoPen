@@ -172,6 +172,9 @@ executor = ThreadPoolExecutor(max_workers=2)
 app.executor = executor
 
 from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_url_discovery_phase
+from cyberhunter_3d.core.scheduler import sync_hackerone_programs
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 
 def run_full_scan(scan_id, app):
     """Runs both discovery and URL discovery phases."""
@@ -201,6 +204,7 @@ def sync_hackerone():
 def submit_targets():
     targets_text = request.form.get('targets', '')
     target_file = request.files.get('target_file')
+    scan_type = request.form.get('scan_type', 'passive') # Default to 'passive'
 
     raw_targets = []
 
@@ -228,7 +232,7 @@ def submit_targets():
         return redirect(url_for('dashboard'))
 
     # 4. Create Scan and Target objects in DB
-    new_scan = Scan(user_id=current_user.id, status='QUEUED')
+    new_scan = Scan(user_id=current_user.id, status='QUEUED', scan_type=scan_type)
     db.session.add(new_scan)
 
     # We need to flush to get the new_scan.id before creating targets
@@ -356,5 +360,19 @@ def scan_results(scan_id):
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database(app.app_context())
+
+    # --- Scheduler Setup ---
+    # In a production environment, you might want a more robust scheduler setup,
+    # but for this self-contained app, a background scheduler is fine.
+    scheduler = BackgroundScheduler(daemon=True)
+    # Run the sync job every 24 hours
+    scheduler.add_job(sync_hackerone_programs, 'interval', hours=24, args=[app])
+    scheduler.start()
+    log.info("Scheduler started. HackerOne sync job scheduled to run every 24 hours.")
+
+    # Shut down the scheduler when exiting the app
+    atexit.register(lambda: scheduler.shutdown())
+
     # In a real deployment, use a proper WSGI server like Gunicorn.
-    app.run(debug=True, port=5001)
+    # The reloader can cause the scheduler to run twice, so disable it for production.
+    app.run(debug=True, port=5001, use_reloader=False)
