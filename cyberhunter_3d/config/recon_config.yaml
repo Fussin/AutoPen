@@ -154,3 +154,13 @@ data_pipeline:
   out_of_scope_rules: |
     api.example.com
     *.dev.example.com
+
+# HackerOne API credentials
+hackerone:
+  api_user: ""
+  api_key: ""
+
+# Bugcrowd API credentials
+bugcrowd:
+  api_user: ""
+  api_key: ""
