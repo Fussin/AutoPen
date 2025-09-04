@@ -1,229 +1,40 @@
-import json
-import os
+import argparse
 import sys
-import click
-from cyberhunter_3d.core.data_pipeline import DataPipeline
-from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
-from cyberhunter_3d.core.scan_manager import run_url_discovery_phase
-from cyberhunter_3d.core.reconnaissance.utils import load_config
-from cyberhunter_3d.utils.logger import setup_logger
-from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
-from cyberhunter_3d.utils.file_utils import get_results_dir
-from cyberhunter_3d.core.error_handler import handle_module_errors, CriticalError
-from cyberhunter_3d.core.health_checker import run_health_checks
+import os
+from core.reconnaissance.subdomain_enum import enumerate_subdomains, save_results
 
-@handle_module_errors(retries=2, fallback_return={})
-def safe_load_json(path):
-    """Safely loads a JSON file, with retries and a fallback."""
-    with open(path, 'r') as f:
-        return json.load(f)
-
-def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str, scan_id: int, scan_events: list = None):
+def main():
     """
-    Aggregates all reconnaissance results into a single JSON file.
+    Main function to run the CyberHunter 3D reconnaissance.
     """
-    logger.info("Aggregating all reconnaissance data...")
-    config = load_config()
-    final_data = {"domain": domain, "scan_events": scan_events or [], "hosts": [], "url_discovery": {}, "vulnerabilities": []}
-    host_map = {}
+    print("Welcome to CyberHunter 3D - Reconnaissance Module")
 
-    # Helper to load JSON files safely
-    def load_json_data(path_key):
-        if path_key not in output_paths:
-            logger.warning(f"Output path for '{path_key}' not found. Skipping.")
-            return None
-        return safe_load_json(output_paths[path_key])
+    parser = argparse.ArgumentParser(description="A futuristic bug bounty automation platform.")
+    parser.add_argument("-d", "--domain", required=True, help="The target domain to perform reconnaissance on.")
 
-    # Load host-based data sources
-    master_subdomains = load_json_data('master_subdomains')
-    if not master_subdomains:
-        logger.warning("Master subdomains list not found. Skipping host aggregation.")
-    else:
-        ip_mapping = load_json_data('subdomain_ip_mapping')
-        asn_details = load_json_data('asn_details')
-        live_hosts = load_json_data('live_hosts')
-        tech_results = load_json_data('technology_and_ports')
-        takeover_findings = load_json_data('takeover_vulnerabilities')
-        cloud_assets = load_json_data('cloud_assets')
-        ocr_results = load_json_data('ocr_results')
-        risk_info = load_json_data('risk_info')
-
-        for host in master_subdomains:
-            host_map[host] = {"host": host, "alive": False, "ips": [], "asn_details": [], "open_ports": [], "technologies": [], "takeover_risk": False, "cloud_asset": False, "screenshot_tags": [], "cve_ids": [], "cvss_score": 0.0, "risk_level": "None", "known_exploits": False}
-        if live_hosts:
-            for host in live_hosts:
-                if host in host_map: host_map[host]['alive'] = True
-        if ip_mapping:
-            for host, ips in ip_mapping.items():
-                if host in host_map:
-                    host_map[host]['ips'] = ips
-                    if asn_details:
-                        host_asns = set()
-                        for ip in ips:
-                            for asn_ip, details in asn_details.items():
-                                if ip == asn_ip: host_asns.add(f"{details['asn']} - {details['org']}")
-                        host_map[host]['asn_details'] = sorted(list(host_asns))
-        if tech_results:
-            for result in tech_results:
-                host = result.get('host')
-                if host and host in host_map:
-                    host_map[host]['open_ports'] = result.get('ports', [])
-                    host_map[host]['technologies'] = result.get('technologies', [])
-        if takeover_findings:
-            for finding in takeover_findings:
-                host = finding.get('host')
-                if host and host in host_map: host_map[host]['takeover_risk'] = True
-        if cloud_assets:
-            for asset in cloud_assets:
-                if asset in host_map: host_map[asset]['cloud_asset'] = True
-        if ocr_results:
-            for host, tags in ocr_results.items():
-                if host in host_map: host_map[host]['screenshot_tags'] = tags
-        if risk_info:
-            for host, risk_data in risk_info.items():
-                if host in host_map:
-                    host_map[host]['cve_ids'] = risk_data.get('cve_ids', [])
-                    host_map[host]['cvss_score'] = risk_data.get('cvss_score', 0.0)
-                    host_map[host]['risk_level'] = risk_data.get('risk_level', 'None')
-                    host_map[host]['known_exploits'] = risk_data.get('known_exploits', False)
-
-    final_data["hosts"] = list(host_map.values())
-
-    # Helper to load text files safely
-    def load_text_data(filename):
-        filepath = os.path.join(results_dir, filename)
-        try:
-            with open(filepath, 'r') as f: return [line.strip() for line in f.readlines()]
-        except FileNotFoundError: return []
-
-    # Aggregate URL discovery results
-    final_data["url_discovery"] = {
-        "alive_urls": load_text_data(f"alive_urls_{scan_id}.txt"),
-        "dead_urls": load_text_data(f"dead_urls_{scan_id}.txt"),
-        "redirect_urls": load_text_data(f"redirect_urls_{scan_id}.txt"),
-        "parameters": load_text_data(f"parameters_{scan_id}.txt"),
-    }
-
-    # Aggregate vulnerability scan results
-    vuln_file_path = os.path.join(results_dir, f"vulnerabilities_{scan_id}.json")
-    if os.path.exists(vuln_file_path):
-        final_data["vulnerabilities"] = safe_load_json(vuln_file_path)
-
-    # Aggregate content discovery results
-    content_file_path = os.path.join(results_dir, f"discovered_paths_{scan_id}.json")
-    if os.path.exists(content_file_path):
-        final_data["content_discovery"] = safe_load_json(content_file_path)
-
-    # Aggregate JavaScript analysis results
-    js_endpoints_file_path = os.path.join(results_dir, f"js_endpoints_{scan_id}.json")
-    if os.path.exists(js_endpoints_file_path):
-        final_data["js_analysis"] = safe_load_json(js_endpoints_file_path)
-
-    # Save the final aggregated file
-    output_dir = config['recon_output_dir']
-    final_output_path = os.path.join(output_dir, config['final_recon_file'])
-    try:
-        with open(final_output_path, 'w') as f: json.dump(final_data, f, indent=4)
-        logger.info(f"Successfully aggregated results to {final_output_path}")
-    except IOError as e:
-        logger.error(f"Failed to write final aggregated file: {e}")
-
-
-@click.command()
-@click.option("-d", "--domain", required=True, help="The target domain for reconnaissance.")
-@click.option("-v", "--verbose", is_flag=True, help="Enable verbose output.")
-@click.option("--upload-to-r2", is_flag=True, help="Upload results to Cloudflare R2.")
-@click.option("--save-to-db", is_flag=True, help="Save the scan results to the database.")
-@click.option("--previous-scan-dir", help="Path to the previous scan's output directory for delta detection.")
-@click.option("--url-discovery", is_flag=True, help="Run the URL discovery and vulnerability scanning phase.")
-@click.option("--generate-report", is_flag=True, help="Generate a PDF report after the scan.")
-@click.option("--autonomous", is_flag=True, help="Run the data pipeline in autonomous mode for the given domain.")
-def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_discovery, generate_report, autonomous):
-    """
-    Main function to run the CyberHunter 3D reconnaissance V3 pipeline.
-    """
-    log_level = 'DEBUG' if verbose else 'INFO'
-    logger = setup_logger('main.log', level=log_level)
-    logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
-
-
-    # Run pre-scan health checks
-    if not run_health_checks():
-        logger.critical("Pre-scan health checks failed. Aborting scan.")
+    # A simple check to guide the user if no arguments are provided.
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
         sys.exit(1)
 
-    if autonomous:
-        logger.info(f"Starting autonomous pipeline run for seed domain: {domain}")
-        pipeline = DataPipeline()
-        processed_targets = pipeline.run_autonomous(seed_domain=domain)
-        logger.info(f"Autonomous pipeline finished. Found {len(processed_targets)} targets.")
-        for target_value, target_type in processed_targets:
-            logger.info(f"  - Type: {target_type}, Value: {target_value}")
-        logger.info("--- Autonomous Run Finished ---")
-        return
+    args = parser.parse_args()
 
+    target_domain = args.domain
 
-    from run_web import create_app
-    from cyberhunter_3d.web.models import db, Scan, Target
-    app = create_app()
-    with app.app_context():
-        # For CLI runs, we create a new scan object to track the operation.
-        target = Target(value=domain, type='domain')
-        # Assuming user_id=1 for all CLI-initiated scans.
-        scan = Scan(status='RUNNING', user_id=1)
-        scan.targets.append(target)
-        db.session.add(target)
-        db.session.add(scan)
-        db.session.commit()
-        scan_id = scan.id
+    # Change to the project root so that Sublist3r path is correct.
+    # This is a bit of a hack for now, a better config management would be needed for a real app.
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(project_root)
 
-    results_dir = get_results_dir(domain, scan_id)
+    # 1. Run the subdomain enumeration
+    found_subdomains = enumerate_subdomains(target_domain)
 
-    try:
-        scan_events = []
-        if url_discovery:
-            logger.info(f"Starting URL discovery for: {domain}")
-            run_url_discovery_phase(scan_id, app)
-            logger.info("URL discovery finished.")
-        else:
-            logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
-            # Run the full subdomain enumeration pipeline
-            output_paths, context, _ = enumerate_subdomains_v2(
-                domain=domain,
-                scan_id=scan_id,
-                app=app
-            )
-            if not output_paths:
-                logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
-                sys.exit(1)
-            logger.info(f"Reconnaissance complete for {domain}.")
-            scan_events = context.scan_events if context else []
+    # 2. Save the results
+    output_filename = "Subdomain.txt"
+    save_results(found_subdomains, output_filename)
 
-        # Always aggregate results at the end
-        aggregate_results({}, domain, logger, results_dir, scan_id, scan_events=scan_events)
-
-        config = load_config()
-        final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
-        logger.info(f"All findings have been aggregated into: {final_file_path}")
-
-        if upload_to_r2:
-            logger.info("R2 upload flag is set. Initiating upload...")
-            upload_to_r2(logger, file_path=final_file_path)
-
-        if generate_report:
-            from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
-            logger.info("Generating PDF report...")
-            generate_pdf_report(scan_id, domain, app)
-
-    except CriticalError as e:
-        logger.critical(f"A critical error occurred: {e}. The pipeline will now exit.")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
-        sys.exit(1)
-
-    logger.info("--- Pipeline Finished ---")
-
+    print(f"\nReconnaissance complete for {target_domain}.")
+    print(f"Results have been saved to {output_filename}")
 
 if __name__ == "__main__":
     main()

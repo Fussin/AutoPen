@@ -15,10 +15,10 @@ make all domain=example.com
 
 # Check for report
 echo "Checking for report..."
-if [ -f "reports/final_report.html" ]; then
+if [ -f "reports/report.html" ]; then
     echo "Smoke test passed!"
 else
-    echo "Smoke test failed: final_report.html not found."
+    echo "Smoke test failed: report.html not found."
     exit 1
 fi
 

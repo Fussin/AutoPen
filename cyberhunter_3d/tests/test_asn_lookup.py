@@ -7,8 +7,7 @@ import subprocess
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn, get_asn_for_ips
-from unittest.mock import MagicMock
+from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 
 # Sample amass output for testing
 SAMPLE_AMASS_OUTPUT = """
@@ -28,13 +27,9 @@ class TestAsnLookup(unittest.TestCase):
 
         assets = get_cidrs_for_asn("15169")
 
-        from cyberhunter_3d.core.reconnaissance.utils import load_config
-        config = load_config()
-        amass_path = config['tools']['amass']
-
         # Check that amass was called correctly
         mock_subprocess_run.assert_called_once_with(
-            [amass_path, 'intel', '-asn', '15169'],
+            ['amass', 'intel', '-asn', '15169'],
             capture_output=True, text=True, check=True
         )
 
@@ -63,31 +58,6 @@ class TestAsnLookup(unittest.TestCase):
 
         cidrs = get_cidrs_for_asn("00000")
         self.assertEqual(len(cidrs), 0)
-
-    @patch('cyberhunter_3d.core.reconnaissance.asn_lookup.subprocess.run')
-    def test_get_asn_for_ips(self, mock_run):
-        """
-        Tests the get_asn_for_ips function to ensure it correctly parses dnsx JSON output.
-        """
-        # Mock the JSON output from the dnsx tool
-        dnsx_output = (
-            '{"host":"8.8.8.8","asn":{"asn":"AS15169","name":"GOOGLE","country":"US","registrar":"ARIN"}}\n'
-            '{"host":"1.1.1.1","asn":{"asn":"AS13335","name":"CLOUDFLARENET","country":"US","registrar":"ARIN"}}\n'
-        )
-        mock_process = MagicMock()
-        mock_process.stdout = dnsx_output
-        mock_run.return_value = mock_process
-
-        ips = {'8.8.8.8', '1.1.1.1'}
-        asn_details = get_asn_for_ips(ips)
-
-        # Assertions
-        self.assertEqual(len(asn_details), 2)
-        self.assertIn('8.8.8.8', asn_details)
-        self.assertIn('1.1.1.1', asn_details)
-        self.assertEqual(asn_details['8.8.8.8']['asn'], 'AS15169')
-        self.assertEqual(asn_details['1.1.1.1']['name'], 'CLOUDFLARENET')
-        mock_run.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()

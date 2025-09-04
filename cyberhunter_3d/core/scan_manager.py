@@ -6,43 +6,6 @@ from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
-from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
-
-def run_url_discovery_phase(scan_id, app):
-    """
-    Performs the URL discovery and vulnerability scanning phase.
-    """
-    with app.app_context():
-        scan = db.session.get(Scan, scan_id)
-        if not scan:
-            print(f"Error: Scan {scan_id} not found for URL discovery phase.")
-            return
-
-        for target in scan.targets:
-            # Assuming the main target for URL discovery is the 'domain' type
-            if target.type == 'domain':
-<<<<<<< HEAD
-                discover_urls(target.value, scan_id, app)
-=======
-                return discover_urls(target.value, scan_id, app)
-        return None
->>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
-
-def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
-    """Helper to create a new asset if it is in scope and doesn't already exist."""
-    if not validator.is_in_scope(value):
-        return False, 'out_of_scope'
-
-    if not Asset.query.filter_by(scan_id=scan_id, type=asset_type, value=value).first():
-        asset = Asset(
-            scan_id=scan_id,
-            type=asset_type,
-            value=value,
-            details=details
-        )
-        db.session.add(asset)
-        return True, 'created'
-    return False, 'exists'
 
 def run_discovery_phase(scan_id, app):
     """
@@ -51,21 +14,23 @@ def run_discovery_phase(scan_id, app):
     It persists discovered assets and sets the scan status to PENDING_REVIEW.
     """
     with app.app_context():
-        scan = db.session.get(Scan, scan_id)
+        scan = Scan.query.get(scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for discovery phase.")
             return
 
         try:
+            # 1. Initialization
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} discovery phase started.")
             validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
 
-            in_scope_count = 0
-            out_of_scope_count = 0
-
+            # Prepare for processing
+            discovered_assets = []
             targets_to_scan = list(scan.targets)
+
+            # 2. Expansion and Discovery Loop (non-intensive tasks)
             i = 0
             while i < len(targets_to_scan):
                 target = targets_to_scan[i]
@@ -85,52 +50,29 @@ def run_discovery_phase(scan_id, app):
 
                 elif target.type in ['domain', 'wildcard_domain']:
                     print(f"Finding subdomains for '{target.value}'...")
-                    recon_data = enumerate_subdomains_v2(target.value)
-
-                    # Persist assets directly from the recon data dictionary
-                    for sub in recon_data.get('master_subdomains', []):
-                        created, status = _create_asset_if_new(scan.id, 'subdomain', sub, validator)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for host in recon_data.get('live_hosts', []):
-                        created, status = _create_asset_if_new(scan.id, 'live_host', host, validator)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for vuln in recon_data.get('subdomain_takeover_vulnerabilities', []):
-                        host = vuln.get('host', 'unknown_host')
-                        created, status = _create_asset_if_new(scan.id, 'vulnerability', host, validator, details=vuln)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for tech, details in recon_data.get('technology_and_ports', {}).items():
-                        created, status = _create_asset_if_new(scan.id, 'technology', tech, validator, details=details)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for asset in recon_data.get('cloud_assets', []):
-                        value = asset.get('value', 'unknown_asset')
-                        created, status = _create_asset_if_new(scan.id, 'cloud_asset', value, validator, details=asset)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
+                    assets = enumerate_subdomains_v2(target.value)
+                    discovered_assets.extend(assets)
 
                 elif target.type in ['ip_address', 'cidr']:
-                    created, status = _create_asset_if_new(scan.id, target.type, target.value, validator)
-                    if created: in_scope_count += 1
-                    elif status == 'out_of_scope': out_of_scope_count += 1
+                    # Add IPs and CIDRs to be scanned in the execution phase
+                    discovered_assets.append({'type': target.type, 'value': target.value})
+                else:
+                    print(f"Skipping target with unknown type: {target.type}")
 
-                db.session.commit()
+            # 3. Validation and Persistence of discovered domains/IPs
+            print(f"Persisting {len(discovered_assets)} initially discovered assets...")
+            in_scope_count = 0
+            out_of_scope_count = 0
+            for asset_data in discovered_assets:
+                if validator.is_in_scope(asset_data['value']):
+                    if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
+                        db.session.add(Asset(type=asset_data['type'], value=asset_data['value'], scan_id=scan.id))
+                        in_scope_count += 1
+                else:
+                    out_of_scope_count += 1
 
-            scan.results = f"Discovery phase complete. Found {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
+            scan.results = f"Discovery phase complete. Found {in_scope_count} assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
             scan.status = 'PENDING_REVIEW'
-<<<<<<< HEAD
-=======
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed the discovery phase. {in_scope_count} new assets found."
-            )
->>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
             print(f"Scan {scan_id} discovery phase complete.")
 
         except Exception as e:
@@ -218,13 +160,6 @@ def run_execution_phase(scan_id, app):
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
             scan.status = 'COMPLETED'
-<<<<<<< HEAD
-=======
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed successfully."
-            )
->>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
             print(f"Scan {scan_id} execution phase complete.")
 
         except Exception as e:
