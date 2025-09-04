@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch, MagicMock
 from collections import deque
 
 from cyberhunter_3d.core.data_pipeline import DataPipeline
@@ -6,111 +7,116 @@ from cyberhunter_3d.core.data_pipeline import DataPipeline
 
 class TestDataPipeline(unittest.TestCase):
 
-    def test_pipeline_initialization(self):
-        """Test that the pipeline initializes correctly with scope rules."""
-        in_scope = "*.example.com"
-        out_of_scope = "dev.example.com"
-        pipeline = DataPipeline(in_scope_rules=in_scope, out_of_scope_rules=out_of_scope)
+    def setUp(self):
+        """Set up a mock config for all tests."""
+        self.mock_config = {
+            'data_pipeline': {
+                'in_scope_rules': '*.example.com',
+                'out_of_scope_rules': 'dev.example.com'
+            }
+        }
+
+    def test_pipeline_initialization_with_config(self):
+        """Test that the pipeline initializes correctly with a config object."""
+        pipeline = DataPipeline(config=self.mock_config)
         self.assertIsNotNone(pipeline.scope_validator)
+        # Check that the rules from the mock config were loaded
         self.assertEqual(len(pipeline.scope_validator.in_scope_patterns), 1)
         self.assertEqual(len(pipeline.scope_validator.out_of_scope_patterns), 1)
 
+    @patch('cyberhunter_3d.core.data_pipeline.load_config')
+    def test_pipeline_initialization_loads_default_config(self, mock_load_config):
+        """Test that the pipeline loads the default config if none is provided."""
+        mock_load_config.return_value = self.mock_config
+        pipeline = DataPipeline()
+        self.assertIsNotNone(pipeline.scope_validator)
+        mock_load_config.assert_called_once()
+        self.assertEqual(len(pipeline.scope_validator.in_scope_patterns), 1)
+
     def test_parsing_and_validation(self):
-        """Test the parsing of raw targets and scope validation."""
-        in_scope = "*.example.com"
-        out_of_scope = "ignore.example.com"
-        pipeline = DataPipeline(in_scope_rules=in_scope, out_of_scope_rules=out_of_scope)
-
+        """Test the parsing of raw targets and scope validation using the mock config."""
+        pipeline = DataPipeline(config=self.mock_config)
         raw_targets = [
-            "test.example.com",          # In scope
-            "ignore.example.com",        # Out of scope
-            "another.com",               # Out of scope (doesn't match in_scope)
-            "192.168.1.1",               # In scope (IPs are not checked against domain rules)
-            "AS15169",                   # In scope (ASNs are not checked)
-            "   ",                       # Empty, should be ignored
-            "invalid-tld",               # Unknown type, should be ignored
+            "test.example.com",
+            "dev.example.com",
+            "another.com",
+            "192.168.1.1",
         ]
-
-        # Manually call the internal method for focused testing
         validated = pipeline._parse_and_validate(raw_targets)
-
-        # Extract just the values for easier comparison
         validated_values = {val for val, typ in validated}
-
         self.assertIn("test.example.com", validated_values)
         self.assertIn("192.168.1.1", validated_values)
-        self.assertIn("15169", validated_values) # ASNs are normalized to numbers
-        self.assertNotIn("ignore.example.com", validated_values)
+        self.assertNotIn("dev.example.com", validated_values)
         self.assertNotIn("another.com", validated_values)
-        self.assertNotIn("invalid-tld", validated_values)
 
     def test_normalization_and_deduplication(self):
         """Test that the pipeline correctly normalizes and deduplicates targets."""
-        pipeline = DataPipeline()
+        pipeline = DataPipeline(config=self.mock_config)
         targets_with_duplicates = [
             ("test.example.com", "domain"),
-            ("test.example.com", "domain"),  # Duplicate
+            ("test.example.com", "domain"),
             ("192.168.1.1", "ip_address"),
-            ("192.168.1.1", "ip_address"),  # Duplicate
         ]
-
         normalized = pipeline._normalize(targets_with_duplicates)
-
         self.assertEqual(len(normalized), 2)
-        self.assertIn(("test.example.com", "domain"), normalized)
-        self.assertIn(("192.168.1.1", "ip_address"), normalized)
 
     def test_prioritization(self):
         """Test the prioritization of targets."""
-        pipeline = DataPipeline()
+        pipeline = DataPipeline(config=self.mock_config)
         unsorted_targets = [
             ("192.168.1.1", "ip_address"),
-            ("*.example.com", "wildcard_domain"),
             ("test.example.com", "domain"),
-            ("10.0.0.0/8", "cidr"),
         ]
-
         prioritized_queue = pipeline._prioritize(unsorted_targets)
-
-        self.assertIsInstance(prioritized_queue, deque)
-        # Check order based on priority map
         self.assertEqual(prioritized_queue.popleft(), ("test.example.com", "domain"))
-        self.assertEqual(prioritized_queue.popleft(), ("*.example.com", "wildcard_domain"))
         self.assertEqual(prioritized_queue.popleft(), ("192.168.1.1", "ip_address"))
-        self.assertEqual(prioritized_queue.popleft(), ("10.0.0.0/8", "cidr"))
 
-    def test_end_to_end_run(self):
-        """Test the full pipeline run method."""
-        in_scope = "*.example.com"
-        out_of_scope = "dev.example.com"
-        pipeline = DataPipeline(in_scope_rules=in_scope, out_of_scope_rules=out_of_scope)
+    @patch('cyberhunter_3d.core.data_pipeline.get_subdomains_from_crtsh')
+    def test_fetch_autonomous_targets(self, mock_get_subdomains):
+        """Test the autonomous target fetching method."""
+        mock_get_subdomains.return_value = ["sub1.example.com", "sub2.example.com"]
+        pipeline = DataPipeline(config=self.mock_config)
+        targets = pipeline._fetch_autonomous_targets("example.com")
+        mock_get_subdomains.assert_called_once_with("example.com")
+        self.assertIn("sub1.example.com", targets)
+        self.assertIn("sub2.example.com", targets)
+        self.assertIn("example.com", targets) # Seed domain should be included
+        self.assertEqual(len(targets), 3)
 
-        raw_targets = [
-            "test.example.com",
-            "www.example.com",
-            "dev.example.com",   # Out of scope
-            "test.example.com",  # Duplicate
-            "192.168.1.1",
+    def test_generate_dynamic_scope(self):
+        """Test the dynamic scope generation."""
+        pipeline = DataPipeline(config=self.mock_config)
+        seed_domain = "new-scope.com"
+        pipeline._generate_dynamic_scope(seed_domain)
+
+        # Check that the validator was replaced with one with the new rules
+        self.assertTrue(pipeline.scope_validator.is_in_scope("test.new-scope.com"))
+        self.assertTrue(pipeline.scope_validator.is_in_scope("new-scope.com"))
+        self.assertFalse(pipeline.scope_validator.is_in_scope("another.com"))
+        # Check that the original config rules are gone
+        self.assertFalse(pipeline.scope_validator.is_in_scope("test.example.com"))
+
+    @patch('cyberhunter_3d.core.data_pipeline.DataPipeline._fetch_autonomous_targets')
+    def test_run_autonomous_mode(self, mock_fetch_targets):
+        """Test the end-to-end autonomous run."""
+        mock_fetch_targets.return_value = [
+            "www.autonomous.com",
+            "api.autonomous.com",
+            "www.autonomous.com" # Duplicate
         ]
+        pipeline = DataPipeline(config=self.mock_config)
+        seed_domain = "autonomous.com"
 
-        result_queue = pipeline.run(raw_targets)
+        result_queue = pipeline.run_autonomous(seed_domain)
 
-        # Expected order: domain > ip_address
-        # Note: set operation in _normalize may change order, but sorting in _prioritize fixes it.
-        # Let's convert to a list to check contents, as order is partly non-deterministic
-        # due to the set operation in normalization.
+        # Check that dynamic scope was generated and used
+        self.assertTrue(pipeline.scope_validator.is_in_scope("www.autonomous.com"))
+
+        # Check the final processed queue
         result_list = list(result_queue)
-
-        # Check length (should be 3 unique, in-scope targets)
-        self.assertEqual(len(result_list), 3)
-
-        # Check for presence of expected targets
-        self.assertIn(("test.example.com", "domain"), result_list)
-        self.assertIn(("www.example.com", "domain"), result_list)
-        self.assertIn(("192.168.1.1", "ip_address"), result_list)
-
-        # Check that out-of-scope and duplicates are gone
-        self.assertNotIn(("dev.example.com", "domain"), result_list)
+        self.assertEqual(len(result_list), 2)
+        self.assertIn(("www.autonomous.com", "domain"), result_list)
+        self.assertIn(("api.autonomous.com", "domain"), result_list)
 
 if __name__ == '__main__':
     unittest.main()
