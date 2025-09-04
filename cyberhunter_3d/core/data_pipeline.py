@@ -5,6 +5,7 @@ from .target_parser import parse_targets
 from .scope_validator import ScopeValidator
 from .reconnaissance.utils import load_config
 from .feeds.hackerone_client import get_hackerone_scopes
+from .feeds.bugcrowd_client import get_bugcrowd_programs
 
 
 class DataPipeline:
@@ -34,6 +35,10 @@ class DataPipeline:
         hackerone_config = config.get('hackerone', {})
         self.h1_user = hackerone_config.get('api_user')
         self.h1_key = hackerone_config.get('api_key')
+
+        bugcrowd_config = config.get('bugcrowd', {})
+        self.bc_user = bugcrowd_config.get('api_user')
+        self.bc_key = bugcrowd_config.get('api_key')
 
     def run(self, raw_targets: List[str]) -> Deque[Tuple[str, str]]:
         """
@@ -117,14 +122,26 @@ class DataPipeline:
 
     def run_autonomous(self) -> List[dict]:
         """
-        Runs the pipeline in autonomous mode by fetching targets from HackerOne.
+        Runs the pipeline in autonomous mode by fetching targets from HackerOne and Bugcrowd.
 
         :return: A list of program dictionaries, each containing targets and scope.
         """
-        if not self.h1_user or not self.h1_key:
-            print("HackerOne API user or key not configured. Skipping autonomous run.")
-            return []
+        all_programs = []
 
-        print("Running in autonomous mode...")
-        programs = get_hackerone_scopes(self.h1_user, self.h1_key)
-        return programs
+        if self.h1_user and self.h1_key:
+            print("Fetching programs from HackerOne...")
+            h1_programs = get_hackerone_scopes(self.h1_user, self.h1_key)
+            all_programs.extend(h1_programs)
+            print(f"Found {len(h1_programs)} programs on HackerOne.")
+        else:
+            print("HackerOne API user or key not configured. Skipping.")
+
+        if self.bc_user and self.bc_key:
+            print("Fetching programs from Bugcrowd...")
+            bc_programs = get_bugcrowd_programs(self.bc_user, self.bc_key)
+            all_programs.extend(bc_programs)
+            print(f"Found {len(bc_programs)} programs on Bugcrowd.")
+        else:
+            print("Bugcrowd API user or key not configured. Skipping.")
+
+        return all_programs

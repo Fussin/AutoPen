@@ -159,3 +159,8 @@ data_pipeline:
 hackerone:
   api_user: ""
   api_key: ""
+
+# Bugcrowd API credentials
+bugcrowd:
+  api_user: ""
+  api_key: ""
