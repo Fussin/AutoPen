@@ -1,0 +1,75 @@
+# Main configuration file for the pipeline
+
+# General settings
+output_dir: outputs
+artifacts_dir: artifacts
+
+# API keys
+# shodan_api_key: YOUR_API_KEY
+# censys_api_id: YOUR_API_ID
+# censys_api_secret: YOUR_API_SECRET
+
+# Wordlists
+wordlists:
+  dns_bruteforce: /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+  resolvers: /usr/share/seclists/Discovery/DNS/resolvers.txt
+
+# Plugin settings
+plugins:
+  # Reconnaissance Phase
+  subfinder:
+    enabled: true
+  amass:
+    enabled: true
+  fierce:
+    enabled: true
+  dnsenum:
+    enabled: true
+  theharvester:
+    enabled: true
+  httpx:
+    enabled: true
+  subjack:
+    enabled: true
+  whatweb:
+    enabled: true
+
+  # URL Discovery Phase
+  gau:
+    enabled: true
+  waybackurls:
+    enabled: true
+  katana:
+    enabled: true
+  hakrawler:
+    enabled: true
+
+  # Vulnerability Discovery Phase
+  nuclei:
+    enabled: true
+    # Example of template configuration
+    # templates:
+    #   - "cves"
+    #   - "network"
+  sqlmap:
+    enabled: true
+  trufflehog:
+    enabled: true
+
+  # Network Scanning Phase
+  nmap:
+    enabled: true
+  masscan:
+    enabled: true
+    rate: 1000
+    ports: "0-65535"
+  rustscan:
+    enabled: true
+  enum4linux:
+    enabled: true
+
+  # OSINT Phase
+  aquatone:
+    enabled: true
+  sherlock:
+    enabled: true

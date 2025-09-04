@@ -11,3 +11,21 @@ Create the most advanced bug bounty automation platform ever conceived, featurin
 - **Enterprise-Grade Scalability**: Built on a microservices architecture for high performance and availability.
 
 This repository contains the source code for the CyberHunter 3D platform.
+
+## Installation
+
+This project relies on a number of external security tools. You need to install these tools and ensure they are in your system's PATH for the pipeline to work correctly.
+
+A good starting point is the `cyberhunter_3d/scripts/install_tools.sh` script from the original codebase. You may need to adapt it to your system.
+
+The Python dependencies are listed in `requirements.txt` and can be installed with:
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+The main entry point for the pipeline is `src/main.py`. You can run the full pipeline with:
+```bash
+make all domain=yourtarget.com
+```
