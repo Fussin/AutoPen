@@ -34,6 +34,11 @@ class Plugin(ABC):
         """
         return []
 
+    @property
+    def fallback(self) -> str:
+        """The name of the plugin to fall back to if this one fails."""
+        return None
+
     @abstractmethod
     def run(self, context: ScanContext):
         """

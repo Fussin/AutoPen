@@ -1,5 +1,7 @@
 from typing import Any, Dict
 
+import datetime
+
 class ScanContext:
     """
     A class to hold the context of a scan, including target information
@@ -10,6 +12,17 @@ class ScanContext:
         self.scan_id = scan_id
         self.results_dir = results_dir
         self._data: Dict[str, Any] = {}
+        self.scan_events = []
+
+    def add_event(self, event_type: str, message: str, plugin_name: str = None):
+        """Adds a timestamped event to the scan's history."""
+        event = {
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "type": event_type,
+            "plugin": plugin_name,
+            "message": message,
+        }
+        self.scan_events.append(event)
 
     def set(self, key: str, value: Any):
         """

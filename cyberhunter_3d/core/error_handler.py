@@ -18,20 +18,23 @@ class MinorError(ModuleError):
     """For errors that can be recovered from, allowing the pipeline to continue."""
     pass
 
-def handle_module_errors(retries=1, delay=2, fallback_return=None, error_severity=MinorError):
+def handle_module_errors(retries=1, delay=2, fallback_return=None, error_severity=MinorError, backoff_factor=2, max_delay=60):
     """
-    A decorator to handle errors in reconnaissance modules gracefully.
+    A decorator to handle errors in reconnaissance modules gracefully with exponential backoff.
 
     Args:
         retries (int): The number of times to retry the decorated function.
-        delay (int): The delay in seconds between retries.
+        delay (int): The initial delay in seconds between retries.
         fallback_return: The value to return if the function fails after all retries.
         error_severity (Exception): The type of error to raise if all retries fail.
+        backoff_factor (int): The factor by which the delay should increase after each retry.
+        max_delay (int): The maximum delay in seconds.
     """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             last_exception = None
+            current_delay = delay
             for attempt in range(retries):
                 try:
                     return func(*args, **kwargs)
@@ -39,9 +42,10 @@ def handle_module_errors(retries=1, delay=2, fallback_return=None, error_severit
                     last_exception = e
                     logger.warning(
                         f"Attempt {attempt + 1}/{retries} failed for {func.__name__}: {e}. "
-                        f"Retrying in {delay} seconds..."
+                        f"Retrying in {current_delay:.2f} seconds..."
                     )
-                    time.sleep(delay)
+                    time.sleep(current_delay)
+                    current_delay = min(current_delay * backoff_factor, max_delay)
 
             logger.error(f"All {retries} retries failed for {func.__name__}. Last error: {last_exception}")
 
