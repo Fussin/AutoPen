@@ -95,4 +95,3 @@ def discover_urls(domain: str, scan_id: int, app):
         run_plugin_by_name("Vulnerability Scanner", context)
 
         log.info(f"URL Discovery and Enrichment Pipeline for {domain} completed.")
-        return context

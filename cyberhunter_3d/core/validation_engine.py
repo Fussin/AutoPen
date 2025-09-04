@@ -1,23 +1,56 @@
 import logging
+import time
+import requests
+from abc import ABC, abstractmethod
 from typing import Dict, Any, List
-from .vulnerability.validation import XSSValidator, SQLiValidator
 
 log = logging.getLogger(__name__)
 
+class ValidationHandler(ABC):
+    """Abstract base class for validation handlers."""
+    @abstractmethod
+    def validate(self, finding: Dict[str, Any]) -> bool:
+        raise NotImplementedError
 
-import time
+class TimeBasedSQLiHandler(ValidationHandler):
+    """
+    Validates time-based SQL injection vulnerabilities by re-testing with a
+    safe, time-delay payload.
+    """
+    def validate(self, finding: Dict[str, Any]) -> bool:
+        nuclei_evidence = next((ev for ev in finding.get("raw_evidence", []) if ev.get("template-id")), None)
+        if not nuclei_evidence:
+            return False
+        target_url = nuclei_evidence.get("matched-at")
+        if not target_url:
+            return False
+        delay = 5
+        payload = f"' OR SLEEP({delay})--"
+        if "?" in target_url:
+            validated_url = f"{target_url}{payload}"
+        else:
+            return False
+        try:
+            start_time = time.time()
+            requests.get(validated_url, timeout=delay + 3, verify=False)
+            end_time = time.time()
+            if (end_time - start_time) >= delay:
+                return True
+        except requests.exceptions.Timeout:
+            return True
+        except requests.exceptions.RequestException:
+            return False
+        return False
 
 class ValidationEngine:
     """
     The Validation Engine is responsible for safely validating high-impact,
     high-confidence findings and updating them with the validation outcome.
     """
-    def __init__(self, findings: List[Dict[str, Any]], clock=None):
+    def __init__(self, findings: List[Dict[str, Any]]):
         self.findings = findings
-        self.clock = clock or time.time
-        self.validators = {
-            "CWE-79": XSSValidator,
-            "CWE-89": SQLiValidator,
+        self.handlers = {
+            "CWE-89": TimeBasedSQLiHandler(),
         }
         self.confidence_threshold = 0.75
 
@@ -32,11 +65,9 @@ class ValidationEngine:
                 finding['status'] = 'Validation Skipped (Low Confidence)'
                 finding['validation_outcome'] = None
                 continue
-
-            validator_class = self.validators.get(finding.get("vulnerability_type"))
-            if validator_class:
-                validator = validator_class(finding, clock=self.clock)
-                is_validated = validator.validate()
+            handler = self.handlers.get(finding.get("vulnerability_type"))
+            if handler:
+                is_validated = handler.validate(finding)
                 finding['status'] = 'Validated' if is_validated else 'Validation Failed'
                 finding['validation_outcome'] = is_validated
             else:

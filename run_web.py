@@ -172,56 +172,27 @@ executor = ThreadPoolExecutor(max_workers=2)
 app.executor = executor
 
 from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_url_discovery_phase
-from cyberhunter_3d.core.plugins.context import ScanContext
-from cyberhunter_3d.core.triage_engine import TriageEngine
-from cyberhunter_3d.core.validation_engine import ValidationEngine
-from cyberhunter_3d.core.response_engine import ResponseEngine
-from cyberhunter_3d.core.db_utils import save_findings_to_db
 from cyberhunter_3d.core.scheduler import sync_hackerone_programs
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 
-
 def run_full_scan(scan_id, app):
-    """Runs the full scan and processing pipeline."""
-    # Discovery Phase
-    discovery_future = app.executor.submit(run_discovery_phase, scan_id, app)
-    discovery_future.result()  # Wait for discovery to complete
+    """Runs both discovery and URL discovery phases."""
+    # Submit the discovery phase to the executor
+    future = app.executor.submit(run_discovery_phase, scan_id, app)
+    # Wait for the discovery phase to complete
+    future.result()
 
-    # URL Discovery & Vulnerability Scanning Phase
-    url_discovery_context = run_url_discovery_phase(scan_id, app)
-    if not url_discovery_context:
-        log.error(f"URL discovery phase failed for scan {scan_id}. Aborting.")
-        return
-
-    # Triage, Validation, and Response
-    specialized_scan_results = url_discovery_context.get("specialized_scan_results", {})
-
-    triage_context = ScanContext(
-        scan_id=scan_id,
-        target_domain=url_discovery_context.get("target_domain")
-    )
-    triage_context.set("specialized_scan_results", specialized_scan_results)
-
-    triage_engine = TriageEngine(triage_context)
-    findings = triage_engine.run()
-
-    validation_engine = ValidationEngine(findings)
-    validated_findings = validation_engine.run()
-
-    response_engine = ResponseEngine(validated_findings)
-    final_findings = response_engine.run()
-
-    # Save findings to the database
-    save_findings_to_db(final_findings, app)
-
-    log.info(f"Full scan and processing for scan {scan_id} completed.")
+    # Run the URL discovery phase
+    run_url_discovery_phase(scan_id, app)
 
 from cyberhunter_3d.web.views.dashboard import dashboard_bp
+from cyberhunter_3d.web.views.user_journey import user_journey_bp
 
 # Register the API blueprint
 app.register_blueprint(api_bp)
 app.register_blueprint(dashboard_bp)
+app.register_blueprint(user_journey_bp)
 
 @app.route('/sync-hackerone', methods=['POST'])
 @login_required

@@ -1,4 +1,4 @@
-from cyberhunter_3d.web.models import db, Scan, Target, Asset, ScanProgress
+from cyberhunter_3d.web.models import db, Scan, Target, Asset
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
@@ -7,7 +7,6 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
-from cyberhunter_3d.core.notifications.notification_manager import NotificationManager
 
 def run_url_discovery_phase(scan_id, app):
     """
@@ -17,23 +16,12 @@ def run_url_discovery_phase(scan_id, app):
         scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for URL discovery phase.")
-            return None
+            return
 
         for target in scan.targets:
             # Assuming the main target for URL discovery is the 'domain' type
             if target.type == 'domain':
-                return discover_urls(target.value, scan_id, app)
-        return None
-
-def _update_progress(scan_id, module_name, progress):
-    """Helper to update the progress of a scan module."""
-    progress_entry = ScanProgress.query.filter_by(scan_id=scan_id, module_name=module_name).first()
-    if progress_entry:
-        progress_entry.progress = progress
-    else:
-        progress_entry = ScanProgress(scan_id=scan_id, module_name=module_name, progress=progress)
-        db.session.add(progress_entry)
-    db.session.commit()
+                discover_urls(target.value, scan_id, app)
 
 def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
     """Helper to create a new asset if it is in scope and doesn't already exist."""
@@ -64,14 +52,8 @@ def run_discovery_phase(scan_id, app):
             return
 
         try:
-            notification_manager = NotificationManager()
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has started the discovery phase."
-            )
             scan.status = 'RUNNING'
             db.session.commit()
-            _update_progress(scan_id, 'Discovery', 5)
             print(f"Scan {scan_id} discovery phase started.")
             validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
 
@@ -98,9 +80,7 @@ def run_discovery_phase(scan_id, app):
 
                 elif target.type in ['domain', 'wildcard_domain']:
                     print(f"Finding subdomains for '{target.value}'...")
-                    _update_progress(scan_id, 'Subdomain Discovery', 20)
                     recon_data = enumerate_subdomains_v2(target.value)
-                    _update_progress(scan_id, 'Subdomain Discovery', 80)
 
                     # Persist assets directly from the recon data dictionary
                     for sub in recon_data.get('master_subdomains', []):
@@ -139,14 +119,6 @@ def run_discovery_phase(scan_id, app):
 
             scan.results = f"Discovery phase complete. Found {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
             scan.status = 'PENDING_REVIEW'
-
-            _update_progress(scan_id, 'Discovery', 100)
-
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed the discovery phase. {in_scope_count} new assets found."
-            )
-
             print(f"Scan {scan_id} discovery phase complete.")
 
         except Exception as e:
@@ -171,34 +143,25 @@ def run_execution_phase(scan_id, app):
             return
 
         try:
-            notification_manager = NotificationManager()
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has started the execution phase."
-            )
             scan.status = 'RUNNING'
             db.session.commit()
-            _update_progress(scan_id, 'Execution', 5)
             print(f"Scan {scan_id} execution phase started.")
             validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
             out_of_scope_count = 0 # We need to track this across phases
 
             # 1. Port Scanning
-            _update_progress(scan_id, 'Network Scanning', 10)
             ip_targets = Asset.query.filter(
                 Asset.scan_id == scan.id,
                 Asset.is_approved_for_scan == True,
                 Asset.type.in_(['ip_address', 'cidr'])
             ).all()
-            for i, target in enumerate(ip_targets):
+            for target in ip_targets:
                 print(f"Port scanning '{target.value}'...")
                 ip_scan_assets = scan_ip_target(target.value)
                 for asset_data in ip_scan_assets:
                     if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
                         db.session.add(Asset(type=asset_data['type'], value=asset_data['value'], details=asset_data.get('details'), scan_id=scan.id))
-                _update_progress(scan_id, 'Network Scanning', 10 + int(60 * (i + 1) / len(ip_targets)))
             db.session.commit()
-            _update_progress(scan_id, 'Network Scanning', 70)
 
             # 2. Expansion Phase (Reverse DNS)
             print("Starting Expansion: Reverse DNS")
@@ -243,15 +206,6 @@ def run_execution_phase(scan_id, app):
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
             scan.status = 'COMPLETED'
-
-            _update_progress(scan_id, 'Execution', 100)
-            _update_progress(scan_id, 'Network Scanning', 100)
-
-            notification_manager.send_notification(
-                "slack",
-                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed successfully."
-            )
-
             print(f"Scan {scan_id} execution phase complete.")
 
         except Exception as e:
