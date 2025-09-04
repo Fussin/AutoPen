@@ -8,6 +8,13 @@ from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
 from cyberhunter_3d.utils.file_utils import get_results_dir
+from cyberhunter_3d.core.error_handler import handle_module_errors, CriticalError
+
+@handle_module_errors(retries=2, fallback_return={})
+def safe_load_json(path):
+    """Safely loads a JSON file, with retries and a fallback."""
+    with open(path, 'r') as f:
+        return json.load(f)
 
 def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str, scan_id: int):
     """
@@ -23,12 +30,7 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
         if path_key not in output_paths:
             logger.warning(f"Output path for '{path_key}' not found. Skipping.")
             return None
-        try:
-            with open(output_paths[path_key], 'r') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.error(f"Could not read or parse {output_paths[path_key]}: {e}")
-            return None
+        return safe_load_json(output_paths[path_key])
 
     # Load host-based data sources
     master_subdomains = load_json_data('master_subdomains')
@@ -103,23 +105,17 @@ def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str,
     # Aggregate vulnerability scan results
     vuln_file_path = os.path.join(results_dir, f"vulnerabilities_{scan_id}.json")
     if os.path.exists(vuln_file_path):
-        with open(vuln_file_path, 'r') as f:
-            try: final_data["vulnerabilities"] = json.load(f)
-            except json.JSONDecodeError: logger.error(f"Could not decode vulnerabilities file: {vuln_file_path}")
+        final_data["vulnerabilities"] = safe_load_json(vuln_file_path)
 
     # Aggregate content discovery results
     content_file_path = os.path.join(results_dir, f"discovered_paths_{scan_id}.json")
     if os.path.exists(content_file_path):
-        with open(content_file_path, 'r') as f:
-            try: final_data["content_discovery"] = json.load(f)
-            except json.JSONDecodeError: logger.error(f"Could not decode content discovery file: {content_file_path}")
+        final_data["content_discovery"] = safe_load_json(content_file_path)
 
     # Aggregate JavaScript analysis results
     js_endpoints_file_path = os.path.join(results_dir, f"js_endpoints_{scan_id}.json")
     if os.path.exists(js_endpoints_file_path):
-        with open(js_endpoints_file_path, 'r') as f:
-            try: final_data["js_analysis"] = json.load(f)
-            except json.JSONDecodeError: logger.error(f"Could not decode JS analysis file: {js_endpoints_file_path}")
+        final_data["js_analysis"] = safe_load_json(js_endpoints_file_path)
 
     # Save the final aggregated file
     output_dir = config['recon_output_dir']
@@ -163,38 +159,46 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
 
     results_dir = get_results_dir(domain, scan_id)
 
-    if url_discovery:
-        logger.info(f"Starting URL discovery for: {domain}")
-        run_url_discovery_phase(scan_id, app)
-        logger.info("URL discovery finished.")
-    else:
-        logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
-        # Run the full subdomain enumeration pipeline
-        output_paths, _, _ = enumerate_subdomains_v2(
-            domain=domain,
-            scan_id=scan_id,
-            app=app
-        )
-        if not output_paths:
-            logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
-            sys.exit(1)
-        logger.info(f"Reconnaissance complete for {domain}.")
+    try:
+        if url_discovery:
+            logger.info(f"Starting URL discovery for: {domain}")
+            run_url_discovery_phase(scan_id, app)
+            logger.info("URL discovery finished.")
+        else:
+            logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
+            # Run the full subdomain enumeration pipeline
+            output_paths, _, _ = enumerate_subdomains_v2(
+                domain=domain,
+                scan_id=scan_id,
+                app=app
+            )
+            if not output_paths:
+                logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
+                sys.exit(1)
+            logger.info(f"Reconnaissance complete for {domain}.")
 
-    # Always aggregate results at the end
-    aggregate_results({}, domain, logger, results_dir, scan_id)
+        # Always aggregate results at the end
+        aggregate_results({}, domain, logger, results_dir, scan_id)
 
-    config = load_config()
-    final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
-    logger.info(f"All findings have been aggregated into: {final_file_path}")
+        config = load_config()
+        final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
+        logger.info(f"All findings have been aggregated into: {final_file_path}")
 
-    if upload_to_r2:
-        logger.info("R2 upload flag is set. Initiating upload...")
-        upload_to_r2(logger, file_path=final_file_path)
+        if upload_to_r2:
+            logger.info("R2 upload flag is set. Initiating upload...")
+            upload_to_r2(logger, file_path=final_file_path)
 
-    if generate_report:
-        from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
-        logger.info("Generating PDF report...")
-        generate_pdf_report(scan_id, domain, app)
+        if generate_report:
+            from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
+            logger.info("Generating PDF report...")
+            generate_pdf_report(scan_id, domain, app)
+
+    except CriticalError as e:
+        logger.critical(f"A critical error occurred: {e}. The pipeline will now exit.")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
+        sys.exit(1)
 
     logger.info("--- Pipeline Finished ---")
 

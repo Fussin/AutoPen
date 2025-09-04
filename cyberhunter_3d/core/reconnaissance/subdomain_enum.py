@@ -3,6 +3,7 @@ from ..plugins.manager import PluginManager
 from ..plugins.context import ScanContext
 from cyberhunter_3d.utils.file_utils import save_to_json, get_results_dir
 from ...web.models import Scan, Asset, db
+from ..error_handler import handle_module_errors, CriticalError
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ def perform_delta_scan(master_subdomains: set, previous_subdomains: set, logger)
 
     return {"new": new_subdomains, "removed": removed_subdomains}
 
+@handle_module_errors(retries=2, fallback_return=({}, None, None), error_severity=CriticalError)
 def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
     """
     Orchestrates the subdomain enumeration process using the new plugin architecture.
@@ -71,4 +73,4 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
 
         log.info(f"Scan {scan_id} for {domain} completed. Found {len(all_subdomains)} subdomains.")
 
-        return {"master_results_list": master_filepath}
+        return {"master_results_list": master_filepath}, None, None
