@@ -29,6 +29,7 @@ class Scan(db.Model):
     Scan model to track a reconnaissance job.
     """
     id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=True)
     status = db.Column(db.String(20), nullable=False, default='QUEUED')
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -112,6 +113,22 @@ class Finding(db.Model):
     def __repr__(self):
         return f'<Finding {self.title} ({self.severity})>'
 
+
+class Alert(db.Model):
+    """
+    Alert model for dashboard notifications.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    finding_id = db.Column(db.Integer, db.ForeignKey('finding.id'), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    finding = db.relationship('Finding', backref='alerts')
+
+    def __repr__(self):
+        return f'<Alert {self.id} for Finding {self.finding_id}>'
+
 class ScanProgress(db.Model):
     """
     Model to track the progress of individual modules within a scan.
@@ -126,3 +143,4 @@ class ScanProgress(db.Model):
 
     def __repr__(self):
         return f'<ScanProgress {self.scan_id} - {self.module_name}: {self.progress}%>'
+

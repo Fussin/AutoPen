@@ -17,12 +17,13 @@ def run_url_discovery_phase(scan_id, app):
         scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for URL discovery phase.")
-            return
+            return None
 
         for target in scan.targets:
             # Assuming the main target for URL discovery is the 'domain' type
             if target.type == 'domain':
-                discover_urls(target.value, scan_id, app)
+                return discover_urls(target.value, scan_id, app)
+        return None
 
 def _update_progress(scan_id, module_name, progress):
     """Helper to update the progress of a scan module."""
