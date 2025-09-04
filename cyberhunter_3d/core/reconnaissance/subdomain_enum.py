@@ -6,6 +6,7 @@ from ..ai.scan_config_selector import AIScanConfigSelector
 from ...web.models import Scan, Asset, Finding, db
 from ..error_handler import handle_module_errors, CriticalError
 from ..triage_engine import TriageEngine
+from ..response_engine import ResponseEngine
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +86,13 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         triage_engine = TriageEngine(context)
         triaged_findings = triage_engine.run()
 
-        for finding_data in triaged_findings:
+        # --- Automated Response ---
+        log.info(f"Scan {scan_id}: Starting automated response process...")
+        context.add_event("INFO", "Starting automated response process...")
+        response_engine = ResponseEngine(triaged_findings)
+        final_findings = response_engine.run()
+
+        for finding_data in final_findings:
             # The TriageEngine may return keys not in the DB model, so we filter
             db_finding = Finding(
                 scan_id=scan_id,

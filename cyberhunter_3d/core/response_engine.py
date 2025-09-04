@@ -19,6 +19,30 @@ class ResponseHandler(ABC):
     def handle(self, finding: Dict[str, Any]) -> Optional[str]:
         raise NotImplementedError
 
+class NotificationLoggerHandler(ResponseHandler):
+    """A simple handler that logs a finding to a file."""
+    def __init__(self, log_file: str = "notifications.log"):
+        self.log_file = log_file
+
+    def handle(self, finding: Dict[str, Any]) -> Optional[str]:
+        try:
+            message = (
+                f"--- New Triaged Finding ---\n"
+                f"Title: {finding.get('title', 'N/A')}\n"
+                f"Severity: {finding.get('severity', 'N/A')}\n"
+                f"Confidence: {finding.get('confidence', 'N/A')}\n"
+                f"Host: {finding.get('host', 'N/A')}\n"
+                f"Description: {finding.get('description', 'N/A')}\n"
+                f"---------------------------\n\n"
+            )
+            with open(self.log_file, "a") as f:
+                f.write(message)
+            log.info(f"Logged finding to {self.log_file}")
+            return f"Logged to {self.log_file}"
+        except Exception as e:
+            log.error(f"Failed to write to notification log {self.log_file}: {e}")
+            return None
+
 class JiraTicketHandler(ResponseHandler):
     """Creates a Jira ticket for a validated finding."""
     def __init__(self):
@@ -65,15 +89,18 @@ class ResponseEngine:
     """
     def __init__(self, findings: List[Dict[str, Any]]):
         self.findings = findings
-        self.handlers: List[ResponseHandler] = [JiraTicketHandler()]
+        self.handlers: List[ResponseHandler] = [
+            NotificationLoggerHandler(),
+            JiraTicketHandler()
+        ]
 
     def run(self) -> List[Dict[str, Any]]:
         """
         The main entry point for the response process.
         """
-        validated_findings = [f for f in self.findings if f.get("status") == "Validated"]
-        log.info(f"Starting response process for {len(validated_findings)} validated findings...")
-        for finding in validated_findings:
+        triaged_findings = [f for f in self.findings if f.get("status") == "Triaged"]
+        log.info(f"Starting response process for {len(triaged_findings)} triaged findings...")
+        for finding in triaged_findings:
             dispositions = []
             for handler in self.handlers:
                 try:
