@@ -9,6 +9,7 @@ from .feeds.crtsh_client import get_subdomains_from_crtsh
 
 from .feeds.hackerone_client import get_hackerone_scopes
 from .feeds.bugcrowd_client import get_bugcrowd_programs
+from .feeds.diodb_client import get_diodb_programs
 
 
 
@@ -131,6 +132,9 @@ class DataPipeline:
         :param seed_domain: The domain to use as a seed for discovery.
         :return: A list of raw target strings.
         """
+
+        Runs the pipeline in autonomous mode by fetching targets from multiple sources.
+
         print(f"Fetching autonomous targets for seed: {seed_domain}")
         # For now, we'll just use crt.sh. This can be expanded later.
         subdomains = get_subdomains_from_crtsh(seed_domain)
@@ -153,6 +157,7 @@ class DataPipeline:
         in_scope_rule = f"*.{seed_domain}\n{seed_domain}"
 
         Runs the pipeline in autonomous mode by fetching targets from HackerOne and Bugcrowd.
+
 
 
         # For this simple case, we assume no out-of-scope rules are
@@ -184,22 +189,40 @@ class DataPipeline:
         return self.run(raw_targets)
 
         all_programs = []
+        program_names = set()
 
+        # Helper to process and deduplicate programs
+        def process_programs(programs, source_name):
+            count = 0
+            for prog in programs:
+                name = prog.get('name')
+                if name and name.lower() not in program_names:
+                    program_names.add(name.lower())
+                    all_programs.append(prog)
+                    count += 1
+            print(f"Found {count} new programs from {source_name}.")
+
+        # Fetch from HackerOne
         if self.h1_user and self.h1_key:
             print("Fetching programs from HackerOne...")
             h1_programs = get_hackerone_scopes(self.h1_user, self.h1_key)
-            all_programs.extend(h1_programs)
-            print(f"Found {len(h1_programs)} programs on HackerOne.")
+            process_programs(h1_programs, "HackerOne")
         else:
             print("HackerOne API user or key not configured. Skipping.")
 
+        # Fetch from Bugcrowd
         if self.bc_user and self.bc_key:
             print("Fetching programs from Bugcrowd...")
             bc_programs = get_bugcrowd_programs(self.bc_user, self.bc_key)
-            all_programs.extend(bc_programs)
-            print(f"Found {len(bc_programs)} programs on Bugcrowd.")
+            process_programs(bc_programs, "Bugcrowd")
         else:
             print("Bugcrowd API user or key not configured. Skipping.")
 
+        # Fetch from diodb
+        print("Fetching programs from diodb...")
+        diodb_programs = get_diodb_programs()
+        process_programs(diodb_programs, "diodb")
+
+        print(f"Total unique programs found: {len(all_programs)}")
         return all_programs
 
