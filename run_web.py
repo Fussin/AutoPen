@@ -184,10 +184,12 @@ def run_full_scan(scan_id, app):
     run_url_discovery_phase(scan_id, app)
 
 from cyberhunter_3d.web.views.dashboard import dashboard_bp
+from cyberhunter_3d.web.views.user_journey import user_journey_bp
 
 # Register the API blueprint
 app.register_blueprint(api_bp)
 app.register_blueprint(dashboard_bp)
+app.register_blueprint(user_journey_bp)
 
 @app.route('/sync-hackerone', methods=['POST'])
 @login_required
