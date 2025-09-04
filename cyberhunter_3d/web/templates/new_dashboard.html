@@ -4,7 +4,10 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2>Interactive Dashboard</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
+        <h2>Interactive Dashboard</h2>
+        <a href="{{ url_for('user_journey.show_user_journey') }}" class="button">View User Journey</a>
+    </div>
     <p>This is the new interactive dashboard for viewing scan results.</p>
 
     <div class="card">
