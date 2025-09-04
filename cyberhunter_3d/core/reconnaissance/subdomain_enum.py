@@ -34,6 +34,7 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
 
         results_dir = get_results_dir(domain, scan_id)
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
+        context.add_event("INFO", "Starting V3 Plugin-Based Reconnaissance.")
 
         plugin_manager = PluginManager()
         plugin_manager.run_all_plugins(context)
@@ -72,5 +73,6 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         db.session.commit()
 
         log.info(f"Scan {scan_id} for {domain} completed. Found {len(all_subdomains)} subdomains.")
+        context.add_event("INFO", f"Scan completed. Found {len(all_subdomains)} subdomains.")
 
-        return {"master_results_list": master_filepath}, None, None
+        return {"master_results_list": master_filepath}, context, None

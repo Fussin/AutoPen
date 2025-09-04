@@ -144,15 +144,32 @@ class PluginManager:
 
     def run_all_plugins(self, context: ScanContext, include_plugins: List[str] = None):
         self.run_order = self.resolve_dependencies()
+        plugins_dict = {p.name: p for p in self.plugins}
 
         if include_plugins:
             self.run_order = [p for p in self.run_order if p.name in include_plugins]
 
         log.info(f"Plugin execution order: {[p.name for p in self.run_order]}")
+        context.add_event("INFO", f"Plugin execution order: {[p.name for p in self.run_order]}")
 
         for plugin in self.run_order:
             log.info(f"Running plugin: {plugin.name}")
+            context.add_event("INFO", f"Running plugin: {plugin.name}", plugin_name=plugin.name)
             try:
                 plugin.run(context)
             except Exception as e:
                 log.error(f"Error running plugin {plugin.name}: {e}")
+                context.add_event("ERROR", f"Error running plugin: {e}", plugin_name=plugin.name)
+
+                if plugin.fallback and plugin.fallback in plugins_dict:
+                    fallback_plugin = plugins_dict[plugin.fallback]
+                    log.warning(f"Attempting to run fallback plugin: {fallback_plugin.name}")
+                    context.add_event("INFO", f"Attempting to run fallback plugin: {fallback_plugin.name}", plugin_name=plugin.name)
+                    try:
+                        fallback_plugin.run(context)
+                    except Exception as fallback_e:
+                        log.error(f"Fallback plugin {fallback_plugin.name} also failed: {fallback_e}")
+                        context.add_event("ERROR", f"Fallback plugin {fallback_plugin.name} also failed: {fallback_e}", plugin_name=fallback_plugin.name)
+                else:
+                    log.error(f"No fallback available for {plugin.name}.")
+                    context.add_event("ERROR", "No fallback available.", plugin_name=plugin.name)

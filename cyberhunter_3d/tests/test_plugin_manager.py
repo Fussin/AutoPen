@@ -77,5 +77,18 @@ class TestPluginManager(unittest.TestCase):
         expected_calls = [unittest.mock.call("plugin1"), unittest.mock.call("plugin2"), unittest.mock.call("plugin3")]
         self.assertEqual(call_order_mock.call_args_list, expected_calls)
 
+    def test_run_all_plugins_with_fallback(self):
+        plugin1 = MagicMock(spec=Plugin, name="Plugin1", provides=["data1"], requires=[], run=MagicMock(side_effect=Exception("Plugin1 failed")), fallback="FallbackPlugin")
+        fallback_plugin = MagicMock(spec=Plugin, name="FallbackPlugin", provides=["data1"], requires=[], run=MagicMock(), fallback=None)
+
+        with patch('cyberhunter_3d.core.plugins.manager.PluginManager.discover_plugins', return_value=[plugin1, fallback_plugin]):
+            plugin_manager = PluginManager()
+
+        context = ScanContext(target_domain="example.com")
+        plugin_manager.run_all_plugins(context)
+
+        plugin1.run.assert_called_once_with(context)
+        fallback_plugin.run.assert_called_once_with(context)
+
 if __name__ == '__main__':
     unittest.main()

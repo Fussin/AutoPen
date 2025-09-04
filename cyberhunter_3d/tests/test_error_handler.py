@@ -67,19 +67,20 @@ class TestErrorHandler(unittest.TestCase):
             func_raising_critical_error()
 
     @patch('time.sleep', return_value=None)
-    def test_delay_between_retries(self, mock_sleep):
+    def test_exponential_backoff(self, mock_sleep):
         """
-        Tests that the decorator waits for the specified delay between retries.
+        Tests that the decorator uses exponential backoff for delays.
         """
         mock_func = Mock(side_effect=[Exception("fail"), Exception("fail"), "success"])
 
-        @handle_module_errors(retries=3, delay=5)
-        def func_with_delay():
+        @handle_module_errors(retries=3, delay=2, backoff_factor=3, max_delay=10)
+        def func_with_backoff():
             return mock_func()
 
-        func_with_delay()
+        func_with_backoff()
         self.assertEqual(mock_sleep.call_count, 2)
-        mock_sleep.assert_called_with(5)
+        mock_sleep.assert_any_call(2)
+        mock_sleep.assert_any_call(6)
 
 if __name__ == '__main__':
     unittest.main()

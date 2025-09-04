@@ -10,6 +10,7 @@ from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
 from cyberhunter_3d.utils.file_utils import get_results_dir
 from cyberhunter_3d.core.error_handler import handle_module_errors, CriticalError
+from cyberhunter_3d.core.health_checker import run_health_checks
 
 @handle_module_errors(retries=2, fallback_return={})
 def safe_load_json(path):
@@ -17,13 +18,13 @@ def safe_load_json(path):
     with open(path, 'r') as f:
         return json.load(f)
 
-def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str, scan_id: int):
+def aggregate_results(output_paths: dict, domain: str, logger, results_dir: str, scan_id: int, scan_events: list = None):
     """
     Aggregates all reconnaissance results into a single JSON file.
     """
     logger.info("Aggregating all reconnaissance data...")
     config = load_config()
-    final_data = {"domain": domain, "hosts": [], "url_discovery": {}, "vulnerabilities": []}
+    final_data = {"domain": domain, "scan_events": scan_events or [], "hosts": [], "url_discovery": {}, "vulnerabilities": []}
     host_map = {}
 
     # Helper to load JSON files safely
@@ -145,6 +146,12 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
     logger = setup_logger('main.log', level=log_level)
     logger.info("--- Welcome to CyberHunter 3D - Reconnaissance Module (V3) ---")
 
+
+    # Run pre-scan health checks
+    if not run_health_checks():
+        logger.critical("Pre-scan health checks failed. Aborting scan.")
+        sys.exit(1)
+
     if autonomous:
         logger.info(f"Starting autonomous pipeline run for seed domain: {domain}")
         pipeline = DataPipeline()
@@ -154,6 +161,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
             logger.info(f"  - Type: {target_type}, Value: {target_value}")
         logger.info("--- Autonomous Run Finished ---")
         return
+
 
     from run_web import create_app
     from cyberhunter_3d.web.models import db, Scan, Target
@@ -172,6 +180,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
     results_dir = get_results_dir(domain, scan_id)
 
     try:
+        scan_events = []
         if url_discovery:
             logger.info(f"Starting URL discovery for: {domain}")
             run_url_discovery_phase(scan_id, app)
@@ -179,7 +188,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         else:
             logger.info(f"Starting V3 reconnaissance pipeline for: {domain}")
             # Run the full subdomain enumeration pipeline
-            output_paths, _, _ = enumerate_subdomains_v2(
+            output_paths, context, _ = enumerate_subdomains_v2(
                 domain=domain,
                 scan_id=scan_id,
                 app=app
@@ -188,9 +197,10 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
                 logger.error("Reconnaissance pipeline did not produce any output. Exiting.")
                 sys.exit(1)
             logger.info(f"Reconnaissance complete for {domain}.")
+            scan_events = context.scan_events if context else []
 
         # Always aggregate results at the end
-        aggregate_results({}, domain, logger, results_dir, scan_id)
+        aggregate_results({}, domain, logger, results_dir, scan_id, scan_events=scan_events)
 
         config = load_config()
         final_file_path = os.path.join(config['recon_output_dir'], config['final_recon_file'])
