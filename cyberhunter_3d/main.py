@@ -8,7 +8,7 @@ from cyberhunter_3d.core.scan_manager import run_url_discovery_phase
 from cyberhunter_3d.core.reconnaissance.utils import load_config
 from cyberhunter_3d.utils.logger import setup_logger
 from cyberhunter_3d.reporting.r2_uploader import upload_to_r2
-from cyberhunter_3d.utils.file_utils import get_results_dir
+from cyberhunter_3d.utils.file_utils import get_results_dir, create_scan_results_structure
 from cyberhunter_3d.core.error_handler import handle_module_errors, CriticalError
 from cyberhunter_3d.core.health_checker import run_health_checks
 
@@ -178,6 +178,7 @@ def main(domain, verbose, upload_to_r2, save_to_db, previous_scan_dir, url_disco
         scan_id = scan.id
 
     results_dir = get_results_dir(domain, scan_id)
+    create_scan_results_structure(results_dir)
 
     try:
         scan_events = []
