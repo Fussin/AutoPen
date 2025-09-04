@@ -157,3 +157,31 @@ def get_scan_graph(scan_id):
         graph_definition += f'    {scan_node} --> {asset_node}\n'
 
     return jsonify({'graph_definition': graph_definition})
+
+@api_bp.route('/monitoring/status', methods=['GET'])
+def get_monitoring_status():
+    """
+    Provides mock data for the 3D monitoring view.
+    In a real application, this would fetch real-time data from the scan manager.
+    """
+    mock_data = {
+        "scan_progress": [
+            {"name": "Subdomain Discovery", "progress": 65},
+            {"name": "URL Collection", "progress": 85},
+            {"name": "XSS Testing", "progress": 40},
+            {"name": "SQL Injection", "progress": 70},
+            {"name": "Network Scanning", "progress": 100}
+        ],
+        "vulnerability_feed": [
+            {"severity": "CRITICAL", "title": "XSS found in example.com/search"},
+            {"severity": "HIGH", "title": "SQL Injection in api.example.com/user"},
+            {"severity": "MEDIUM", "title": "CORS misconfiguration on *.example.com"},
+            {"severity": "LOW", "title": "Information disclosure /backup.sql"}
+        ],
+        "scanner_stats": {
+            "active": 127,
+            "queue": 1847,
+            "completed": 3492
+        }
+    }
+    return jsonify(mock_data)
