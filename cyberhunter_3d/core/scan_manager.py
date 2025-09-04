@@ -7,6 +7,7 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
+from cyberhunter_3d.core.notifications.notification_manager import NotificationManager
 
 def run_url_discovery_phase(scan_id, app):
     """
@@ -52,6 +53,11 @@ def run_discovery_phase(scan_id, app):
             return
 
         try:
+            notification_manager = NotificationManager()
+            notification_manager.send_notification(
+                "slack",
+                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has started the discovery phase."
+            )
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} discovery phase started.")
@@ -119,6 +125,10 @@ def run_discovery_phase(scan_id, app):
 
             scan.results = f"Discovery phase complete. Found {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
             scan.status = 'PENDING_REVIEW'
+            notification_manager.send_notification(
+                "slack",
+                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed the discovery phase. {in_scope_count} new assets found."
+            )
             print(f"Scan {scan_id} discovery phase complete.")
 
         except Exception as e:
@@ -143,6 +153,11 @@ def run_execution_phase(scan_id, app):
             return
 
         try:
+            notification_manager = NotificationManager()
+            notification_manager.send_notification(
+                "slack",
+                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has started the execution phase."
+            )
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} execution phase started.")
@@ -206,6 +221,10 @@ def run_execution_phase(scan_id, app):
                 f"Skipped {out_of_scope_count} out-of-scope items during expansion."
             )
             scan.status = 'COMPLETED'
+            notification_manager.send_notification(
+                "slack",
+                f"Scan {getattr(scan, 'name', f'Scan {scan_id}')} (ID: {scan_id}) has completed successfully."
+            )
             print(f"Scan {scan_id} execution phase complete.")
 
         except Exception as e:
