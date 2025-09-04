@@ -177,10 +177,6 @@ from cyberhunter_3d.core.triage_engine import TriageEngine
 from cyberhunter_3d.core.validation_engine import ValidationEngine
 from cyberhunter_3d.core.response_engine import ResponseEngine
 from cyberhunter_3d.core.db_utils import save_findings_to_db
-from cyberhunter_3d.core.scheduler import sync_hackerone_programs
-from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
-
 
 def run_full_scan(scan_id, app):
     """Runs the full scan and processing pipeline."""
@@ -209,11 +205,18 @@ def run_full_scan(scan_id, app):
     validation_engine = ValidationEngine(findings)
     validated_findings = validation_engine.run()
 
-    response_engine = ResponseEngine(validated_findings)
-    final_findings = response_engine.run()
+    response_engine = ResponseEngine()
+
+    # Process critical findings
+    critical_findings = [f for f in validated_findings if f.get('severity') == 'Critical']
+    if critical_findings:
+        response_engine.run(critical_findings, 'CRITICAL_FINDING_DETECTED')
+
+    # Process scan completion
+    response_engine.run(validated_findings, 'SCAN_COMPLETION')
 
     # Save findings to the database
-    save_findings_to_db(final_findings, app)
+    save_findings_to_db(validated_findings, app)
 
     log.info(f"Full scan and processing for scan {scan_id} completed.")
 
@@ -235,7 +238,6 @@ def sync_hackerone():
 def submit_targets():
     targets_text = request.form.get('targets', '')
     target_file = request.files.get('target_file')
-    scan_type = request.form.get('scan_type', 'passive') # Default to 'passive'
 
     raw_targets = []
 
@@ -263,7 +265,7 @@ def submit_targets():
         return redirect(url_for('dashboard'))
 
     # 4. Create Scan and Target objects in DB
-    new_scan = Scan(user_id=current_user.id, status='QUEUED', scan_type=scan_type)
+    new_scan = Scan(user_id=current_user.id, status='QUEUED')
     db.session.add(new_scan)
 
     # We need to flush to get the new_scan.id before creating targets
@@ -391,19 +393,5 @@ def scan_results(scan_id):
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database(app.app_context())
-
-    # --- Scheduler Setup ---
-    # In a production environment, you might want a more robust scheduler setup,
-    # but for this self-contained app, a background scheduler is fine.
-    scheduler = BackgroundScheduler(daemon=True)
-    # Run the sync job every 24 hours
-    scheduler.add_job(sync_hackerone_programs, 'interval', hours=24, args=[app])
-    scheduler.start()
-    log.info("Scheduler started. HackerOne sync job scheduled to run every 24 hours.")
-
-    # Shut down the scheduler when exiting the app
-    atexit.register(lambda: scheduler.shutdown())
-
     # In a real deployment, use a proper WSGI server like Gunicorn.
-    # The reloader can cause the scheduler to run twice, so disable it for production.
-    app.run(debug=True, port=5001, use_reloader=False)
+    app.run(debug=True, port=5001)

@@ -2,11 +2,11 @@ import logging
 from ..plugins.manager import PluginManager
 from ..plugins.context import ScanContext
 from cyberhunter_3d.utils.file_utils import save_to_json, get_results_dir
-from ..ai.scan_config_selector import AIScanConfigSelector
-from ...web.models import Scan, Asset, Finding, db
+from ...web.models import Scan, Asset, db
 from ..error_handler import handle_module_errors, CriticalError
 from ..triage_engine import TriageEngine
 from ..response_engine import ResponseEngine
+
 
 log = logging.getLogger(__name__)
 
@@ -39,16 +39,8 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
         context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
         context.add_event("INFO", "Starting V3 Plugin-Based Reconnaissance.")
 
-        # AI-Powered Scan Configuration
-        ai_selector = AIScanConfigSelector()
-        # Use the scan_type from the database to drive the AI's decision
-        target_info = {'scan_type': scan.scan_type}
-        recommended_plugins = ai_selector.select_plugins(target_info)
-
-        context.add_event("INFO", f"AI recommended plugins: {recommended_plugins}")
-
         plugin_manager = PluginManager()
-        plugin_manager.run_all_plugins(context, include_plugins=recommended_plugins)
+        plugin_manager.run_all_plugins(context)
 
         all_subdomains = context.get('subdomains', set())
 
@@ -80,6 +72,7 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
             )
             db.session.add(asset)
 
+
         # --- Automated Triage ---
         log.info(f"Scan {scan_id}: Starting automated triage process...")
         context.add_event("INFO", "Starting automated triage process...")
@@ -110,6 +103,7 @@ def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
             db.session.add(db_finding)
         log.info(f"Scan {scan_id}: Saved {len(triaged_findings)} findings to the database.")
         context.add_event("INFO", f"Saved {len(triaged_findings)} findings to the database.")
+
 
         scan.status = 'COMPLETED'
         db.session.commit()
