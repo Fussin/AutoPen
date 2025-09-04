@@ -107,3 +107,18 @@ class Finding(db.Model):
 
     def __repr__(self):
         return f'<Finding {self.title} ({self.severity})>'
+
+class ScanProgress(db.Model):
+    """
+    Model to track the progress of individual modules within a scan.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    module_name = db.Column(db.String(100), nullable=False)
+    progress = db.Column(db.Integer, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('scan_id', 'module_name', name='_scan_module_uc'),)
+
+    def __repr__(self):
+        return f'<ScanProgress {self.scan_id} - {self.module_name}: {self.progress}%>'
