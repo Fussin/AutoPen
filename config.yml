@@ -9,6 +9,13 @@ artifacts_dir: artifacts
 # censys_api_id: YOUR_API_ID
 # censys_api_secret: YOUR_API_SECRET
 
+# Asset configuration
+assets:
+  - name: "prod.example.com"
+    criticality: 1.5
+  - name: "staging.example.com"
+    criticality: 1.2
+
 # Wordlists
 wordlists:
   dns_bruteforce: /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
@@ -19,57 +26,74 @@ plugins:
   # Reconnaissance Phase
   subfinder:
     enabled: true
+    confidence: 0.9
   amass:
     enabled: true
+    confidence: 0.9
   fierce:
     enabled: true
+    confidence: 0.8
   dnsenum:
     enabled: true
+    confidence: 0.8
   theharvester:
     enabled: true
+    confidence: 0.8
   httpx:
     enabled: true
+    confidence: 1.0
   subjack:
     enabled: true
+    confidence: 0.95
   whatweb:
     enabled: true
+    confidence: 0.9
 
   # URL Discovery Phase
   gau:
     enabled: true
+    confidence: 0.8
   waybackurls:
     enabled: true
+    confidence: 0.8
   katana:
     enabled: true
+    confidence: 0.9
   hakrawler:
     enabled: true
+    confidence: 0.8
 
   # Vulnerability Discovery Phase
   nuclei:
     enabled: true
-    # Example of template configuration
-    # templates:
-    #   - "cves"
-    #   - "network"
+    confidence: 0.95
   sqlmap:
     enabled: true
+    confidence: 1.0
   trufflehog:
     enabled: true
+    confidence: 1.0
 
   # Network Scanning Phase
   nmap:
     enabled: true
+    confidence: 1.0
   masscan:
     enabled: true
+    confidence: 1.0
     rate: 1000
     ports: "0-65535"
   rustscan:
     enabled: true
+    confidence: 1.0
   enum4linux:
     enabled: true
+    confidence: 0.9
 
   # OSINT Phase
   aquatone:
     enabled: true
+    confidence: 1.0
   sherlock:
     enabled: true
+    confidence: 0.9

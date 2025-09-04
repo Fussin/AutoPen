@@ -42,7 +42,6 @@ class Scan(db.Model):
 
     # Relationship to discovered assets
     assets = db.relationship('Asset', backref='scan', lazy=True, cascade="all, delete-orphan")
-    findings = db.relationship('Finding', backref='scan', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<Scan {self.id} - {self.status}>'
@@ -68,9 +67,6 @@ class Asset(db.Model):
     type = db.Column(db.String(50), nullable=False) # e.g., 'subdomain', 'ip_address', 'open_port'
     value = db.Column(db.String(255), nullable=False)
     details = db.Column(db.JSON, nullable=True) # For extra info like port details
-    risk_level = db.Column(db.String(50), nullable=True, default='None')
-    cvss_score = db.Column(db.Float, nullable=True, default=0.0)
-    known_exploits = db.Column(db.Boolean, nullable=True, default=False)
     is_approved_for_scan = db.Column(db.Boolean, nullable=False, default=True)
     first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -78,50 +74,3 @@ class Asset(db.Model):
 
     def __repr__(self):
         return f'<Asset {self.value} ({self.type})>'
-
-class Finding(db.Model):
-    """
-    Finding model to store triaged and correlated findings. This model also
-    includes fields for the ML feedback loop.
-    """
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
-    severity = db.Column(db.String(50), nullable=False)
-    # The confidence score will be updated by the ML model
-    confidence = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(50), nullable=False, default='New')
-    description = db.Column(db.Text, nullable=False)
-    raw_evidence = db.Column(db.JSON, nullable=False)
-    scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    # --- Fields for ML Feedback Loop ---
-    # A unique signature for the finding type, e.g., 'nuclei:cve-2021-44228'
-    finding_signature = db.Column(db.String(255), nullable=False, index=True)
-    # Context about the asset, e.g., {'is_production': true, 'tech_stack': ['nginx', 'react']}
-    asset_context = db.Column(db.JSON, nullable=True)
-    # Ground truth from the validation engine: True (TP), False (FP), or None (Not Validated)
-    validation_outcome = db.Column(db.Boolean, nullable=True)
-    # Final action taken, e.g., 'ticket_created', 'false_positive', 'ignored'
-    disposition = db.Column(db.String(100), nullable=True)
-
-    def __repr__(self):
-        return f'<Finding {self.title} ({self.severity})>'
-<<<<<<< HEAD
-=======
-
-class Alert(db.Model):
-    """
-    Alert model for dashboard notifications.
-    """
-    id = db.Column(db.Integer, primary_key=True)
-    finding_id = db.Column(db.Integer, db.ForeignKey('finding.id'), nullable=False)
-    message = db.Column(db.Text, nullable=False)
-    is_read = db.Column(db.Boolean, nullable=False, default=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    finding = db.relationship('Finding', backref='alerts')
-
-    def __repr__(self):
-        return f'<Alert {self.id} for Finding {self.finding_id}>'
->>>>>>> 525ac14ad8592b1fe5b703f44fd8b258c944c147
