@@ -1,6 +1,11 @@
 import unittest
+import sys
+import os
 from unittest.mock import patch, MagicMock
-from ..core.reconnaissance.passive_engine import run_passive_enumeration
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from cyberhunter_3d.core.reconnaissance.passive_engine import run_passive_enumeration
 
 class TestRefactoring(unittest.TestCase):
 
