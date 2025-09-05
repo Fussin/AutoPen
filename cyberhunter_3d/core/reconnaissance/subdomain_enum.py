@@ -1,41 +1,21 @@
-import concurrent.futures
 import json
-from typing import Set, List, Dict
-
+import os
 import subprocess
 import tempfile
-import os
+import datetime
+import collections
+import concurrent.futures
+from typing import Set, List, Dict
+
 from .utils import get_logger, load_config
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
-from ...plugins.recon.dnsgen import DnsgenPlugin
-from ...plugins.recon.gotator import GotatorPlugin
-from .js_engine import run_js_enumeration, run_github_dorking
+from .js_engine import run_js_enumeration
 from .visual_recon import run_visual_recon
 from .tech_fingerprinting import run_tech_fingerprinting
 from .cloud_asset_enum import find_cloud_assets
 
 logger = get_logger(__name__)
-
-def generate_custom_wordlist(subdomains: Set[str]) -> str:
-    """
-    Generates a custom wordlist from a set of known subdomains.
-    """
-    custom_words = set()
-    for sub in subdomains:
-        parts = sub.split('.')
-        if len(parts) > 2:
-            subdomain_part = '.'.join(parts[:-2])
-            for word in subdomain_part.replace('-', '.').split('.'):
-                if word and not word.isnumeric():
-                    custom_words.add(word)
-
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as tmp_file:
-        wordlist_filename = tmp_file.name
-        for word in custom_words:
-            tmp_file.write(f"{word}\n")
-
-    return wordlist_filename
 
 def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     """
@@ -44,44 +24,42 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     config = load_config()
     logger.info(f"Starting V2 reconnaissance for: {domain}")
 
-    # --- Initial Enumeration ---
-    passive_findings = run_passive_enumeration(domain)
-    active_findings = run_active_enumeration(domain)
+    # --- Step 1: Subdomain Enumeration ---
+    passive_subdomains = run_passive_enumeration(domain)
+    active_subdomains = run_active_enumeration(domain)
+    raw_subdomains = passive_subdomains.union(active_subdomains)
 
-    # We need to work with sets for efficiency
-    raw_subdomains = passive_findings.union(active_findings)
-
-    # --- Permutation Enumeration ---
-    if raw_subdomains:
-        logger.info("Starting permutation enumeration.")
-        custom_wordlist_path = generate_custom_wordlist(raw_subdomains)
-
-        dnsgen_plugin = DnsgenPlugin()
-        gotator_plugin = GotatorPlugin()
-
-        # For simplicity, running sequentially. Can be parallelized.
-        dnsgen_findings = dnsgen_plugin.run(list(raw_subdomains), custom_wordlist_path)
-        gotator_findings = gotator_plugin.run(list(raw_subdomains), custom_wordlist_path)
-
-        perm_subdomains = {f['evidence']['poc'] for f in dnsgen_findings if f['status'] == 'success'}
-        perm_subdomains.update({f['evidence']['poc'] for f in gotator_findings if f['status'] == 'success'})
-
-        raw_subdomains.update(perm_subdomains)
-        os.remove(custom_wordlist_path)
-    else:
-        logger.warning("No known subdomains to permute. Skipping permutation step.")
-
-
-    logger.info(f"Total raw subdomains found from all engines: {len(raw_subdomains)}")
-
-    # --- Downstream Pipeline ---
+    # --- Step 2: DNS Resolution and Validation ---
+    logger.info("Starting DNS resolution and validation...")
     master_subdomains = resolve_and_validate(raw_subdomains)
-    # ... (rest of the pipeline remains)
+    logger.info(f"Found {len(master_subdomains)} valid subdomains after resolution.")
+
+    # --- Step 3: Enrichment & Analysis ---
+    live_hosts, screenshots = run_visual_recon(master_subdomains)
+    tech_results = run_tech_fingerprinting(live_hosts)
+    js_findings = run_js_enumeration(live_hosts) # This now returns List[Finding]
+    cloud_assets = find_cloud_assets(master_subdomains)
+
+    # --- Step 4: Final Report Generation ---
+    final_recon_data = {
+        'domain': domain,
+        'master_subdomains': sorted(list(master_subdomains)),
+        'live_hosts': sorted(list(live_hosts)),
+        'screenshots': screenshots,
+        'technology_and_ports': tech_results,
+        'js_findings': js_findings, # Already in the correct format
+        'cloud_assets': cloud_assets,
+    }
+
+    final_recon_file = os.path.join(config['recon_output_dir'], config['final_recon_file'])
+    os.makedirs(config['recon_output_dir'], exist_ok=True)
+    with open(final_recon_file, 'w') as f_out:
+        json.dump(final_recon_data, f_out, indent=4)
 
     assets = [{'type': 'subdomain', 'value': sub} for sub in master_subdomains]
     return assets
 
 
 def resolve_and_validate(subdomains: Set[str]) -> Set[str]:
-    # ... (implementation remains)
+    # ... (original implementation)
     pass
