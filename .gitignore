@@ -74,6 +74,7 @@ target/
 
 # ---- Jupyter Notebook ----
 .ipynb_checkpoints
+*.ipynb_checkpoints/
 
 # ---- IPython ----
 profile_default/
@@ -107,6 +108,8 @@ venv.bak/
 .ropeproject
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # ---- mkdocs documentation ----
 /site
@@ -125,9 +128,15 @@ dmypy.json
 # ---- Cython debug symbols ----
 cython_debug/
 
-# ---- CyberHunter 3D specific ----
+# ---- CyberHunter 3D / AutoPen specific ----
 cyberhunter.db
 subdomains_alive.txt
 subdomains_dead.txt
+*.db
+*.sqlite
+*.sqlite3
 *.log
-
+*.tmp
+*.bak
+*.orig
+*.rej
