@@ -1,0 +1,38 @@
+{
+    "domain": "example.com",
+    "start_time": "2025-09-05T07:46:16.015400",
+    "end_time": "2025-09-05T07:46:16.018284",
+    "duration_seconds": 0.002884,
+    "plugin_stats": {
+        "subfinder": {
+            "success": 1,
+            "failed": 0
+        },
+        "amass": {
+            "success": 1,
+            "failed": 0
+        },
+        "assetfinder": {
+            "success": 0,
+            "failed": 1
+        },
+        "gobuster": {
+            "success": 1,
+            "failed": 0
+        },
+        "puredns": {
+            "success": 1,
+            "failed": 0
+        }
+    },
+    "errors": [
+        {
+            "target": "example.com",
+            "phase": "recon",
+            "tool": "assetfinder",
+            "status": "failed",
+            "evidence": null,
+            "error": "timeout"
+        }
+    ]
+}

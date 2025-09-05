@@ -39,6 +39,8 @@ screenshot_dir: recon_results/screenshots
 nmap_output_dir: recon_results/nmap
 final_recon_file: recon_results/final_recon_data.json
 master_subdomains_file: recon_results/master_subdomains.txt
+subdomains_all_file: recon_results/subdomains_all.txt
+subdomains_metadata_file: recon_results/subdomains_metadata.json
 
 # Resilience settings for plugins
 resilience:
