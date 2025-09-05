@@ -1,13 +1,12 @@
-# Byte-compiled / optimized / DLL files
+# ---- Python bytecode ----
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 
-# C extensions
+# ---- C extensions ----
 *.so
 
-# Distribution / packaging
+# ---- Distribution / packaging ----
 .Python
 build/
 develop-eggs/
@@ -21,24 +20,22 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
 share/python-wheels/
-*.egg-info/
+pip-wheel-metadata/
 .installed.cfg
+*.egg-info/
 *.egg
 MANIFEST
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+# ---- PyInstaller ----
 *.manifest
 *.spec
 
-# Installer logs
+# ---- Installer logs ----
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# ---- Unit test / coverage reports ----
 htmlcov/
 .tox/
 .nox/
@@ -52,50 +49,50 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Translations
+# ---- Translations ----
 *.mo
 *.pot
 
-# Django stuff:
+# ---- Django stuff ----
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-# Flask stuff:
+# ---- Flask stuff ----
 instance/
 .webassets-cache
 
-# Scrapy stuff:
+# ---- Scrapy stuff ----
 .scrapy
 
-# Sphinx documentation
+# ---- Sphinx documentation ----
 docs/_build/
 
-# PyBuilder
+# ---- PyBuilder ----
 target/
 
-# Jupyter Notebook
+# ---- Jupyter Notebook ----
 .ipynb_checkpoints
 
-# IPython
+# ---- IPython ----
 profile_default/
 ipython_config.py
 
-# pyenv
+# ---- pyenv ----
 .python-version
 
-# PEP 582; used by poetry and pdm
+# ---- PEP 582; used by poetry and pdm ----
 __pypackages__/
 
-# Celery stuff
+# ---- Celery stuff ----
 celerybeat-schedule
 celerybeat.pid
 
-# SageMath parsed files
+# ---- SageMath parsed files ----
 *.sage.py
 
-# Environments
+# ---- Environments ----
 .env
 .venv
 env/
@@ -104,36 +101,33 @@ ENV/
 env.bak/
 venv.bak/
 
-# Spyder project settings
+# ---- IDE / Editor settings ----
 .spyderproject
 .spyproject
-
-# Rope project settings
 .ropeproject
+.vscode/
+.idea/
 
-# mkdocs documentation
+# ---- mkdocs documentation ----
 /site
 
-# mypy
+# ---- mypy ----
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
-# Pyre type checker
+# ---- Pyre type checker ----
 .pyre/
 
-# pytype static analyzer
+# ---- pytype static analyzer ----
 .pytype/
 
-# Cython debug symbols
+# ---- Cython debug symbols ----
 cython_debug/
 
-# CyberHunter 3D specific
+# ---- CyberHunter 3D specific ----
 cyberhunter.db
 subdomains_alive.txt
 subdomains_dead.txt
 *.log
-__pycache__/
-*.pyc
-*.db
 
