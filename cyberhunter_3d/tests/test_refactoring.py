@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from ..core.reconnaissance.passive_engine import run_passive_enumeration
+from cyberhunter_3d.core.reconnaissance.passive_engine import run_passive_enumeration
 
 class TestRefactoring(unittest.TestCase):
 

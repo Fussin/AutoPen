@@ -23,7 +23,7 @@ def require_api_key(f):
 
 from cyberhunter_3d.web.models import db, Scan, Target, Asset
 from cyberhunter_3d.core.target_parser import parse_targets
-from cyberhunter_3d.core.scan_manager import run_discovery_phase
+from cyberhunter_3d.core.lifecycle_manager import ScanLifecycleManager
 from concurrent.futures import ThreadPoolExecutor
 from flask import current_app
 
@@ -73,11 +73,12 @@ def create_scan():
 
     db.session.commit()
 
-    # Trigger discovery phase
-    get_executor().submit(run_discovery_phase, new_scan.id, current_app._get_current_object())
+    # Trigger the full scan lifecycle
+    manager = ScanLifecycleManager(new_scan.id, current_app._get_current_object())
+    get_executor().submit(manager.run)
 
     return jsonify({
-        'message': 'Scan created successfully',
+        'message': 'Scan created and lifecycle initiated successfully',
         'scan_id': new_scan.id
     }), 202
 
@@ -151,3 +152,25 @@ def get_scan_graph(scan_id):
         graph_definition += f'    {scan_node} --> {asset_node}\n'
 
     return jsonify({'graph_definition': graph_definition})
+
+@api_bp.route('/scans/<int:scan_id>/run', methods=['POST'])
+@require_api_key
+def run_scan_lifecycle(scan_id):
+    """
+    Triggers the full lifecycle for an existing scan.
+    """
+    scan = Scan.query.get_or_404(scan_id)
+    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
+    if scan.user_id != user.id:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    if scan.status.startswith('RUNNING'):
+        return jsonify({'error': 'Scan is already running'}), 409
+
+    manager = ScanLifecycleManager(scan_id, current_app._get_current_object())
+    get_executor().submit(manager.run)
+
+    return jsonify({
+        'message': f'Lifecycle initiated for scan {scan_id}',
+        'scan_id': scan_id
+    }), 202
