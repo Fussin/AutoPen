@@ -1,69 +1,47 @@
-import subprocess
-import tempfile
-import os
+import concurrent.futures
 from typing import Set, List, Dict
-from .utils import load_config, get_logger
 
-config = load_config()
+from .utils import get_logger
+from ...plugins.cloud.goblob import GoblobPlugin
+from ...plugins.cloud.s3scanner import S3ScannerPlugin
+from ...common.schema import Finding
+
 logger = get_logger(__name__)
 
-def find_cloud_assets(subdomains: Set[str]) -> List[Dict[str, str]]:
+def find_cloud_assets(subdomains: Set[str]) -> List[Finding]:
     """
-    Finds cloud assets (S3 buckets, Azure blobs, GCP buckets) for a list of subdomains.
+    Finds cloud assets by orchestrating cloud asset enumeration plugins.
     """
     logger.info(f"Starting cloud asset identification for {len(subdomains)} subdomains...")
-
     if not subdomains:
         logger.warning("No subdomains to check for cloud assets.")
         return []
 
-    cloud_assets = []
-
     # Generate potential bucket names from subdomains
     potential_bucket_names = set()
     for sub in subdomains:
-        # A simple strategy: use the full subdomain and the first part of the subdomain
         potential_bucket_names.add(sub)
         if '.' in sub:
             potential_bucket_names.add(sub.split('.')[0])
 
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as tmp_file:
-        bucket_filename = tmp_file.name
-        for name in potential_bucket_names:
-            tmp_file.write(f"{name}\n")
+    potential_names_list = list(potential_bucket_names)
+    all_findings: List[Finding] = []
 
-    try:
-        # Azure Blobs with goblob
-        logger.info("Checking for Azure blobs...")
-        goblob_command = [config['tools']['goblob'], '-accounts', bucket_filename, '-silent']
-        result = subprocess.run(goblob_command, capture_output=True, text=True)
-        for line in result.stdout.strip().split('\n'):
-            if line:
-                cloud_assets.append({'type': 'azure_blob', 'value': line})
+    goblob_plugin = GoblobPlugin()
+    s3scanner_plugin = S3ScannerPlugin()
 
-        # S3 Buckets with S3Scanner
-        logger.info("Checking for S3 buckets...")
-        s3_command = [config['tools']['s3scanner'], '-provider', 'aws', '-bucket-file', bucket_filename]
-        result = subprocess.run(s3_command, capture_output=True, text=True)
-        for line in result.stdout.strip().split('\n'):
-            if "is readable" in line or "exists" in line:
-                cloud_assets.append({'type': 's3_bucket', 'value': line.split()[0]})
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit scanner tasks
+        future_goblob = executor.submit(goblob_plugin.run, potential_names_list)
+        future_s3_aws = executor.submit(s3scanner_plugin.run, potential_names_list, provider='aws')
+        future_s3_gcp = executor.submit(s3scanner_plugin.run, potential_names_list, provider='gcp')
 
-        # GCP Buckets with S3Scanner
-        logger.info("Checking for GCP buckets...")
-        gcp_command = [config['tools']['s3scanner'], '-provider', 'gcp', '-bucket-file', bucket_filename]
-        result = subprocess.run(gcp_command, capture_output=True, text=True)
-        for line in result.stdout.strip().split('\n'):
-            if "is readable" in line or "exists" in line:
-                cloud_assets.append({'type': 'gcp_bucket', 'value': line.split()[0]})
+        # Process results as they complete
+        for future in concurrent.futures.as_completed([future_goblob, future_s3_aws, future_s3_gcp]):
+            try:
+                all_findings.extend(future.result())
+            except Exception as e:
+                logger.error(f"A cloud asset plugin task generated an exception: {e}")
 
-    except FileNotFoundError as e:
-        tool_name = str(e).split("'")[1]
-        logger.error(f"Error: Tool '{tool_name}' not found.")
-    except Exception as e:
-        logger.error(f"An error occurred during cloud asset identification: {e}")
-    finally:
-        os.remove(bucket_filename)
-
-    logger.info(f"Found {len(cloud_assets)} potential cloud assets.")
-    return cloud_assets
+    logger.info(f"Found {len(all_findings)} potential cloud assets.")
+    return all_findings
