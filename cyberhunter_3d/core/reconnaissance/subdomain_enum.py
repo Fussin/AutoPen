@@ -5,7 +5,7 @@ from typing import Set, List, Dict
 import subprocess
 import tempfile
 import os
-from .utils import get_logger, load_config
+from .utils import get_logger
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
 from .permutation_engine import run_permutation_enumeration
@@ -21,7 +21,6 @@ def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     Runs the full V2 reconnaissance pipeline.
     """
     logger.info(f"Starting V2 reconnaissance for: {domain}")
-    config = load_config()
 
     raw_subdomains = set()
 
