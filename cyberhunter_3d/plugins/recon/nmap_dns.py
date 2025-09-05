@@ -1,5 +1,6 @@
 import shutil
 import re
+import time
 from typing import List, Dict
 from ...common.exec import run_command
 from ...common.schema import Finding
@@ -15,32 +16,42 @@ class NmapDnsPlugin:
     def check_dependencies(self) -> bool:
         return shutil.which(config['tools']['nmap']) is not None
 
-    def run(self, targets: List[str]) -> List[Dict]:
+    def run(self, targets: List[str], retries: int = 1, timeout: int = 300) -> List[Dict]:
         if not self.check_dependencies():
-            print("Nmap is not installed or configured.")
-            return []
+            return [{
+                "tool": self.name(), "phase": self.phase(), "target": t,
+                "status": "failed", "evidence": None,
+                "error": "Nmap tool not found."
+            } for t in targets]
 
         all_findings = []
         for target in targets:
-            try:
-                tool_path = config['tools']['nmap']
-                command = [tool_path, '--script', 'dns-zone-transfer', '-p', '53', target]
-                raw_output = run_command(command)
-                if raw_output and "dns-zone-transfer:" in raw_output:
-                    findings = self.parse(raw_output, target)
-                    all_findings.extend(findings)
-            except ToolExecutionError as e:
-                # Nmap can be noisy on stderr, only show error if zone transfer fails unexpectedly
-                if "failed to get zone" not in e.stderr.lower():
-                    print(f"Error running Nmap DNS Zone Transfer: {e}")
-            except Exception as e:
-                print(f"A general error occurred with Nmap DNS plugin: {e}")
+            for attempt in range(retries):
+                try:
+                    tool_path = config['tools']['nmap']
+                    command = [tool_path, '--script', 'dns-zone-transfer', '-p', '53', target]
+                    raw_output = run_command(command, timeout=timeout)
+                    if raw_output and "dns-zone-transfer:" in raw_output:
+                        findings = self.parse(raw_output, target)
+                        all_findings.extend(findings)
+                    break  # Success
+                except ToolExecutionError as e:
+                    # A failed zone transfer is not necessarily a retryable error,
+                    # but we'll retry on timeouts or other execution issues.
+                    if attempt < retries - 1:
+                        time.sleep(2)
+                        continue
+                    else:
+                        # Only report as failure if it's not the common "failed to get zone" message
+                        if "failed to get zone" not in e.stderr.lower():
+                             all_findings.append({
+                                "tool": self.name(), "phase": self.phase(), "target": target,
+                                "status": "failed", "evidence": None, "error": str(e)
+                            })
         return all_findings
 
     def parse(self, raw_output: str, target: str) -> List[Dict]:
         findings = []
-        # Regex to capture the hostname from a line like:
-        # | an.example.com.              300 IN A     192.0.2.1
         pattern = re.compile(r'^\s*\|\s+([\w\-\.]+\.' + re.escape(target) + r')\.')
 
         for line in raw_output.strip().split('\n'):
@@ -51,7 +62,9 @@ class NmapDnsPlugin:
                     "target": target,
                     "phase": self.phase(),
                     "tool": self.name(),
+                    "status": "success",
                     "evidence": {"poc": subdomain},
+                    "error": None,
                 }
                 findings.append(finding)
         return findings

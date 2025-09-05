@@ -1,31 +1,48 @@
 import shutil
+import time
 from typing import List, Dict
-from ...common.base_plugin import Plugin
 from ...common.exec import run_command
 from ...common.schema import Finding
 from ...common.exceptions import ToolExecutionError
-import datetime
+from ...common.utils import load_config
 
-class SubfinderPlugin(Plugin):
+config = load_config()
+
+class SubfinderPlugin:
     def name(self) -> str: return "subfinder"
     def phase(self) -> str: return "recon"
-    def check_dependencies(self) -> bool: return shutil.which("subfinder") is not None
 
-    def run(self, targets: List[str]) -> List[Dict]:
+    def check_dependencies(self) -> bool:
+        return shutil.which(config['tools']['subfinder']) is not None
+
+    def run(self, targets: List[str], retries: int = 1, timeout: int = 300) -> List[Dict]:
         if not self.check_dependencies():
-            print("Subfinder is not installed.")
-            return []
+            return [{
+                "tool": self.name(), "phase": self.phase(), "target": t,
+                "status": "failed", "evidence": None,
+                "error": "Subfinder tool not found."
+            } for t in targets]
 
         all_findings = []
         for target in targets:
-            try:
-                command = ["subfinder", "-d", target, "-silent"]
-                raw_output = run_command(command)
-                if raw_output:
-                    findings = self.parse(raw_output, target)
-                    all_findings.extend(findings)
-            except ToolExecutionError as e:
-                print(f"Error running subfinder: {e}")
+            for attempt in range(retries):
+                try:
+                    tool_path = config['tools']['subfinder']
+                    command = [tool_path, "-d", target, "-silent"]
+                    raw_output = run_command(command, timeout=timeout)
+                    if raw_output:
+                        findings = self.parse(raw_output, target)
+                        all_findings.extend(findings)
+                    break  # Success, exit retry loop
+                except ToolExecutionError as e:
+                    if attempt < retries - 1:
+                        time.sleep(2)  # Wait 2s before retrying
+                        continue
+                    else:
+                        all_findings.append({
+                            "tool": self.name(), "phase": self.phase(), "target": target,
+                            "status": "failed", "evidence": None, "error": str(e)
+                        })
         return all_findings
 
     def parse(self, raw_output: str, target: str) -> List[Dict]:
@@ -36,7 +53,9 @@ class SubfinderPlugin(Plugin):
                     "target": target,
                     "phase": self.phase(),
                     "tool": self.name(),
+                    "status": "success",
                     "evidence": {"poc": subdomain},
+                    "error": None,
                 }
                 findings.append(finding)
         return findings

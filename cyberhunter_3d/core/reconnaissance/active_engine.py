@@ -18,6 +18,10 @@ def run_active_enumeration(domain: str) -> Set[str]:
     logger.info(f"Starting active enumeration for: {domain}")
     all_subdomains: Set[str] = set()
 
+    # Load resilience and wordlist settings from config
+    resilience_config = config.get('resilience', {})
+    retries = resilience_config.get('retries', 1)
+    timeout = resilience_config.get('timeout_active', 600)
     wordlist = config['wordlists']['dns_bruteforce']
     resolvers = config['wordlists']['resolvers']
 
@@ -28,9 +32,9 @@ def run_active_enumeration(domain: str) -> Set[str]:
 
     # Create a dictionary mapping a plugin name to its instance and a zero-argument lambda runner
     plugin_runners = {
-        "gobuster": (gobuster_plugin, lambda: gobuster_plugin.run([domain], wordlist=wordlist)),
-        "puredns": (puredns_plugin, lambda: puredns_plugin.run([domain], wordlist=wordlist, resolvers=resolvers)),
-        "nmap_dns": (nmap_plugin, lambda: nmap_plugin.run([domain])),
+        "gobuster": (gobuster_plugin, lambda: gobuster_plugin.run([domain], wordlist=wordlist, retries=retries, timeout=timeout)),
+        "puredns": (puredns_plugin, lambda: puredns_plugin.run([domain], wordlist=wordlist, resolvers=resolvers, retries=retries, timeout=timeout)),
+        "nmap_dns": (nmap_plugin, lambda: nmap_plugin.run([domain], retries=retries, timeout=timeout)),
     }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(plugin_runners)) as executor:
@@ -45,12 +49,19 @@ def run_active_enumeration(domain: str) -> Set[str]:
             name = future_to_plugin_name[future]
             try:
                 findings = future.result()
-                if findings:
-                    results = {f["evidence"]["poc"] for f in findings}
-                    all_subdomains.update(results)
-                    logger.info(f"Found {len(results)} subdomains with {name} plugin.")
+                successful_findings = 0
+                for finding in findings:
+                    if finding['status'] == 'success':
+                        all_subdomains.add(finding['evidence']['poc'])
+                        successful_findings += 1
+                    else:
+                        logger.error(f"Plugin {name} failed on target {finding['target']}: {finding['error']}")
+
+                if successful_findings > 0:
+                    logger.info(f"Found {successful_findings} subdomains with {name} plugin.")
+
             except Exception as exc:
-                logger.error(f"Plugin '{name}' generated an exception: {exc}", exc_info=True)
+                logger.exception(f"An unexpected error occurred with plugin {name}: {exc}")
 
     logger.info(f"Total unique active subdomains found: {len(all_subdomains)}")
     return all_subdomains
