@@ -1,7 +1,6 @@
 import shutil
 import tempfile
 import os
-import time
 import json
 from typing import List, Dict
 from ...common.exec import run_command
@@ -18,70 +17,46 @@ class NucleiJsSecretsPlugin:
     def check_dependencies(self) -> bool:
         return shutil.which(config['tools']['nuclei']) is not None
 
-    def run(self, live_hosts: List[str], retries: int = 1, timeout: int = 1200) -> List[Finding]:
+    def run(self, live_hosts: List[str]) -> List[Finding]:
         if not self.check_dependencies():
-            return [{
-                "tool": self.name(), "phase": self.phase(), "target": "multiple",
-                "status": "failed", "evidence": None,
-                "error": "nuclei tool not found."
-            }]
+            return [{"tool": self.name(), "phase": self.phase(), "target": "multiple", "status": "failed", "evidence": None, "error": "nuclei tool not found."}]
 
         all_findings = []
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as input_file:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt") as input_file, \
+             tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".json") as output_file:
             input_filename = input_file.name
+            output_filename = output_file.name
             input_file.write('\n'.join(live_hosts))
 
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".json") as output_file:
-            output_filename = output_file.name
-
-        for attempt in range(retries):
-            try:
-                tool_path = config['tools']['nuclei']
-                # Using -jsonl for machine-readable output
-                command = [tool_path, '-l', input_filename, '-t', 'technologies/javascript/js-secrets.yaml', '-jsonl', '-o', output_filename, '-silent']
-                run_command(command, timeout=timeout)
-
-                with open(output_filename, 'r') as f:
-                    raw_output = f.read()
-
-                if raw_output:
-                    findings = self.parse(raw_output, "multiple_targets")
-                    all_findings.extend(findings)
-                break
-            except ToolExecutionError as e:
-                if attempt < retries - 1:
-                    time.sleep(2)
-                    continue
-                else:
-                    all_findings.append({
-                        "tool": self.name(), "phase": self.phase(), "target": "multiple_targets",
-                        "status": "failed", "evidence": None, "error": str(e)
-                    })
-            finally:
-                os.remove(input_filename)
-                os.remove(output_filename)
-
+        try:
+            tool_path = config['tools']['nuclei']
+            command = [tool_path, '-l', input_filename, '-t', 'technologies/javascript/js-secrets.yaml', '-jsonl', '-o', output_filename, '-silent']
+            run_command(command)
+            with open(output_filename, 'r') as f:
+                raw_output = f.read()
+            if raw_output:
+                findings = self.parse(raw_output)
+                all_findings.extend(findings)
+        except ToolExecutionError as e:
+            all_findings.append({"tool": self.name(), "phase": self.phase(), "target": "multiple", "status": "failed", "evidence": None, "error": str(e)})
+        finally:
+            os.remove(input_filename)
+            os.remove(output_filename)
         return all_findings
 
-    def parse(self, raw_output: str, target: str) -> List[Finding]:
+    def parse(self, raw_output: str) -> List[Finding]:
         findings = []
         for line in raw_output.strip().split('\n'):
-            if not line:
-                continue
+            if not line: continue
             try:
                 data = json.loads(line)
                 finding: Finding = {
-                    "target": data.get('host'),
-                    "phase": self.phase(),
-                    "tool": self.name(),
-                    "status": "success",
-                    "evidence": {
+                    "target": data.get('host'), "phase": self.phase(), "tool": self.name(),
+                    "status": "success", "evidence": {
                         "template": data.get('template-id'),
                         "finding_name": data.get('info', {}).get('name'),
                         "matched_at": data.get('matched-at'),
-                        "curl_command": data.get('curl-command'),
-                    },
-                    "error": None,
+                    }, "error": None,
                 }
                 findings.append(finding)
             except (json.JSONDecodeError, KeyError):

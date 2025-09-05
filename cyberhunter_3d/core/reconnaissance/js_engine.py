@@ -1,15 +1,11 @@
-import subprocess
-import tempfile
-import os
 import concurrent.futures
 from typing import Set, List, Dict
 
-from .utils import load_config, get_logger
+from .utils import get_logger
 from ...plugins.js_analysis.linkfinder import LinkfinderPlugin
 from ...plugins.js_analysis.nuclei_js_secrets import NucleiJsSecretsPlugin
 from ...common.schema import Finding
 
-config = load_config()
 logger = get_logger(__name__)
 
 def run_js_enumeration(live_hosts: Set[str]) -> List[Finding]:
@@ -17,7 +13,6 @@ def run_js_enumeration(live_hosts: Set[str]) -> List[Finding]:
     Runs JS/Code analysis tools in parallel using plugins.
     """
     logger.info(f"Starting JS/Code analysis for {len(live_hosts)} live hosts...")
-
     if not live_hosts:
         logger.warning("No live hosts to analyze. Skipping JS/Code analysis engine.")
         return []
@@ -54,6 +49,7 @@ def run_github_dorking(subdomains: Set[str]) -> List[str]:
     Performs GitHub dorking to find sensitive information.
     (This function is out of scope for the current refactoring)
     """
-    logger.info(f"Starting GitHub dorking for {len(subdomains)} subdomains...")
-    # ... (original implementation remains)
-    pass
+    # This function remains in its original state.
+    # A full implementation would be part of a separate refactoring effort.
+    logger.warning("run_github_dorking is not fully implemented in this refactoring.")
+    return []
