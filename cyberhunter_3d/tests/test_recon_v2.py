@@ -1,38 +1,91 @@
 import pytest
-import os
-import json
-from unittest.mock import patch
-from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
+from unittest.mock import patch, MagicMock
+from cyberhunter_3d.core.reconnaissance.passive_engine import run_passive_enumeration
+from cyberhunter_3d.core.reconnaissance.active_engine import run_active_enumeration
 
-from cyberhunter_3d.core.reconnaissance.utils import load_config
+# Mock Finding format that the plugins are expected to return
+def create_mock_finding(subdomain, tool, target="example.com"):
+    return {
+        "target": target,
+        "phase": "recon",
+        "tool": tool,
+        "evidence": {"poc": subdomain},
+    }
 
-config = load_config()
-
-@pytest.mark.slow
-def test_full_recon_pipeline():
+@patch('cyberhunter_3d.core.reconnaissance.passive_engine.AssetfinderPlugin')
+@patch('cyberhunter_3d.core.reconnaissance.passive_engine.AmassPlugin')
+@patch('cyberhunter_3d.core.reconnaissance.passive_engine.SubfinderPlugin')
+def test_passive_engine_with_plugin_mocks(mock_subfinder, mock_amass, mock_assetfinder):
     """
-    Slow integration test that runs the full V2 recon pipeline.
+    Tests the passive engine's orchestration of plugins.
+    We patch the plugins in the namespace of the module under test.
     """
-    domain = "example.com"
-    assets = enumerate_subdomains_v2(domain)
-    assert assets is not None
-    assert os.path.exists(config['final_recon_file'])
-    with open(config['final_recon_file'], 'r') as f:
-        data = json.load(f)
-    assert 'domain' in data
+    # Arrange: Configure mocks for each plugin's instance
+    # The .return_value represents the instance created by Plugin()
+    mock_subfinder.return_value.run.return_value = [
+        create_mock_finding("sub1.example.com", "subfinder"),
+        create_mock_finding("sub2.example.com", "subfinder"),
+    ]
 
-    # Teardown
-    if os.path.exists(config['recon_output_dir']):
-        import shutil
-        shutil.rmtree(config['recon_output_dir'])
+    mock_amass.return_value.run.return_value = [
+        create_mock_finding("sub2.example.com", "amass"), # Duplicate
+        create_mock_finding("sub3.example.com", "amass"),
+    ]
 
-@patch('subprocess.run')
-def test_passive_engine_runs(mock_run):
+    mock_assetfinder.return_value.run.return_value = [] # No findings
+
+    # Act
+    result_subdomains = run_passive_enumeration("example.com")
+
+    # Assert
+    assert len(result_subdomains) == 3
+    assert result_subdomains == {"sub1.example.com", "sub2.example.com", "sub3.example.com"}
+
+    # Check that each plugin's run method was called once
+    mock_subfinder.return_value.run.assert_called_once_with(["example.com"])
+    mock_amass.return_value.run.assert_called_once_with(["example.com"])
+    mock_assetfinder.return_value.run.assert_called_once_with(["example.com"])
+
+
+@patch('cyberhunter_3d.core.reconnaissance.active_engine.NmapDnsPlugin')
+@patch('cyberhunter_3d.core.reconnaissance.active_engine.PureDNSPlugin')
+@patch('cyberhunter_3d.core.reconnaissance.active_engine.GobusterPlugin')
+def test_active_engine_with_plugin_mocks(mock_gobuster, mock_puredns, mock_nmap):
     """
-    A faster test that only runs the passive engine.
+    Tests the active engine's orchestration of plugins.
+    We patch the plugins in the namespace of the module under test.
     """
-    from cyberhunter_3d.core.reconnaissance.passive_engine import run_passive_enumeration
-    domain = "example.com"
-    subdomains = run_passive_enumeration(domain)
-    assert isinstance(subdomains, set)
-    mock_run.assert_called()
+    # Arrange
+    # Mock gobuster
+    mock_gobuster.return_value.name.return_value = "gobuster"
+    mock_gobuster.return_value.check_dependencies.return_value = True
+    mock_gobuster.return_value.run.return_value = [
+        create_mock_finding("active1.example.com", "gobuster")
+    ]
+
+    # Mock puredns
+    mock_puredns.return_value.name.return_value = "puredns"
+    mock_puredns.return_value.check_dependencies.return_value = True
+    mock_puredns.return_value.run.return_value = [
+        create_mock_finding("active2.example.com", "puredns")
+    ]
+
+    # Mock nmap
+    mock_nmap.return_value.name.return_value = "nmap_dns"
+    mock_nmap.return_value.check_dependencies.return_value = True
+    mock_nmap.return_value.run.return_value = [
+        create_mock_finding("active1.example.com", "nmap_dns"), # Duplicate
+        create_mock_finding("active3.example.com", "nmap_dns"),
+    ]
+
+    # Act
+    result_subdomains = run_active_enumeration("example.com")
+
+    # Assert
+    assert len(result_subdomains) == 3
+    assert result_subdomains == {"active1.example.com", "active2.example.com", "active3.example.com"}
+
+    # Check that run methods were called correctly
+    mock_gobuster.return_value.run.assert_called_once()
+    mock_puredns.return_value.run.assert_called_once()
+    mock_nmap.return_value.run.assert_called_once()
