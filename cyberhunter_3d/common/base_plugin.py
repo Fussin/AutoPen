@@ -35,8 +35,16 @@ class Plugin(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def parse(self, raw_output: str) -> List[Dict]:
+    def parse(self, raw_output: str, target: str) -> List[Dict]:
         """
         Parses the raw output of the tool into a standardized format.
+        """
+        pass
+
+    @abc.abstractmethod
+    def accepted_target_types(self) -> List[str]:
+        """
+        Returns a list of target types that the plugin can handle.
+        e.g., ["url", "git_repo", "domain"]
         """
         pass

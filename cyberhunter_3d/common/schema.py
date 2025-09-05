@@ -24,3 +24,4 @@ class Finding(TypedDict):
     vuln: Vulnerability
     tags: List[str]
     fingerprints: Fingerprints
+    risk_score: Optional[float]

@@ -1,9 +1,11 @@
 import subprocess
 from typing import List
+from .exceptions import ToolExecutionError
 
 def run_command(command: List[str]):
     """
     Runs an external command and returns the output.
+    Raises ToolExecutionError on failure.
     """
     try:
         result = subprocess.run(
@@ -14,8 +16,6 @@ def run_command(command: List[str]):
         )
         return result.stdout
     except FileNotFoundError as e:
-        print(f"Error: Command not found: {e}")
-        return None
+        raise ToolExecutionError(f"Command not found: {e.filename}") from e
     except subprocess.CalledProcessError as e:
-        print(f"Error running command: {e}\nOutput: {e.stderr}")
-        return None
+        raise ToolExecutionError(f"Command '{e.cmd}' returned non-zero exit status {e.returncode}.\nStderr: {e.stderr}") from e
