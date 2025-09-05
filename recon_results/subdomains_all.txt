@@ -1,0 +1,3 @@
+active1.example.com
+passive1.example.com
+shared.example.com

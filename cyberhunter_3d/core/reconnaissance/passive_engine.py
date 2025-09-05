@@ -1,9 +1,10 @@
 import concurrent.futures
 import logging
-from typing import Set, List
+from typing import Set, List, Dict
 
 from .utils import get_logger
 from ...common.utils import load_config
+from ...common.schema import Finding
 from ...plugins.recon.subfinder import SubfinderPlugin
 from ...plugins.recon.amass import AmassPlugin
 from ...plugins.recon.assetfinder import AssetfinderPlugin
@@ -11,13 +12,13 @@ from ...plugins.recon.assetfinder import AssetfinderPlugin
 config = load_config()
 logger = get_logger(__name__)
 
-def run_passive_enumeration(domain: str) -> Set[str]:
+def run_passive_enumeration(domain: str) -> List[Finding]:
     """
     Run passive enumeration for a domain using multiple plugins
-    and return a set of discovered subdomains.
+    and return a list of Finding objects.
     """
     logger.info(f"Starting passive enumeration for: {domain}")
-    all_subdomains: Set[str] = set()
+    all_findings: List[Finding] = []
 
     resilience_config = config.get('resilience', {})
     retries = resilience_config.get('retries', 1)
@@ -30,7 +31,6 @@ def run_passive_enumeration(domain: str) -> Set[str]:
     ]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(plugins)) as executor:
-        # Schedule each plugin to run with resilience settings
         future_to_plugin = {
             executor.submit(plugin.run, [domain], retries=retries, timeout=timeout): plugin
             for plugin in plugins
@@ -40,19 +40,19 @@ def run_passive_enumeration(domain: str) -> Set[str]:
             plugin = future_to_plugin[future]
             try:
                 findings = future.result()
-                successful_findings = 0
-                for finding in findings:
-                    if finding['status'] == 'success':
-                        all_subdomains.add(finding['evidence']['poc'])
-                        successful_findings += 1
-                    else:
-                        logger.error(f"Plugin {plugin.name()} failed on target {finding['target']}: {finding['error']}")
+                all_findings.extend(findings)
 
+                # Log summary for this plugin run
+                successful_findings = sum(1 for f in findings if f['status'] == 'success')
+                failed_findings = len(findings) - successful_findings
                 if successful_findings > 0:
-                    logger.info(f"Found {successful_findings} subdomains with {plugin.name()} plugin.")
+                    logger.info(f"Plugin {plugin.name()} found {successful_findings} subdomains.")
+                if failed_findings > 0:
+                    logger.warning(f"Plugin {plugin.name()} reported {failed_findings} failures.")
 
             except Exception as e:
                 logger.exception(f"An unexpected error occurred with plugin {plugin.name()}: {e}")
 
-    logger.info(f"Total discovered passive subdomains for {domain}: {len(all_subdomains)}")
-    return all_subdomains
+    successful_count = sum(1 for f in all_findings if f['status'] == 'success')
+    logger.info(f"Passive enumeration complete. Total successful findings: {successful_count}")
+    return all_findings
