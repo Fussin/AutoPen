@@ -1,10 +1,11 @@
 import shutil
-import os
 from typing import List, Dict
-from src.common.base_plugin import Plugin
-from src.common.exec import run_command
-from src.common.schema import Finding
+from ...common.base_plugin import Plugin
+from ...common.exec import run_command
+from ...common.schema import Finding
+from ...common.exceptions import ToolExecutionError
 import datetime
+import os
 
 class SubfinderPlugin(Plugin):
     """
@@ -18,15 +19,9 @@ class SubfinderPlugin(Plugin):
         return "recon"
 
     def check_dependencies(self) -> bool:
-        """
-        Checks if subfinder is installed.
-        """
         return shutil.which("subfinder") is not None
 
     def run(self, targets: List[str]) -> List[Dict]:
-        """
-        Runs subfinder on a list of domains.
-        """
         if not self.check_dependencies():
             print("Subfinder is not installed. Please install it to use this plugin.")
             return []
@@ -35,23 +30,18 @@ class SubfinderPlugin(Plugin):
         for target in targets:
             print(f"Running subfinder on {target}...")
             command = ["subfinder", "-d", target, "-silent"]
-            raw_output = run_command(command)
-            if raw_output:
-                # Save raw output
-                output_dir = f"artifacts/recon/{self.name()}"
-                os.makedirs(output_dir, exist_ok=True)
-                output_path = os.path.join(output_dir, f"{target}.txt")
-                with open(output_path, "w") as f:
-                    f.write(raw_output)
 
-                findings = self.parse(raw_output, target)
-                all_findings.extend(findings)
+            try:
+                raw_output = run_command(command)
+                if raw_output:
+                    findings = self.parse(raw_output, target)
+                    all_findings.extend(findings)
+            except ToolExecutionError as e:
+                print(f"Error running subfinder on {target}: {e}")
+
         return all_findings
 
     def parse(self, raw_output: str, target: str) -> List[Dict]:
-        """
-        Parses the raw output of subfinder.
-        """
         findings = []
         for subdomain in raw_output.strip().split('\n'):
             if subdomain:
@@ -66,7 +56,11 @@ class SubfinderPlugin(Plugin):
                         "severity": "info",
                     },
                     "tags": ["subdomain", "recon"],
-                    "fingerprints": {}
+                    "fingerprints": {},
+                    "risk_score": 0.0
                 }
                 findings.append(finding)
         return findings
+
+    def accepted_target_types(self) -> List[str]:
+        return ["domain"]
