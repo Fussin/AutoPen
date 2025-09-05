@@ -2,7 +2,7 @@ import subprocess
 from typing import List
 from .exceptions import ToolExecutionError
 
-def run_command(command: List[str], timeout: int = None):
+def run_command(command: List[str]):
     """
     Runs an external command and returns the output.
     Raises ToolExecutionError on failure.
@@ -13,12 +13,9 @@ def run_command(command: List[str], timeout: int = None):
             capture_output=True,
             text=True,
             check=True,
-            timeout=timeout
         )
         return result.stdout
     except FileNotFoundError as e:
         raise ToolExecutionError(f"Command not found: {e.filename}") from e
-    except subprocess.TimeoutExpired as e:
-        raise ToolExecutionError(f"Command '{e.cmd}' timed out after {e.timeout} seconds.") from e
     except subprocess.CalledProcessError as e:
         raise ToolExecutionError(f"Command '{e.cmd}' returned non-zero exit status {e.returncode}.\nStderr: {e.stderr}") from e

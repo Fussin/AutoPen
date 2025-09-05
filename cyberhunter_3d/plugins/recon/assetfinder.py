@@ -1,5 +1,4 @@
 import shutil
-import time
 from typing import List, Dict
 from ...common.exec import run_command
 from ...common.schema import Finding
@@ -15,47 +14,34 @@ class AssetfinderPlugin:
     def check_dependencies(self) -> bool:
         return shutil.which(config['tools']['assetfinder']) is not None
 
-    def run(self, targets: List[str], retries: int = 1, timeout: int = 300) -> List[Dict]:
+    def run(self, targets: List[str]) -> List[Dict]:
         if not self.check_dependencies():
-            return [{
-                "tool": self.name(), "phase": self.phase(), "target": t,
-                "status": "failed", "evidence": None,
-                "error": "Assetfinder tool not found."
-            } for t in targets]
+            print("Assetfinder is not installed or configured.")
+            return []
 
         all_findings = []
         for target in targets:
-            for attempt in range(retries):
-                try:
-                    tool_path = config['tools']['assetfinder']
-                    command = [tool_path, "--subs-only", target]
-                    raw_output = run_command(command, timeout=timeout)
-                    if raw_output:
-                        findings = self.parse(raw_output, target)
-                        all_findings.extend(findings)
-                    break  # Success, exit retry loop
-                except ToolExecutionError as e:
-                    if attempt < retries - 1:
-                        time.sleep(2)
-                        continue
-                    else:
-                        all_findings.append({
-                            "tool": self.name(), "phase": self.phase(), "target": target,
-                            "status": "failed", "evidence": None, "error": str(e)
-                        })
+            try:
+                tool_path = config['tools']['assetfinder']
+                command = [tool_path, "--subs-only", target]
+                raw_output = run_command(command)
+                if raw_output:
+                    findings = self.parse(raw_output, target)
+                    all_findings.extend(findings)
+            except ToolExecutionError as e:
+                print(f"Error running assetfinder: {e}")
         return all_findings
 
     def parse(self, raw_output: str, target: str) -> List[Dict]:
         findings = []
         for subdomain in raw_output.strip().split('\n'):
-            if subdomain and subdomain.endswith(target):
+            # assetfinder can sometimes return duplicate or unrelated domains, filter them
+            if subdomain and target in subdomain:
                 finding: Finding = {
                     "target": target,
                     "phase": self.phase(),
                     "tool": self.name(),
-                    "status": "success",
                     "evidence": {"poc": subdomain.strip()},
-                    "error": None,
                 }
                 findings.append(finding)
         return findings
