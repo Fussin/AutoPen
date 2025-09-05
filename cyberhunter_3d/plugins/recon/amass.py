@@ -1,4 +1,5 @@
 import shutil
+import time
 from typing import List, Dict
 from ...common.exec import run_command
 from ...common.schema import Finding
@@ -14,22 +15,34 @@ class AmassPlugin:
     def check_dependencies(self) -> bool:
         return shutil.which(config['tools']['amass']) is not None
 
-    def run(self, targets: List[str]) -> List[Dict]:
+    def run(self, targets: List[str], retries: int = 1, timeout: int = 300) -> List[Dict]:
         if not self.check_dependencies():
-            print("Amass is not installed or configured.")
-            return []
+            return [{
+                "tool": self.name(), "phase": self.phase(), "target": t,
+                "status": "failed", "evidence": None,
+                "error": "Amass tool not found."
+            } for t in targets]
 
         all_findings = []
         for target in targets:
-            try:
-                tool_path = config['tools']['amass']
-                command = [tool_path, "enum", "-passive", "-d", target, "-nolocal", "-nocolor"]
-                raw_output = run_command(command)
-                if raw_output:
-                    findings = self.parse(raw_output, target)
-                    all_findings.extend(findings)
-            except ToolExecutionError as e:
-                print(f"Error running amass: {e}")
+            for attempt in range(retries):
+                try:
+                    tool_path = config['tools']['amass']
+                    command = [tool_path, "enum", "-passive", "-d", target, "-nolocal", "-nocolor"]
+                    raw_output = run_command(command, timeout=timeout)
+                    if raw_output:
+                        findings = self.parse(raw_output, target)
+                        all_findings.extend(findings)
+                    break  # Success, exit retry loop
+                except ToolExecutionError as e:
+                    if attempt < retries - 1:
+                        time.sleep(2)
+                        continue
+                    else:
+                        all_findings.append({
+                            "tool": self.name(), "phase": self.phase(), "target": target,
+                            "status": "failed", "evidence": None, "error": str(e)
+                        })
         return all_findings
 
     def parse(self, raw_output: str, target: str) -> List[Dict]:
@@ -40,7 +53,9 @@ class AmassPlugin:
                     "target": target,
                     "phase": self.phase(),
                     "tool": self.name(),
+                    "status": "success",
                     "evidence": {"poc": subdomain.strip()},
+                    "error": None,
                 }
                 findings.append(finding)
         return findings
