@@ -6,9 +6,7 @@ from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
-from cyberhunter_3d.core.smart_priority import classify_asset
 from cyberhunter_3d.core.decision_tree import DecisionTree
-
 
 def run_discovery_phase(scan_id, app):
     """
@@ -35,48 +33,8 @@ def run_discovery_phase(scan_id, app):
             # 3. Persist the results from the DecisionTree
             in_scope_count, out_of_scope_count = decision_tree.persist_discovered_assets()
 
-
-                if target.type in ['asn', 'org_name']:
-                    print(f"Expanding {target.type}: {target.value}")
-                    assets_to_add = []
-                    if target.type == 'asn':
-                        assets_to_add = get_cidrs_for_asn(target.value)
-                    elif target.type == 'org_name':
-                        assets_to_add = get_assets_for_org(target.value)
-
-                    for asset_data in assets_to_add:
-                        targets_to_scan.append(Target(value=asset_data['value'], type=asset_data['type']))
-                    continue
-
-                elif target.type in ['domain', 'wildcard_domain']:
-                    print(f"Finding subdomains for '{target.value}'...")
-                    assets = enumerate_subdomains_v2(target.value)
-                    discovered_assets.extend(assets)
-
-                elif target.type in ['ip_address', 'cidr']:
-                    # Add IPs and CIDRs to be scanned in the execution phase
-                    discovered_assets.append({'type': target.type, 'value': target.value})
-                else:
-                    print(f"Skipping target with unknown type: {target.type}")
-
-            # 3. Validation and Persistence of discovered domains/IPs
-            print(f"Persisting {len(discovered_assets)} initially discovered assets...")
-            in_scope_count = 0
-            out_of_scope_count = 0
-            for asset_data in discovered_assets:
-                if validator.is_in_scope(asset_data['value']):
-                    if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
-                        priority = classify_asset(asset_data['value'])
-                        db.session.add(Asset(type=asset_data['type'], value=asset_data['value'], scan_id=scan.id, priority=priority))
-                        in_scope_count += 1
-                else:
-                    out_of_scope_count += 1
-
-            scan.results = f"Discovery phase complete. Found {in_scope_count} assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
-
             # 4. Finalize Discovery Phase
             scan.results = f"Discovery phase complete. Found {in_scope_count} new assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
-
             scan.status = 'PENDING_REVIEW'
             print(f"Scan {scan_id} discovery phase complete.")
 
@@ -113,7 +71,7 @@ def run_execution_phase(scan_id, app):
                 Asset.scan_id == scan.id,
                 Asset.is_approved_for_scan == True,
                 Asset.type.in_(['ip_address', 'cidr'])
-            ).order_by(Asset.priority).all()
+            ).all()
             for target in ip_targets:
                 print(f"Port scanning '{target.value}'...")
                 ip_scan_assets = scan_ip_target(target.value)
@@ -124,7 +82,7 @@ def run_execution_phase(scan_id, app):
 
             # 2. Expansion Phase (Reverse DNS)
             print("Starting Expansion: Reverse DNS")
-            ip_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'host_with_open_ports').order_by(Asset.priority).all()
+            ip_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'host_with_open_ports').all()
             unique_ips = list(set(asset.value for asset in ip_assets))
             rdns_found_count = 0
             if unique_ips:
@@ -144,7 +102,7 @@ def run_execution_phase(scan_id, app):
                 Asset.scan_id == scan.id,
                 Asset.is_approved_for_scan == True,
                 Asset.type.in_(['domain', 'subdomain'])
-            ).order_by(Asset.priority).all()
+            ).all()
             unique_domains = list(set(asset.value for asset in domain_assets))
             analytics_found_count = 0
             if unique_domains:
