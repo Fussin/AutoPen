@@ -14,6 +14,7 @@ echo "Starting installation of CyberHunter 3D V2 reconnaissance tools..."
 # --- System package installation (apt) ---
 echo "Installing system packages..."
 apt-get update
+apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip wkhtmltopdf sqlmap golang-go tesseract-ocr
 apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip seclists
 echo "System packages installed successfully."
 
