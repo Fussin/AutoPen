@@ -157,6 +157,7 @@ from cyberhunter_3d.web.models import Scan, Target
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
+from cyberhunter_3d.core.target_parser import parse_single_target
 
 # --- Background Task Executor ---
 # Using a simple thread pool for background tasks.
@@ -180,7 +181,6 @@ def submit_targets():
 
     # 2. Get targets from file
     if target_file and target_file.filename != '':
-        # It's good practice to secure the filename, though we don't save the file
         filename = secure_filename(target_file.filename)
         if filename.endswith('.txt') or filename.endswith('.csv'):
             try:
@@ -190,22 +190,36 @@ def submit_targets():
                 flash(f"Error reading file: {e}", 'danger')
                 return redirect(url_for('dashboard'))
 
-    # 3. Clean and validate targets
-    targets = {line.strip() for line in raw_targets if line.strip()}
+    # 3. Parse and validate targets
+    parsed_targets = []
+    invalid_targets = []
+    for raw_target in raw_targets:
+        if not raw_target.strip():
+            continue
 
-    if not targets:
-        flash('No valid targets submitted.', 'danger')
+        value, type = parse_single_target(raw_target)
+        if type not in ['unknown', 'empty']:
+            parsed_targets.append({'value': value, 'type': type})
+        else:
+            invalid_targets.append(raw_target)
+
+    if not parsed_targets:
+        flash('No valid targets were submitted.', 'danger')
+        if invalid_targets:
+            flash(f"The following {len(invalid_targets)} targets were invalid: {', '.join(invalid_targets)}", 'warning')
         return redirect(url_for('dashboard'))
 
     # 4. Create Scan and Target objects in DB
     new_scan = Scan(user_id=current_user.id, status='QUEUED')
     db.session.add(new_scan)
+    db.session.flush()  # Get new_scan.id
 
-    # We need to flush to get the new_scan.id before creating targets
-    db.session.flush()
-
-    for target_value in targets:
-        new_target = Target(value=target_value, scan_id=new_scan.id)
+    for p_target in parsed_targets:
+        new_target = Target(
+            value=p_target['value'],
+            type=p_target['type'],
+            scan_id=new_scan.id
+        )
         db.session.add(new_target)
 
     db.session.commit()
@@ -213,7 +227,11 @@ def submit_targets():
     # Trigger the scan in the background
     executor.submit(run_discovery_phase, new_scan.id, app)
 
-    flash(f'{len(targets)} targets have been queued for scanning.', 'success')
+    # Flash messages to the user
+    flash(f'{len(parsed_targets)} targets have been queued for scanning.', 'success')
+    if invalid_targets:
+        flash(f"The following {len(invalid_targets)} targets were invalid and have been ignored: {', '.join(invalid_targets)}", 'warning')
+
     return redirect(url_for('dashboard'))
 
 
