@@ -95,6 +95,7 @@ def test_report_generation(real_om, caplog):
 
     # Add some dummy data to the output manager
     real_om.add_vulnerability({"id": "VULN-001", "title": "Test Vuln", "severity": "High", "description": "A test vulnerability."})
+    real_om.add_asset({'type': 'subdomain', 'value': 'test.example.com', 'details': {}})
 
     pso.report_generation(scan_id, real_om)
 

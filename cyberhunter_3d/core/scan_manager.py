@@ -109,6 +109,7 @@ def run_execution_phase(scan_id, app):
                 print(f"Port scanning '{target.value}'...")
                 ip_scan_assets = scan_ip_target(target.value)
                 for asset_data in ip_scan_assets:
+                    om.add_asset(asset_data)
                     all_ports_data.append(asset_data)
                     if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
                         db.session.add(Asset(type=asset_data['type'], value=asset_data['value'], details=asset_data.get('details'), scan_id=scan.id))
@@ -146,6 +147,7 @@ def run_execution_phase(scan_id, app):
                 hostnames = get_hostnames_for_ips(unique_ips)
                 om.write_discovery_file("reverse_dns_results.txt", "\n".join(hostnames))
                 for hostname in hostnames:
+                    om.add_asset({'type': 'subdomain', 'value': hostname})
                     if validator.is_in_scope(hostname) and not Asset.query.filter_by(scan_id=scan.id, value=hostname).first():
                         db.session.add(Asset(type='subdomain', value=hostname, scan_id=scan.id))
                         rdns_found_count += 1
@@ -163,6 +165,7 @@ def run_execution_phase(scan_id, app):
                 related_domains = find_related_domains_by_analytics(unique_domains)
                 om.write_discovery_file("analytics_correlation_results.txt", "\n".join(related_domains))
                 for domain in related_domains:
+                    om.add_asset({'type': 'subdomain', 'value': domain})
                     if validator.is_in_scope(domain) and not Asset.query.filter_by(scan_id=scan.id, value=domain).first():
                         db.session.add(Asset(type='subdomain', value=domain, scan_id=scan.id))
                         analytics_found_count += 1
@@ -176,6 +179,11 @@ def run_execution_phase(scan_id, app):
             scan.status = 'COMPLETED'
             db.session.commit()
             print(f"Scan {scan_id} execution phase complete.")
+
+            # Populate OutputManager with all assets from the scan for reporting
+            all_db_assets = Asset.query.filter_by(scan_id=scan.id).all()
+            for asset in all_db_assets:
+                om.add_asset({'type': asset.type, 'value': asset.value, 'details': asset.details})
 
             # Run post-scan operations
             run_post_scan_operations(scan_id, app, om)

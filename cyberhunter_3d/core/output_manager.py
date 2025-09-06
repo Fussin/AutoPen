@@ -88,6 +88,7 @@ class OutputManager:
                 "vulnerabilities": len(self.vulnerabilities),
             },
             "vulnerabilities": self.vulnerabilities,
+            "assets": self.assets,
         }
 
         html_out = template.render(context)
@@ -121,6 +122,19 @@ class OutputManager:
             row_cells[1].text = vuln.get('title', '')
             row_cells[2].text = vuln.get('severity', '')
             row_cells[3].text = vuln.get('description', '')
+
+        doc.add_heading('Discovered Assets', level=1)
+        asset_table = doc.add_table(rows=1, cols=3)
+        asset_hdr_cells = asset_table.rows[0].cells
+        asset_hdr_cells[0].text = 'Type'
+        asset_hdr_cells[1].text = 'Value'
+        asset_hdr_cells[2].text = 'Details'
+
+        for asset in self.assets:
+            row_cells = asset_table.add_row().cells
+            row_cells[0].text = asset.get('type', '')
+            row_cells[1].text = asset.get('value', '')
+            row_cells[2].text = json.dumps(asset.get('details', {}))
 
         docx_path = self.reports_dir / "scan_report.docx"
         doc.save(docx_path)
