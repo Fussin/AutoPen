@@ -71,6 +71,56 @@ class Asset(db.Model):
     first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    # Relationships for optimization
+    technologies = db.relationship('Technology', backref='asset', lazy=True)
+    vulnerabilities = db.relationship('Vulnerability', backref='asset', lazy=True)
 
     def __repr__(self):
         return f'<Asset {self.value} ({self.type})>'
+
+
+class Technology(db.Model):
+    """
+    Stores information about technologies discovered on an asset.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    version = db.Column(db.String(50), nullable=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Technology {self.name} {self.version or ""}>'
+
+
+class Vulnerability(db.Model):
+    """
+    Stores information about vulnerabilities found on an asset.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    severity = db.Column(db.String(50), nullable=True)
+    cve = db.Column(db.String(50), nullable=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=False)
+    # Link to the tool that found it
+    tool_id = db.Column(db.Integer, db.ForeignKey('tool_success_rate.id'), nullable=True)
+
+
+    def __repr__(self):
+        return f'<Vulnerability {self.name}>'
+
+
+class ToolSuccessRate(db.Model):
+    """
+    Logs the results of each tool run to build a historical dataset for optimization.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    tool_name = db.Column(db.String(100), nullable=False)
+    target_domain = db.Column(db.String(255), nullable=False)
+    tech_stack = db.Column(db.JSON, nullable=True)
+    vulnerabilities_found = db.Column(db.JSON, nullable=True)
+    execution_time = db.Column(db.Float, nullable=False)
+    success = db.Column(db.Boolean, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<ToolSuccessRate {self.tool_name} on {self.target_domain}>'

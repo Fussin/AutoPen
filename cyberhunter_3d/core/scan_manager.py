@@ -1,4 +1,6 @@
-from cyberhunter_3d.web.models import db, Scan, Target, Asset
+import random
+import time
+from cyberhunter_3d.web.models import db, Scan, Target, Asset, ToolSuccessRate
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
@@ -7,6 +9,7 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
+from cyberhunter_3d.core.scan_optimization_engine import ScanOptimizationEngine
 
 def run_discovery_phase(scan_id, app):
     """
@@ -45,6 +48,39 @@ def run_discovery_phase(scan_id, app):
         finally:
             db.session.commit()
             print(f"Final discovery status for scan {scan_id} is {scan.status}.")
+
+
+def run_optimization_phase(scan_id, app):
+    """
+    Runs the Scan Optimization Engine to prepare for the execution phase.
+    This phase now generates the ranked tasks and stores them in the scan results.
+    """
+    with app.app_context():
+        scan = Scan.query.get(scan_id)
+        if not scan:
+            print(f"Error: Scan {scan_id} not found for optimization phase.")
+            return
+
+        try:
+            scan.status = 'OPTIMIZING'
+            db.session.commit()
+            print(f"Scan {scan_id} optimization phase started.")
+
+            optimizer = ScanOptimizationEngine(scan_id, app)
+            ranked_tasks = optimizer.get_ranked_tasks()
+
+            # Store the ranked tasks in the scan results for the execution phase to use
+            scan.results = {"ranked_tasks": ranked_tasks}
+            scan.status = 'OPTIMIZED'
+            db.session.commit()
+            print(f"Scan {scan_id} optimization phase complete.")
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"FATAL: Error in optimization phase for scan {scan_id}: {e}")
+            scan.status = 'FAILED'
+            scan.results = {"error": f"Optimization failed with error: {e}"}
+            db.session.commit()
 
 
 def run_execution_phase(scan_id, app):
@@ -115,13 +151,58 @@ def run_execution_phase(scan_id, app):
                         out_of_scope_count += 1
             print(f"Analytics complete. Found {analytics_found_count} new domains.")
 
-            # 4. Finalize Scan
+            # 4. Vulnerability Scanning (from ranked tasks)
+            print("Starting Vulnerability Scanning based on ranked tasks...")
+            ranked_tasks = scan.results.get("ranked_tasks", [])
+
+            for task in ranked_tasks:
+                asset = Asset.query.get(task['asset_id'])
+                if not asset:
+                    continue
+
+                print(f"Running tool '{task['tool']}' on asset '{asset.value}' with priority {task['priority']:.2f}")
+
+                # Simulate tool run
+                start_time = time.time()
+                time.sleep(random.uniform(0.5, 1.5)) # Simulate scan time
+                execution_time = time.time() - start_time
+
+                # Simulate finding a vulnerability
+                if random.random() > 0.7: # Lower probability for more realistic data
+                    vuln = { "name": f"Simulated {task['tool']} finding", "severity": "medium" }
+                    success = True
+                else:
+                    vuln = {}
+                    success = False
+
+                # Log the result
+                log_entry = ToolSuccessRate(
+                    tool_name=task['tool'],
+                    target_domain=asset.value,
+                    tech_stack={"name": "Unknown"}, # Placeholder
+                    vulnerabilities_found=vuln,
+                    execution_time=execution_time,
+                    success=success
+                )
+                db.session.add(log_entry)
+
+            db.session.commit()
+            print("Vulnerability Scanning complete.")
+
+            # 5. Finalize Scan
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
-            scan.results = (
-                f"Execution phase complete. Total in-scope assets: {final_asset_count} "
-                f"(including {rdns_found_count} from rDNS and {analytics_found_count} from analytics). "
-                f"Skipped {out_of_scope_count} out-of-scope items during expansion."
-            )
+
+            # Append final summary to the results, preserving the ranked_tasks
+            summary = {
+                "summary": f"Execution phase complete. Total in-scope assets: {final_asset_count} "
+                           f"(including {rdns_found_count} from rDNS and {analytics_found_count} from analytics). "
+                           f"Skipped {out_of_scope_count} out-of-scope items during expansion."
+            }
+            if isinstance(scan.results, dict):
+                scan.results.update(summary)
+            else:
+                scan.results = summary
+
             scan.status = 'COMPLETED'
             print(f"Scan {scan_id} execution phase complete.")
 

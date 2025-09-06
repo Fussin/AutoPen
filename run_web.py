@@ -156,7 +156,7 @@ from flask_login import logout_user
 from cyberhunter_3d.web.models import Scan, Target
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
-from cyberhunter_3d.core.scan_manager import run_discovery_phase
+from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_optimization_phase, run_execution_phase
 from cyberhunter_3d.core.target_parser import parse_single_target
 
 # --- Background Task Executor ---
@@ -249,6 +249,43 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
+@app.route('/scan/<int:scan_id>/review')
+@login_required
+def review_scan(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('Unauthorized', 'danger')
+        return redirect(url_for('dashboard'))
+    # This page is for reviewing assets before launching the main scan
+    return render_template('review_scan.html', scan=scan)
+
+
+@app.route('/scan/<int:scan_id>/launch', methods=['POST'])
+@login_required
+def launch_scan(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('Unauthorized', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # 1. Update asset approval status based on form data
+    approved_asset_ids = request.form.getlist('approved_assets')
+    for asset in scan.assets:
+        asset.is_approved_for_scan = str(asset.id) in approved_asset_ids
+    db.session.commit()
+
+    # 2. Trigger the optimization and execution phases
+    # We chain these tasks. The executor will run them sequentially.
+    def run_scan_flow():
+        run_optimization_phase(scan_id, app)
+        run_execution_phase(scan_id, app)
+
+    executor.submit(run_scan_flow)
+
+    flash(f'Scan #{scan_id} has been launched for execution.', 'success')
+    return redirect(url_for('scan_results', scan_id=scan_id))
+
+
 @app.route('/scan/<int:scan_id>')
 @login_required
 def scan_results(scan_id):
@@ -257,6 +294,9 @@ def scan_results(scan_id):
     if scan.user_id != current_user.id:
         flash('You are not authorized to view this scan.', 'danger')
         return redirect(url_for('dashboard'))
+
+    if scan.status == 'PENDING_REVIEW':
+        return redirect(url_for('review_scan', scan_id=scan.id))
 
     return render_template('scan_results.html', scan=scan)
 

@@ -20,4 +20,5 @@ lightgbm
 pandas
 scikit-learn
 corscanner
+psutil
 
