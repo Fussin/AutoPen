@@ -3,6 +3,7 @@ from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from cyberhunter_3d.web.models import db, User
+from cyberhunter_3d.analytics.models import ScanMetrics
 
 # --- App Initialization ---
 app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
@@ -205,6 +206,7 @@ def scan_results(scan_id):
         return redirect(url_for('dashboard'))
     return render_template('scan_results.html', scan=scan)
 
+
 @app.route('/profile')
 @login_required
 def profile():
@@ -254,6 +256,17 @@ def monitoring():
         return redirect(url_for('monitoring'))
 
     return render_template('monitoring.html', settings=settings)
+
+
+@app.route('/scan/<int:scan_id>/analytics')
+@login_required
+def scan_analytics(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to view this scan.', 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('scan_analytics.html', scan=scan)
+
 
 # --- Main Execution ---
 if __name__ == '__main__':

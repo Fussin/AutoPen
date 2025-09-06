@@ -1,5 +1,11 @@
 import yaml
 import os
+import logging
+
+# Set up a simple logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+LOG = logging.getLogger(__name__)
+
 
 def load_config():
     """
