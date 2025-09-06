@@ -1,5 +1,6 @@
 import logging
 import shutil
+import requests
 from pathlib import Path
 from .output_manager import OutputManager
 from cyberhunter_3d.web.models import db, Scan, Target
@@ -68,11 +69,20 @@ def integration_updates(scan_id):
     jira_webhook = "https://example.jira.com/hooks/..."
     slack_webhook = "https://hooks.slack.com/services/..."
 
-    print(f"[{scan_id}] Simulating pushing update to JIRA: {jira_webhook}")
-    # Here you would use a library like 'requests' to send a POST request to the JIRA webhook
+    jira_payload = {"text": f"Scan {scan_id} completed. Results are ready for review."}
+    try:
+        # We don't expect this to succeed as the URL is fake, but it's a more realistic simulation.
+        response = requests.post(jira_webhook, json=jira_payload, timeout=5)
+        print(f"[{scan_id}] Pushed update to JIRA. Status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"[{scan_id}] Failed to push update to JIRA: {e}")
 
-    print(f"[{scan_id}] Simulating pushing update to Slack: {slack_webhook}")
-    # Here you would use a library like 'requests' to send a POST request to the Slack webhook
+    slack_payload = {"text": f"Scan {scan_id} completed. Results available at <http://example.com/scans/{scan_id}>"}
+    try:
+        response = requests.post(slack_webhook, json=slack_payload, timeout=5)
+        print(f"[{scan_id}] Pushed update to Slack. Status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"[{scan_id}] Failed to push update to Slack: {e}")
 
     logger.info(f"[{scan_id}] Integration updates complete.")
 
