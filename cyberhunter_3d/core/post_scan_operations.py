@@ -1,5 +1,6 @@
 import logging
 import shutil
+from pathlib import Path
 from .output_manager import OutputManager
 
 logging.basicConfig(level=logging.INFO)
@@ -19,21 +20,54 @@ def report_generation(scan_id, om: OutputManager):
     logger.info(f"[{scan_id}] Report generation complete.")
 
 def notification_dispatch(scan_id):
-    """Placeholder for notification dispatch logic."""
+    """Simulates sending email notifications to stakeholders."""
     logger.info(f"[{scan_id}] Dispatching notifications...")
-    print(f"[{scan_id}] Simulating notification dispatch: Sending email to stakeholders.")
+
+    # In a real implementation, you would fetch these from a database or config
+    stakeholders = ["admin@example.com", "security-team@example.com"]
+
+    for email in stakeholders:
+        print(f"[{scan_id}] Simulating sending email to {email}...")
+        # Here you would use a library like smtplib to send the actual email
+
     logger.info(f"[{scan_id}] Notification dispatch complete.")
 
-def data_archival(scan_id):
-    """Placeholder for data archival logic."""
+def data_archival(scan_id, om: OutputManager):
+    """Moves the backup archive to a long-term storage directory."""
     logger.info(f"[{scan_id}] Archiving data...")
-    print(f"[{scan_id}] Simulating data archival: Compressing and moving scan results to cold storage.")
-    logger.info(f"[{scan_id}] Data archival complete.")
+    try:
+        archive_dir = Path("archive")
+        archive_dir.mkdir(exist_ok=True)
+
+        archive_filename = f"{om.base_dir.name}.zip"
+        source_path = om.base_dir.parent / archive_filename
+
+        if not source_path.exists():
+            logger.error(f"[{scan_id}] Backup archive not found at {source_path}. Skipping archival.")
+            return
+
+        destination_path = archive_dir / archive_filename
+        shutil.move(str(source_path), str(destination_path))
+
+        print(f"[{scan_id}] Data archived to: {destination_path}")
+        logger.info(f"[{scan_id}] Data archival complete.")
+    except Exception as e:
+        logger.error(f"[{scan_id}] Data archival failed: {e}")
 
 def integration_updates(scan_id):
-    """Placeholder for integration updates logic."""
+    """Simulates pushing updates to JIRA and Slack."""
     logger.info(f"[{scan_id}] Sending integration updates...")
-    print(f"[{scan_id}] Simulating integration updates: Pushing results to JIRA and Slack.")
+
+    # In a real implementation, you would fetch these from a config file
+    jira_webhook = "https://example.jira.com/hooks/..."
+    slack_webhook = "https://hooks.slack.com/services/..."
+
+    print(f"[{scan_id}] Simulating pushing update to JIRA: {jira_webhook}")
+    # Here you would use a library like 'requests' to send a POST request to the JIRA webhook
+
+    print(f"[{scan_id}] Simulating pushing update to Slack: {slack_webhook}")
+    # Here you would use a library like 'requests' to send a POST request to the Slack webhook
+
     logger.info(f"[{scan_id}] Integration updates complete.")
 
 def cleanup_operations(scan_id, om: OutputManager):
@@ -106,9 +140,9 @@ def run_post_scan_operations(scan_id, app, om: OutputManager):
         final_validation(scan_id)
         report_generation(scan_id, om)
         notification_dispatch(scan_id)
-        data_archival(scan_id)
         integration_updates(scan_id)
         backup_creation(scan_id, om)
+        data_archival(scan_id, om)
         analytics_update(scan_id)
         schedule_next_scan(scan_id)
         monitoring_activation(scan_id)
