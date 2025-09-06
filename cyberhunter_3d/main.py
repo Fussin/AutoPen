@@ -23,12 +23,33 @@ def main():
     # Run the exit checklist
     checklist = ExitChecklist(results_file)
     checklist.run_data_finalization()
-    checklist.run_cleanup_and_optimization()
 
     # Generate reports
     reporter = Reporter(checklist.final_data)
-    reporter.generate_pdf_report()
-    reporter.generate_html_report()
+    report_files = []
+
+    pdf_file = "report.pdf"
+    reporter.generate_pdf_report(output_file=pdf_file)
+    report_files.append(pdf_file)
+
+    html_file = "report.html"
+    reporter.generate_html_report(output_file=html_file)
+    report_files.append(html_file)
+
+    json_file = "report.json"
+    reporter.generate_json_export(output_file=json_file)
+    report_files.append(json_file)
+
+    csv_file = "report.csv"
+    reporter.generate_csv_summaries(output_file=csv_file)
+    report_files.append(csv_file)
+
+    # Run post-reporting checklist items
+    checklist.run_quality_assurance(html_report_file=html_file)
+    checklist.run_distribution()
+
+    # Final cleanup
+    checklist.run_cleanup_and_optimization(report_files=report_files)
 
 
 if __name__ == "__main__":
