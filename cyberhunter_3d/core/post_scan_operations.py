@@ -11,13 +11,12 @@ logger = logging.getLogger(__name__)
 def final_validation(scan_id, om: OutputManager):
     """Checks if the backup archive was created successfully."""
     logger.info(f"[{scan_id}] Performing final validation...")
-    archive_path = Path(f"archive/{om.base_dir.name}.zip")
+    archive_path = Path("archive") / f"{om.base_dir.name}.zip"
     if archive_path.exists():
-        print(f"[{scan_id}] Validation successful: Archive found at {archive_path}")
-        logger.info(f"[{scan_id}] Final validation complete.")
+        logger.info(f"Validation successful: Archive found at {archive_path}")
     else:
-        print(f"[{scan_id}] Validation failed: Archive not found at {archive_path}")
-        logger.error(f"[{scan_id}] Final validation failed.")
+        logger.error(f"Validation failed: Archive not found at {archive_path}")
+    logger.info(f"[{scan_id}] Final validation complete.")
 
 def report_generation(scan_id, om: OutputManager):
     """Generates the final reports for the scan."""
@@ -137,13 +136,13 @@ def schedule_next_scan(scan_id):
     """Schedules a new scan with the same targets as the completed scan."""
     logger.info(f"[{scan_id}] Scheduling next scan...")
 
-    current_scan = Scan.query.get(scan_id)
+    current_scan = db.session.query(Scan).filter_by(id=scan_id).first()
     if not current_scan:
         logger.error(f"[{scan_id}] Could not find current scan to reschedule.")
         return
 
     # Create a new scan with the same targets
-    new_scan = Scan(status='PENDING')
+    new_scan = Scan(status='PENDING', user_id=current_scan.user_id)
     for target in current_scan.targets:
         new_scan.targets.append(Target(value=target.value, type=target.type))
 
