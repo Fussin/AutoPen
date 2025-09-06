@@ -3,8 +3,9 @@
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <h2>Scan Results for #{{ scan.id }}</h2>
     <div>
-      <a href="{{ url_for('graph_view', scan_id=scan.id) }}" class="button">View Graph</a>
-      <a href="{{ url_for('dashboard') }}" class="button" style="margin-left: 1em;">Back to Dashboard</a>
+      <a href="{{ url_for('scan_analytics', scan_id=scan.id) }}" class="btn btn-info">View Analytics</a>
+      <a href="{{ url_for('graph_view', scan_id=scan.id) }}" class="btn btn-secondary">View Graph</a>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-primary" style="margin-left: 1em;">Back to Dashboard</a>
     </div>
   </div>
 
