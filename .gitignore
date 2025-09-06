@@ -281,3 +281,8 @@ cyberhunter.db
 subdomains_alive.txt
 subdomains_dead.txt
 *.log
+__pycache__/
+*.pyc
+*.pyo
+*.db
+cyberhunter.db

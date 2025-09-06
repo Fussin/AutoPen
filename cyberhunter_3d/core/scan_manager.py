@@ -7,12 +7,12 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.smart_priority import classify_asset
+from cyberhunter_3d.core.decision_tree import DecisionTree
+
 
 def run_discovery_phase(scan_id, app):
     """
-    Performs the initial discovery and expansion phases of a scan.
-    This includes subdomain enumeration and expansion from ASN/Org targets.
-    It persists discovered assets and sets the scan status to PENDING_REVIEW.
+    Performs the initial discovery and expansion phases of a scan using the DecisionTree.
     """
     with app.app_context():
         scan = Scan.query.get(scan_id)
@@ -25,17 +25,16 @@ def run_discovery_phase(scan_id, app):
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} discovery phase started.")
-            validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
 
-            # Prepare for processing
-            discovered_assets = []
-            targets_to_scan = list(scan.targets)
+            # 2. Use DecisionTree to process targets
+            decision_tree = DecisionTree(scan_id, app)
+            initial_targets = list(scan.targets) # Create a copy
+            for target in initial_targets:
+                decision_tree.process_target(target)
 
-            # 2. Expansion and Discovery Loop (non-intensive tasks)
-            i = 0
-            while i < len(targets_to_scan):
-                target = targets_to_scan[i]
-                i += 1
+            # 3. Persist the results from the DecisionTree
+            in_scope_count, out_of_scope_count = decision_tree.persist_discovered_assets()
+
 
                 if target.type in ['asn', 'org_name']:
                     print(f"Expanding {target.type}: {target.value}")
@@ -74,6 +73,10 @@ def run_discovery_phase(scan_id, app):
                     out_of_scope_count += 1
 
             scan.results = f"Discovery phase complete. Found {in_scope_count} assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
+
+            # 4. Finalize Discovery Phase
+            scan.results = f"Discovery phase complete. Found {in_scope_count} new assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
+
             scan.status = 'PENDING_REVIEW'
             print(f"Scan {scan_id} discovery phase complete.")
 

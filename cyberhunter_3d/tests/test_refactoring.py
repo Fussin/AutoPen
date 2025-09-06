@@ -2,12 +2,11 @@ import unittest
 import sys
 import os
 from unittest.mock import patch, MagicMock
-<<<<<<< HEAD
-=======
+
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
->>>>>>> 083ba05c5b2dd8238104fd18e071892f9ef56958
+
 from cyberhunter_3d.core.reconnaissance.passive_engine import run_passive_enumeration
 
 class TestRefactoring(unittest.TestCase):
