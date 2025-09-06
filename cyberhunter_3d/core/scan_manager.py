@@ -10,6 +10,9 @@ from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_relate
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
 from cyberhunter_3d.core.scan_optimization_engine import ScanOptimizationEngine
+from cyberhunter_3d.core.triage_engine import run_triage_on_scan
+from .output_manager import create_output_directory
+
 
 def run_discovery_phase(scan_id, app):
     """
@@ -26,6 +29,10 @@ def run_discovery_phase(scan_id, app):
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} discovery phase started.")
+
+            # Create output directory
+            output_dir = create_output_directory(scan_id)
+            scan.output_dir = output_dir
 
             # 2. Use DecisionTree to process targets
             decision_tree = DecisionTree(scan_id, app)
@@ -205,6 +212,10 @@ def run_execution_phase(scan_id, app):
 
             scan.status = 'COMPLETED'
             print(f"Scan {scan_id} execution phase complete.")
+
+            # 5. Automated Triage
+            print(f"Starting automated triage for scan {scan_id}...")
+            run_triage_on_scan(scan_id, db)
 
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")

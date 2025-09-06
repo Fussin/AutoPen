@@ -21,4 +21,7 @@ pandas
 scikit-learn
 corscanner
 psutil
+Flask-SocketIO
+eventlet
+APScheduler
 

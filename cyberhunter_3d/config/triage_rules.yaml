@@ -1,0 +1,35 @@
+# Triage rules for automated finding assessment
+# Each rule maps keywords to a severity and confidence level.
+# The first rule that matches will be applied.
+
+- rule:
+    name: "Critical SQL Injection"
+    keywords:
+      - "SQL Injection"
+      - "SQLi"
+    severity: "Critical"
+    confidence: "High"
+
+- rule:
+    name: "High-Confidence XSS"
+    keywords:
+      - "Cross-Site Scripting"
+      - "XSS"
+    severity: "High"
+    confidence: "High"
+
+- rule:
+    name: "Medium-Confidence Open Redirect"
+    keywords:
+      - "Open Redirect"
+    severity: "Medium"
+    confidence: "Medium"
+
+- rule:
+    name: "Informational Header Misconfiguration"
+    keywords:
+      - "Missing Security Header"
+      - "X-Frame-Options"
+      - "Content-Security-Policy"
+    severity: "Informational"
+    confidence: "High"
