@@ -8,6 +8,7 @@ from cyberhunter_3d.core.post_scan_operations import (
     data_archival,
     cleanup_operations,
 )
+from cyberhunter_3d.core.output_manager import OutputManager
 
 @pytest.fixture
 def mock_om(tmp_path):
@@ -19,6 +20,11 @@ def mock_om(tmp_path):
     (om.base_dir / "result.txt").write_text("dummy content")
     om.vulnerabilities = []
     return om
+
+@pytest.fixture
+def real_om(tmp_path):
+    """Creates a real OutputManager instance with a temporary base directory."""
+    return OutputManager(tmp_path / "scan_results")
 
 def test_backup_creation(mock_om):
     """Tests that a zip archive is created."""
@@ -82,14 +88,24 @@ def test_final_validation_failure(mock_om, caplog):
     pso.final_validation(scan_id, mock_om)
     assert "Validation failed" in caplog.text
 
-def test_report_generation(mock_om, caplog):
+def test_report_generation(real_om, caplog):
     """Tests the report_generation function."""
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
-    mock_om.finalize.return_value = {"pdf": "path/to/report.pdf"}
-    pso.report_generation(scan_id, mock_om)
-    mock_om.finalize.assert_called_once_with(generate_pdf=True, generate_docx=True)
-    assert "Generating reports" in caplog.text
+
+    # Add some dummy data to the output manager
+    real_om.add_vulnerability({"id": "VULN-001", "title": "Test Vuln", "severity": "High", "description": "A test vulnerability."})
+
+    pso.report_generation(scan_id, real_om)
+
+    assert "Generating PDF report" in caplog.text
+    assert "Generating DOCX report" in caplog.text
+
+    pdf_path = real_om.reports_dir / "scan_report.pdf"
+    docx_path = real_om.reports_dir / "scan_report.docx"
+
+    assert pdf_path.exists()
+    assert docx_path.exists()
 
 def test_notification_dispatch(caplog):
     """Tests the notification_dispatch function."""

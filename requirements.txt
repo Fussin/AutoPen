@@ -23,5 +23,3 @@ corscanner
 jinja2
 weasyprint
 python-docx
-language-tool-python
-beautifulsoup4

@@ -3,7 +3,6 @@ from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from cyberhunter_3d.web.models import db, User
-from cyberhunter_3d.analytics.models import ScanMetrics
 
 # --- App Initialization ---
 app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
@@ -65,7 +64,6 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
-        print("Login POST request received")
         username = request.form.get('username')
         password = request.form.get('password')
         existing_user = User.query.filter_by(username=username).first()
@@ -105,13 +103,8 @@ def login():
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
         if user and bcrypt.check_password_hash(user.password_hash, password):
-            if user.otp_secret:
-                session['user_id_for_2fa'] = user.id
-                return redirect(url_for('verify_2fa'))
-            else:
-                login_user(user)
-                flash('Logged in successfully!', 'success')
-                return redirect(url_for('dashboard'))
+            session['user_id_for_2fa'] = user.id
+            return redirect(url_for('verify_2fa'))
         else:
             flash('Invalid username or password.', 'danger')
             return redirect(url_for('login'))
@@ -185,9 +178,7 @@ def submit_targets():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    print("Dashboard function called")
     scans = Scan.query.filter_by(user_id=current_user.id).order_by(Scan.created_at.desc()).all()
-    print(f"Scans: {scans}")
     return render_template('dashboard.html', scans=scans)
 
 @app.route('/logout')
@@ -206,69 +197,7 @@ def scan_results(scan_id):
         return redirect(url_for('dashboard'))
     return render_template('scan_results.html', scan=scan)
 
-
-@app.route('/profile')
-@login_required
-def profile():
-    return render_template('profile.html')
-
-@app.route('/sync_hackerone', methods=['POST'])
-@login_required
-def sync_hackerone():
-    flash('Syncing from HackerOne is not implemented yet.', 'info')
-    return redirect(url_for('dashboard'))
-
-from cyberhunter_3d.web.models import MonitoringSettings
-
-@app.route('/monitoring', methods=['GET', 'POST'])
-@login_required
-def monitoring():
-    settings = current_user.monitoring_settings
-    if not settings:
-        settings = MonitoringSettings(user_id=current_user.id)
-        db.session.add(settings)
-        db.session.commit()
-
-    if request.method == 'POST':
-        # Asset Monitoring
-        settings.asset_new_subdomain_detection = 'asset_new_subdomain_detection' in request.form
-        settings.asset_certificate_changes = 'asset_certificate_changes' in request.form
-        settings.asset_dns_record_modifications = 'asset_dns_record_modifications' in request.form
-        settings.asset_technology_updates = 'asset_technology_updates' in request.form
-        settings.asset_new_endpoints = 'asset_new_endpoints' in request.form
-
-        # Vulnerability Monitoring
-        settings.vuln_cve_feed_integration = 'vuln_cve_feed_integration' in request.form
-        settings.vuln_zero_day_alerts = 'vuln_zero_day_alerts' in request.form
-        settings.vuln_patch_status_tracking = 'vuln_patch_status_tracking' in request.form
-        settings.vuln_regression_testing = 'vuln_regression_testing' in request.form
-        settings.vuln_threat_intelligence_correlation = 'vuln_threat_intelligence_correlation' in request.form
-
-        # Schedule Configuration
-        settings.schedule_quick_scans = 'schedule_quick_scans' in request.form
-        settings.schedule_full_scans = 'schedule_full_scans' in request.form
-        settings.schedule_deep_scans = 'schedule_deep_scans' in request.form
-        settings.schedule_compliance_scans = 'schedule_compliance_scans' in request.form
-        settings.schedule_custom_schedules = request.form.get('schedule_custom_schedules')
-
-        db.session.commit()
-        flash('Monitoring settings saved successfully!', 'success')
-        return redirect(url_for('monitoring'))
-
-    return render_template('monitoring.html', settings=settings)
-
-
-@app.route('/scan/<int:scan_id>/analytics')
-@login_required
-def scan_analytics(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    if scan.user_id != current_user.id:
-        flash('You are not authorized to view this scan.', 'danger')
-        return redirect(url_for('dashboard'))
-    return render_template('scan_analytics.html', scan=scan)
-
-
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database()
-    app.run(debug=True, port=5001, use_reloader=False)
+    app.run(debug=True, port=5001)

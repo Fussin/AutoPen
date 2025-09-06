@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scan Report</title>
+    <style>
+        body { font-family: sans-serif; }
+        h1, h2 { color: #333; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Scan Report</h1>
+    <p><strong>Scan ID:</strong> {{ scan_id }}</p>
+    <p><strong>Timestamp:</strong> {{ timestamp }}</p>
+
+    <h2>Summary</h2>
+    <p>Total assets found: {{ summary.total_assets }}</p>
+    <p>Vulnerabilities found: {{ summary.vulnerabilities }}</p>
+
+    <h2>Vulnerabilities</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Severity</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vuln in vulnerabilities %}
+            <tr>
+                <td>{{ vuln.id }}</td>
+                <td>{{ vuln.title }}</td>
+                <td>{{ vuln.severity }}</td>
+                <td>{{ vuln.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
