@@ -7,6 +7,7 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
+from .output_manager import create_output_directory
 
 def run_discovery_phase(scan_id, app):
     """
@@ -23,6 +24,10 @@ def run_discovery_phase(scan_id, app):
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} discovery phase started.")
+
+            # Create output directory
+            output_dir = create_output_directory(scan_id)
+            scan.output_dir = output_dir
 
             # 2. Use DecisionTree to process targets
             decision_tree = DecisionTree(scan_id, app)
