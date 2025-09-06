@@ -140,3 +140,6 @@ subdomains_dead.txt
 # OS-specific files
 .DS_Store
 Thumbs.db
+
+# Scan results
+scan_results/

@@ -101,7 +101,11 @@ class Scan(db.Model):
     in_scope_rules = db.Column(db.Text, nullable=True)
     out_of_scope_rules = db.Column(db.Text, nullable=True)
     assets = db.relationship('Asset', backref='scan', lazy=True, cascade="all, delete-orphan")
+
+    output_dir = db.Column(db.String(255), nullable=True)
+
     findings = db.relationship('Finding', backref='scan', lazy='dynamic', cascade="all, delete-orphan")
+
 
     def __repr__(self):
         return f'<Scan {self.id} - {self.status}>'
