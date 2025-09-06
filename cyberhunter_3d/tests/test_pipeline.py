@@ -8,7 +8,7 @@ def create_mock_finding(target, tool, phase, status="success", evidence=None, er
     """Creates a mock Finding object."""
     return {"target": target, "phase": phase, "tool": tool, "status": status, "evidence": evidence, "error": error}
 
-@patch('cyberhunter_3d.core.reconnaissance.js_engine.run_github_dorking', return_value=[])
+@patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_github_dorking_engine', return_value=[])
 @patch('cyberhunter_3d.core.reconnaissance.cloud_asset_enum.find_cloud_assets', return_value={})
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_js_enumeration')
 @patch('cyberhunter_3d.core.reconnaissance.subdomain_enum.run_enrichment_engine')
