@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2em;">
+    <h2>Continuous Monitoring Configuration</h2>
+    <div>
+      <a href="{{ url_for('dashboard') }}" class="button">Back to Dashboard</a>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('monitoring') }}">
+    <div style="display: flex; gap: 2em;">
+      <!-- Asset Monitoring -->
+      <div style="flex: 1;">
+        <h3>Asset Monitoring</h3>
+        <label><input type="checkbox" name="asset_new_subdomain_detection" {% if settings.asset_new_subdomain_detection %}checked{% endif %}> New subdomain detection (daily)</label><br>
+        <label><input type="checkbox" name="asset_certificate_changes" {% if settings.asset_certificate_changes %}checked{% endif %}> Certificate changes (real-time)</label><br>
+        <label><input type="checkbox" name="asset_dns_record_modifications" {% if settings.asset_dns_record_modifications %}checked{% endif %}> DNS record modifications (hourly)</label><br>
+        <label><input type="checkbox" name="asset_technology_updates" {% if settings.asset_technology_updates %}checked{% endif %}> Technology updates (weekly)</label><br>
+        <label><input type="checkbox" name="asset_new_endpoints" {% if settings.asset_new_endpoints %}checked{% endif %}> New endpoints (continuous)</label><br>
+      </div>
+
+      <!-- Vulnerability Monitoring -->
+      <div style="flex: 1;">
+        <h3>Vulnerability Monitoring</h3>
+        <label><input type="checkbox" name="vuln_cve_feed_integration" {% if settings.vuln_cve_feed_integration %}checked{% endif %}> CVE feed integration</label><br>
+        <label><input type="checkbox" name="vuln_zero_day_alerts" {% if settings.vuln_zero_day_alerts %}checked{% endif %}> Zero-day alerts</label><br>
+        <label><input type="checkbox" name="vuln_patch_status_tracking" {% if settings.vuln_patch_status_tracking %}checked{% endif %}> Patch status tracking</label><br>
+        <label><input type="checkbox" name="vuln_regression_testing" {% if settings.vuln_regression_testing %}checked{% endif %}> Regression testing</label><br>
+        <label><input type="checkbox" name="vuln_threat_intelligence_correlation" {% if settings.vuln_threat_intelligence_correlation %}checked{% endif %}> Threat intelligence correlation</label><br>
+      </div>
+    </div>
+
+    <hr style="border-color: #444; margin: 2em 0;">
+
+    <!-- Schedule Configuration -->
+    <div>
+      <h3>Schedule Configuration</h3>
+      <label><input type="checkbox" name="schedule_quick_scans" {% if settings.schedule_quick_scans %}checked{% endif %}> Quick scans (daily)</label><br>
+      <label><input type="checkbox" name="schedule_full_scans" {% if settings.schedule_full_scans %}checked{% endif %}> Full scans (weekly)</label><br>
+      <label><input type="checkbox" name="schedule_deep_scans" {% if settings.schedule_deep_scans %}checked{% endif %}> Deep scans (monthly)</label><br>
+      <label><input type="checkbox" name="schedule_compliance_scans" {% if settings.schedule_compliance_scans %}checked{% endif %}> Compliance scans (quarterly)</label><br>
+      <label for="custom_schedule">Custom schedules (user-defined):</label><br>
+      <input type="text" id="custom_schedule" name="schedule_custom_schedules" value="{{ settings.schedule_custom_schedules or '' }}" placeholder="e.g., cron expression" style="width: 100%; margin-top: 0.5em;">
+    </div>
+
+    <button type="submit" class="button" style="margin-top: 1.5em;">Save Configuration</button>
+  </form>
+{% endblock %}
