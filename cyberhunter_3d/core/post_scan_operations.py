@@ -2,15 +2,21 @@ import logging
 import shutil
 from pathlib import Path
 from .output_manager import OutputManager
+from cyberhunter_3d.web.models import db, Scan, Target
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def final_validation(scan_id):
-    """Placeholder for final validation logic."""
+def final_validation(scan_id, om: OutputManager):
+    """Checks if the backup archive was created successfully."""
     logger.info(f"[{scan_id}] Performing final validation...")
-    print(f"[{scan_id}] Simulating final validation: Checking for completeness of scan data.")
-    logger.info(f"[{scan_id}] Final validation complete.")
+    archive_path = Path(f"archive/{om.base_dir.name}.zip")
+    if archive_path.exists():
+        print(f"[{scan_id}] Validation successful: Archive found at {archive_path}")
+        logger.info(f"[{scan_id}] Final validation complete.")
+    else:
+        print(f"[{scan_id}] Validation failed: Archive not found at {archive_path}")
+        logger.error(f"[{scan_id}] Final validation failed.")
 
 def report_generation(scan_id, om: OutputManager):
     """Generates the final reports for the scan."""
@@ -100,16 +106,41 @@ def backup_creation(scan_id, om: OutputManager):
     except Exception as e:
         logger.error(f"[{scan_id}] Backup creation failed: {e}")
 
-def analytics_update(scan_id):
-    """Placeholder for analytics update logic."""
+def analytics_update(scan_id, om: OutputManager):
+    """Simulates sending analytics data to a dashboard."""
     logger.info(f"[{scan_id}] Updating analytics...")
-    print(f"[{scan_id}] Simulating analytics update: Updating the analytics dashboard.")
+
+    # In a real implementation, you would extract key metrics from the scan results
+    # and send them to an analytics platform (e.g., Elastic, Splunk).
+    # For now, we'll just simulate with dummy data.
+    metrics = {
+        "scan_id": scan_id,
+        "total_assets": len(om.vulnerabilities) + 10, # dummy value
+        "open_ports": len(om.vulnerabilities), # dummy value
+        "vulnerabilities": len(om.vulnerabilities) # dummy value
+    }
+    print(f"[{scan_id}] Simulating sending analytics data: {metrics}")
+
     logger.info(f"[{scan_id}] Analytics update complete.")
 
 def schedule_next_scan(scan_id):
-    """Placeholder for scheduling the next scan."""
+    """Schedules a new scan with the same targets as the completed scan."""
     logger.info(f"[{scan_id}] Scheduling next scan...")
-    print(f"[{scan_id}] Simulating scheduling next scan: Scheduling a new scan for the same target.")
+
+    current_scan = Scan.query.get(scan_id)
+    if not current_scan:
+        logger.error(f"[{scan_id}] Could not find current scan to reschedule.")
+        return
+
+    # Create a new scan with the same targets
+    new_scan = Scan(status='PENDING')
+    for target in current_scan.targets:
+        new_scan.targets.append(Target(value=target.value, type=target.type))
+
+    db.session.add(new_scan)
+    db.session.commit()
+
+    print(f"[{scan_id}] Simulating scheduling next scan. New scan ID: {new_scan.id}")
     logger.info(f"[{scan_id}] Next scan scheduled.")
 
 def monitoring_activation(scan_id):
@@ -137,13 +168,13 @@ def run_post_scan_operations(scan_id, app, om: OutputManager):
     with app.app_context():
         logger.info(f"[{scan_id}] Starting post-scan operations...")
 
-        final_validation(scan_id)
         report_generation(scan_id, om)
+        backup_creation(scan_id, om)
+        final_validation(scan_id, om)
+        data_archival(scan_id, om)
         notification_dispatch(scan_id)
         integration_updates(scan_id)
-        backup_creation(scan_id, om)
-        data_archival(scan_id, om)
-        analytics_update(scan_id)
+        analytics_update(scan_id, om)
         schedule_next_scan(scan_id)
         monitoring_activation(scan_id)
         cleanup_operations(scan_id, om)
