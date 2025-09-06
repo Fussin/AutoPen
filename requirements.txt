@@ -20,5 +20,6 @@ lightgbm
 pandas
 scikit-learn
 corscanner
-Flask-SocketIO
-eventlet
+jinja2
+weasyprint
+python-docx
