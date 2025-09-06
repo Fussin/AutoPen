@@ -178,15 +178,12 @@ def run_execution_phase(scan_id, app):
             print(f"Scan {scan_id} execution phase complete.")
 
             # Run post-scan operations
-            run_post_scan_operations(scan_id, app)
+            run_post_scan_operations(scan_id, app, om)
 
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")
             scan.status = 'FAILED'
             scan.results = f"Execution failed with error: {e}"
         finally:
-            if om:
-                summary = om.finalize(generate_pdf=True, generate_docx=True)
-                print("Generated reports summary:", summary)
             db.session.commit()
             print(f"Final execution status for scan {scan_id} is {scan.status}.")

@@ -1,4 +1,6 @@
 import logging
+import shutil
+from .output_manager import OutputManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -9,10 +11,11 @@ def final_validation(scan_id):
     print(f"[{scan_id}] Simulating final validation: Checking for completeness of scan data.")
     logger.info(f"[{scan_id}] Final validation complete.")
 
-def report_generation(scan_id):
-    """Placeholder for report generation logic."""
+def report_generation(scan_id, om: OutputManager):
+    """Generates the final reports for the scan."""
     logger.info(f"[{scan_id}] Generating reports...")
-    print(f"[{scan_id}] Simulating report generation: Creating PDF and JSON reports.")
+    summary = om.finalize(generate_pdf=True, generate_docx=True)
+    print("Generated reports summary:", summary)
     logger.info(f"[{scan_id}] Report generation complete.")
 
 def notification_dispatch(scan_id):
@@ -33,11 +36,15 @@ def integration_updates(scan_id):
     print(f"[{scan_id}] Simulating integration updates: Pushing results to JIRA and Slack.")
     logger.info(f"[{scan_id}] Integration updates complete.")
 
-def cleanup_operations(scan_id):
-    """Placeholder for cleanup operations logic."""
+def cleanup_operations(scan_id, om: OutputManager):
+    """Deletes the original scan results directory."""
     logger.info(f"[{scan_id}] Performing cleanup operations...")
-    print(f"[{scan_id}] Simulating cleanup operations: Deleting temporary files.")
-    logger.info(f"[{scan_id}] Cleanup operations complete.")
+    try:
+        shutil.rmtree(om.base_dir)
+        print(f"[{scan_id}] Cleanup successful: Deleted {om.base_dir}")
+        logger.info(f"[{scan_id}] Cleanup operations complete.")
+    except Exception as e:
+        logger.error(f"[{scan_id}] Cleanup operations failed: {e}")
 
 def session_termination(scan_id):
     """Placeholder for session termination logic."""
@@ -45,11 +52,19 @@ def session_termination(scan_id):
     print(f"[{scan_id}] Simulating session termination: Logging out of active sessions.")
     logger.info(f"[{scan_id}] Session termination complete.")
 
-def backup_creation(scan_id):
-    """Placeholder for backup creation logic."""
+def backup_creation(scan_id, om: OutputManager):
+    """Creates a zip archive of the scan results directory."""
     logger.info(f"[{scan_id}] Creating backup...")
-    print(f"[{scan_id}] Simulating backup creation: Creating a backup of the scan results.")
-    logger.info(f"[{scan_id}] Backup creation complete.")
+    try:
+        archive_path = shutil.make_archive(
+            base_name=f"{om.base_dir.parent}/{om.base_dir.name}",
+            format='zip',
+            root_dir=om.base_dir
+        )
+        print(f"[{scan_id}] Backup created at: {archive_path}")
+        logger.info(f"[{scan_id}] Backup creation complete.")
+    except Exception as e:
+        logger.error(f"[{scan_id}] Backup creation failed: {e}")
 
 def analytics_update(scan_id):
     """Placeholder for analytics update logic."""
@@ -81,7 +96,7 @@ def session_closed(scan_id):
     print(f"[{scan_id}] Simulating session closed: Closing the user session.")
     logger.info(f"[{scan_id}] Session closed.")
 
-def run_post_scan_operations(scan_id, app):
+def run_post_scan_operations(scan_id, app, om: OutputManager):
     """
     Main entry point to run all post-scan operations.
     """
@@ -89,20 +104,16 @@ def run_post_scan_operations(scan_id, app):
         logger.info(f"[{scan_id}] Starting post-scan operations...")
 
         final_validation(scan_id)
-        report_generation(scan_id)
+        report_generation(scan_id, om)
         notification_dispatch(scan_id)
         data_archival(scan_id)
         integration_updates(scan_id)
-        cleanup_operations(scan_id)
-        session_termination(scan_id)
-
-        # Post-scan operations from the second part of the diagram
-        backup_creation(scan_id)
+        backup_creation(scan_id, om)
         analytics_update(scan_id)
         schedule_next_scan(scan_id)
         monitoring_activation(scan_id)
-
-        # Final steps
+        cleanup_operations(scan_id, om)
+        session_termination(scan_id)
         platform_logout(scan_id)
         session_closed(scan_id)
 
