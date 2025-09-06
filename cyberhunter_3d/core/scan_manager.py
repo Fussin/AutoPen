@@ -10,7 +10,6 @@ from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_relate
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
 from .output_manager import OutputManager
-from .post_scan_operations import run_post_scan_operations
 
 
 def run_discovery_phase(scan_id, app):
@@ -175,8 +174,8 @@ def run_execution_phase(scan_id, app):
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
             scan.results = f"Execution phase complete. Total assets: {final_asset_count}. See output directory for details."
             scan.status = 'COMPLETED'
-            db.session.commit()
             print(f"Scan {scan_id} execution phase complete.")
+
 
             # Run post-scan operations
             run_post_scan_operations(scan_id, app, om)
