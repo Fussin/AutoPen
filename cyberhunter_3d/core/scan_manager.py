@@ -17,7 +17,7 @@ def run_discovery_phase(scan_id, app):
     Performs the initial discovery and expansion phases of a scan using the DecisionTree.
     """
     with app.app_context():
-        scan = Scan.query.get(scan_id)
+        scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for discovery phase.")
             return
@@ -80,7 +80,7 @@ def run_execution_phase(scan_id, app):
     already been discovered and approved.
     """
     with app.app_context():
-        scan = Scan.query.get(scan_id)
+        scan = db.session.get(Scan, scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for execution phase.")
             return

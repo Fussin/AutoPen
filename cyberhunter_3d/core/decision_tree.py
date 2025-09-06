@@ -2,7 +2,7 @@ import socket
 import uuid
 from collections import namedtuple
 
-from cyberhunter_3d.web.models import db, Asset
+from cyberhunter_3d.web.models import db, Asset, Scan
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
@@ -21,8 +21,7 @@ class DecisionTree:
         self.scan_id = scan_id
         self.app = app
         with self.app.app_context():
-            from cyberhunter_3d.web.models import Scan
-            scan = Scan.query.get(self.scan_id)
+            scan = db.session.get(Scan, self.scan_id)
             if not scan:
                 raise ValueError(f"Scan with ID {self.scan_id} not found.")
             self.scan = scan
