@@ -1,6 +1,6 @@
 from functools import wraps
-from flask import Blueprint, request, jsonify
-from cyberhunter_3d.web.models import User
+from flask import Blueprint, request, jsonify, g
+from cyberhunter_3d.web.models import User, Workspace
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -16,8 +16,7 @@ def require_api_key(f):
         if not user:
             return jsonify({'error': 'Invalid API key'}), 401
 
-        # You could attach the user to the request context if needed
-        # g.user = user
+        g.user = user
         return f(*args, **kwargs)
     return decorated_function
 
@@ -27,8 +26,6 @@ from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from concurrent.futures import ThreadPoolExecutor
 from flask import current_app
 
-# This is a bit of a hack to get access to the executor defined in run_web.py
-# In a real app, this would be handled by a proper application factory or shared context.
 def get_executor():
     return current_app.executor
 
@@ -42,11 +39,16 @@ def ping():
 @require_api_key
 def create_scan():
     """
-    Creates a new scan. Expects a JSON payload with targets.
+    Creates a new scan within a workspace.
+    Expects a JSON payload with workspace_id and targets.
     """
     data = request.get_json()
-    if not data or 'targets' not in data:
-        return jsonify({'error': 'Missing targets in request body'}), 400
+    if not data or 'targets' not in data or 'workspace_id' not in data:
+        return jsonify({'error': 'Missing targets or workspace_id in request body'}), 400
+
+    workspace = Workspace.query.get(data['workspace_id'])
+    if not workspace or g.user not in workspace.members:
+        return jsonify({'error': 'Invalid or unauthorized workspace'}), 403
 
     raw_targets = data.get('targets', [])
     if isinstance(raw_targets, str):
@@ -56,11 +58,9 @@ def create_scan():
     if not parsed_targets:
         return jsonify({'error': 'No valid targets could be parsed'}), 400
 
-    # Get user from API key to associate the scan
-    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
-
     new_scan = Scan(
-        user_id=user.id,
+        owner_id=g.user.id,
+        workspace_id=workspace.id,
         status='QUEUED',
         in_scope_rules=data.get('in_scope_rules', ''),
         out_of_scope_rules=data.get('out_of_scope_rules', '')
@@ -73,7 +73,6 @@ def create_scan():
 
     db.session.commit()
 
-    # Trigger discovery phase
     get_executor().submit(run_discovery_phase, new_scan.id, current_app._get_current_object())
 
     return jsonify({
@@ -85,9 +84,7 @@ def create_scan():
 @require_api_key
 def get_scan_status(scan_id):
     scan = Scan.query.get_or_404(scan_id)
-    # Simple authorization check
-    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
-    if scan.user_id != user.id:
+    if g.user not in scan.workspace.members:
         return jsonify({'error': 'Forbidden'}), 403
 
     return jsonify({
@@ -102,8 +99,7 @@ def get_scan_status(scan_id):
 @require_api_key
 def get_scan_results(scan_id):
     scan = Scan.query.get_or_404(scan_id)
-    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
-    if scan.user_id != user.id:
+    if g.user not in scan.workspace.members:
         return jsonify({'error': 'Forbidden'}), 403
 
     if scan.status not in ['COMPLETED', 'PENDING_REVIEW']:
@@ -126,28 +122,22 @@ def get_scan_results(scan_id):
 @require_api_key
 def get_scan_graph(scan_id):
     scan = Scan.query.get_or_404(scan_id)
-    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
-    if scan.user_id != user.id:
+    if g.user not in scan.workspace.members:
         return jsonify({'error': 'Forbidden'}), 403
 
     graph_definition = 'graph TD\n'
     scan_node = f'scan{scan.id}("Scan #{scan.id}")'
     graph_definition += f'    {scan_node}\n'
 
-    # Add targets as nodes
     for target in scan.targets:
         target_node = f'target{target.id}("{target.value} ({target.type})")'
         graph_definition += f'    {target_node}\n'
         graph_definition += f'    {scan_node} --> {target_node}\n'
 
-    # Add assets as nodes and link them
-    # A more advanced version would link assets to the target that found them
     for asset in scan.assets:
-        # Sanitize value for mermaid id
         safe_value = ''.join(e for e in asset.value if e.isalnum())
         asset_node = f'asset{asset.id}{safe_value}("{asset.value} ({asset.type})")'
         graph_definition += f'    {asset_node}\n'
-        # For now, link all assets back to the main scan node
         graph_definition += f'    {scan_node} --> {asset_node}\n'
 
     return jsonify({'graph_definition': graph_definition})
