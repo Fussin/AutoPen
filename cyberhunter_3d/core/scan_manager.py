@@ -12,6 +12,7 @@ from cyberhunter_3d.core.decision_tree import DecisionTree
 from cyberhunter_3d.analytics.manager import AnalyticsManager
 from .output_manager import OutputManager
 
+
 def run_discovery_phase(scan_id, app):
     """
     Performs the initial discovery and expansion phases of a scan using the DecisionTree.
@@ -92,6 +93,7 @@ def run_execution_phase(scan_id, app):
     already been discovered and approved.
     """
     with app.app_context():
+
         analytics = AnalyticsManager(scan_id, app)
 
         @analytics.track_phase_duration('execution')
@@ -209,3 +211,114 @@ def run_execution_phase(scan_id, app):
                 print(f"Final execution status for scan {scan_id} is {scan.status}.")
 
         execution_work()
+
+        scan = Scan.query.get(scan_id)
+        if not scan:
+            print(f"Error: Scan {scan_id} not found for execution phase.")
+            return
+
+        om = None
+        try:
+            scan.status = 'RUNNING'
+            db.session.commit()
+            print(f"Scan {scan_id} execution phase started.")
+
+            if not scan.output_dir:
+                print(f"Error: scan.output_dir not set for scan {scan_id}. Cannot create reports.")
+                om = OutputManager.create_for_timestamp(Path("scan_results"))
+                scan.output_dir = str(om.base_dir)
+            else:
+                om = OutputManager(Path(scan.output_dir))
+
+            validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
+            out_of_scope_count = 0
+
+            # 1. Port Scanning and Simulated Vulnerability Reporting
+            ip_targets = Asset.query.filter(Asset.scan_id == scan.id, Asset.is_approved_for_scan == True, Asset.type.in_(['ip_address', 'cidr'])).all()
+            all_ports_data = []
+            vuln_id_counter = 1
+            for target in ip_targets:
+                print(f"Port scanning '{target.value}'...")
+                ip_scan_assets = scan_ip_target(target.value)
+                for asset_data in ip_scan_assets:
+                    all_ports_data.append(asset_data)
+                    if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
+                        db.session.add(Asset(type=asset_data['type'], value=asset_data['value'], details=asset_data.get('details'), scan_id=scan.id))
+
+                    # This is a simulation of vulnerability reporting.
+                    # In a real application, a vulnerability scanner would be used here.
+                    port_info = asset_data.get('details', {})
+                    port = port_info.get('port', 'N/A')
+                    om.add_vulnerability({
+                        "id": f"VULN-{scan.id}-{vuln_id_counter}",
+                        "title": f"Informational: Port {port} Open on {target.value}",
+                        "description": f"An open port ({port}) was discovered on host {target.value}. This is for informational purposes and should be reviewed to ensure it is expected.",
+                        "severity": "informational",
+                        "evidence": {"host": target.value, "port": port, "protocol": port_info.get('protocol', 'tcp')}
+                    }, severity="informational")
+                    vuln_id_counter += 1
+
+            om.write_network_json("open_ports.json", all_ports_data)
+            om.write_network_json("services.json", {})
+            om.write_network_json("ssl_issues.json", {})
+
+            om.write_discovery_file("Way_kat.txt", "# Data from Wayback Machine / Katana - Not yet implemented\n")
+            om.write_discovery_file("api_endpoints.json", "[] # API endpoints - Not yet implemented\n")
+            om.write_discovery_file("parameters.json", "[] # Discovered parameters - Not yet implemented\n")
+            om.write_discovery_file("javascript_files.txt", "# Discovered Javascript files - Not yet implemented\n")
+
+            db.session.commit()
+
+            # 2. Expansion Phase (Reverse DNS)
+            print("Starting Expansion: Reverse DNS")
+            ip_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'host_with_open_ports').all()
+            unique_ips = list(set(asset.value for asset in ip_assets))
+            rdns_found_count = 0
+            if unique_ips:
+                hostnames = get_hostnames_for_ips(unique_ips)
+                om.write_discovery_file("reverse_dns_results.txt", "\n".join(hostnames))
+                for hostname in hostnames:
+                    if validator.is_in_scope(hostname) and not Asset.query.filter_by(scan_id=scan.id, value=hostname).first():
+                        db.session.add(Asset(type='subdomain', value=hostname, scan_id=scan.id))
+                        rdns_found_count += 1
+                    elif not validator.is_in_scope(hostname):
+                        out_of_scope_count += 1
+            print(f"rDNS complete. Found {rdns_found_count} new hostnames.")
+            db.session.commit()
+
+            # 3. Expansion Phase (Analytics Correlation)
+            print("Starting Expansion: Analytics Correlation")
+            domain_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.is_approved_for_scan == True, Asset.type.in_(['domain', 'subdomain'])).all()
+            unique_domains = list(set(asset.value for asset in domain_assets))
+            analytics_found_count = 0
+            if unique_domains:
+                related_domains = find_related_domains_by_analytics(unique_domains)
+                om.write_discovery_file("analytics_correlation_results.txt", "\n".join(related_domains))
+                for domain in related_domains:
+                    if validator.is_in_scope(domain) and not Asset.query.filter_by(scan_id=scan.id, value=domain).first():
+                        db.session.add(Asset(type='subdomain', value=domain, scan_id=scan.id))
+                        analytics_found_count += 1
+                    elif not validator.is_in_scope(domain):
+                        out_of_scope_count += 1
+            print(f"Analytics complete. Found {analytics_found_count} new domains.")
+
+            # 4. Finalize Scan
+            final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
+            scan.results = f"Execution phase complete. Total assets: {final_asset_count}. See output directory for details."
+            scan.status = 'COMPLETED'
+            print(f"Scan {scan_id} execution phase complete.")
+
+
+            # Run post-scan operations
+            run_post_scan_operations(scan_id, app, om)
+
+        except Exception as e:
+            print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")
+            scan.status = 'FAILED'
+            scan.results = f"Execution failed with error: {e}"
+        finally:
+            if om:
+                summary = om.finalize(generate_pdf=True, generate_docx=True)
+                print("Generated reports summary:", summary)
+            db.session.commit()
+            print(f"Final execution status for scan {scan_id} is {scan.status}.")

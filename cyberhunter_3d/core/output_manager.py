@@ -1,3 +1,4 @@
+
 import json
 from pathlib import Path
 
@@ -41,3 +42,9 @@ class OutputManager:
 
     def finalize(self, generate_pdf=False, generate_docx=False):
         return {}
+
+class OutputManager:
+    """
+    This is a placeholder class to fix the ImportError.
+    """
+    pass
