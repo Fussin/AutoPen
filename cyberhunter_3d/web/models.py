@@ -17,6 +17,7 @@ class User(UserMixin, db.Model):
     api_key = db.Column(db.String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
     hackerone_api_key = db.Column(db.String(255), nullable=True)
     scans = db.relationship('Scan', backref='user', lazy=True)
+    monitoring_settings = db.relationship('MonitoringSettings', uselist=False, back_populates='user', cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -75,3 +76,29 @@ class Asset(db.Model):
 
     def __repr__(self):
         return f'<Asset {self.value} ({self.type})>'
+
+class MonitoringSettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, unique=True)
+    user = db.relationship('User', back_populates='monitoring_settings')
+
+    # Asset Monitoring
+    asset_new_subdomain_detection = db.Column(db.Boolean, default=False, nullable=False)
+    asset_certificate_changes = db.Column(db.Boolean, default=False, nullable=False)
+    asset_dns_record_modifications = db.Column(db.Boolean, default=False, nullable=False)
+    asset_technology_updates = db.Column(db.Boolean, default=False, nullable=False)
+    asset_new_endpoints = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Vulnerability Monitoring
+    vuln_cve_feed_integration = db.Column(db.Boolean, default=False, nullable=False)
+    vuln_zero_day_alerts = db.Column(db.Boolean, default=False, nullable=False)
+    vuln_patch_status_tracking = db.Column(db.Boolean, default=False, nullable=False)
+    vuln_regression_testing = db.Column(db.Boolean, default=False, nullable=False)
+    vuln_threat_intelligence_correlation = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Schedule Configuration
+    schedule_quick_scans = db.Column(db.Boolean, default=False, nullable=False)
+    schedule_full_scans = db.Column(db.Boolean, default=False, nullable=False)
+    schedule_deep_scans = db.Column(db.Boolean, default=False, nullable=False)
+    schedule_compliance_scans = db.Column(db.Boolean, default=False, nullable=False)
+    schedule_custom_schedules = db.Column(db.String(255), nullable=True)
