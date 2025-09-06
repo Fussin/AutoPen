@@ -87,9 +87,9 @@ def cleanup_operations(scan_id, om: OutputManager):
         logger.error(f"[{scan_id}] Cleanup operations failed: {e}")
 
 def session_termination(scan_id):
-    """Placeholder for session termination logic."""
+    """Simulates terminating the user session."""
     logger.info(f"[{scan_id}] Terminating session...")
-    print(f"[{scan_id}] Simulating session termination: Logging out of active sessions.")
+    print(f"[{scan_id}] Simulating session termination: Invalidating user session token.")
     logger.info(f"[{scan_id}] Session termination complete.")
 
 def backup_creation(scan_id, om: OutputManager):
@@ -144,21 +144,21 @@ def schedule_next_scan(scan_id):
     logger.info(f"[{scan_id}] Next scan scheduled.")
 
 def monitoring_activation(scan_id):
-    """Placeholder for monitoring activation logic."""
+    """Simulates activating continuous monitoring for the target."""
     logger.info(f"[{scan_id}] Activating monitoring...")
-    print(f"[{scan_id}] Simulating monitoring activation: Activating continuous monitoring for the target.")
+    print(f"[{scan_id}] Simulating monitoring activation: Setting up continuous monitoring for the target.")
     logger.info(f"[{scan_id}] Monitoring activation complete.")
 
 def platform_logout(scan_id):
-    """Placeholder for platform logout logic."""
+    """Simulates logging out of the platform."""
     logger.info(f"[{scan_id}] Logging out of platform...")
-    print(f"[{scan_id}] Simulating platform logout: Logging out of the CyberHunter 3D platform.")
+    print(f"[{scan_id}] Simulating platform logout: Clearing session data.")
     logger.info(f"[{scan_id}] Platform logout complete.")
 
 def session_closed(scan_id):
-    """Placeholder for session closed logic."""
+    """Simulates closing the user session and releasing resources."""
     logger.info(f"[{scan_id}] Closing session...")
-    print(f"[{scan_id}] Simulating session closed: Closing the user session.")
+    print(f"[{scan_id}] Simulating session closed: Releasing resources associated with the session.")
     logger.info(f"[{scan_id}] Session closed.")
 
 def run_post_scan_operations(scan_id, app, om: OutputManager):
