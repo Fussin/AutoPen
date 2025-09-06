@@ -1,42 +1,36 @@
 import os
-import logging
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
-from cyberhunter_3d.web.models import db, User, Scan, Asset
+from cyberhunter_3d.web.models import db, User
 
-# --- Logging Configuration ---
-logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# --- App Initialization ---
+app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
 
-def create_app():
-    app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
+# --- Configuration ---
+# In a real app, this should be a more complex, securely stored secret.
+app.config['SECRET_KEY'] = 'a-very-secret-key-that-should-be-changed'
+# Define the database path
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    # --- Configuration ---
-    app.config['SECRET_KEY'] = 'a-very-secret-key-that-should-be-changed'
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# --- Extensions Initialization ---
+db.init_app(app)
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login' # The route to redirect to for login
 
-    # --- Extensions Initialization ---
-    db.init_app(app)
-    Bcrypt(app)
-    login_manager = LoginManager(app)
-    login_manager.login_view = 'login'
+@login_manager.user_loader
+def load_user(user_id):
+    """Flask-Login hook to load a user by ID."""
+    return User.query.get(int(user_id))
 
-    @login_manager.user_loader
-    def load_user(user_id):
-        return db.session.get(User, int(user_id))
-
-    return app
-
-app = create_app()
-bcrypt = Bcrypt(app) # bcrypt needs to be available globally for password hashing in routes
-
-def init_database(app_context):
+# --- Database Initialization ---
+def init_database():
     """Create database tables if they don't exist."""
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
     if not os.path.exists(db_path):
-        with app_context:
+        with app.app_context():
             print("Creating database and tables...")
             db.create_all()
             print("Database initialized.")
@@ -45,7 +39,7 @@ def init_database(app_context):
 
 # --- Routes ---
 from cyberhunter_3d.web.api import api_bp
-from flask import render_template, request, redirect, url_for, flash, session, jsonify
+from flask import render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, current_user, login_required
 import pyotp
 import qrcode
@@ -141,7 +135,7 @@ def verify_2fa():
 
     if request.method == 'POST':
         user_id = session['user_id_for_2fa']
-        user = db.session.get(User, user_id)
+        user = User.query.get(user_id)
         token = request.form.get('token')
 
         totp = pyotp.TOTP(user.otp_secret)
@@ -163,38 +157,15 @@ from cyberhunter_3d.web.models import Scan, Target
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
-from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
+from cyberhunter_3d.core.target_parser import parse_single_target
 
 # --- Background Task Executor ---
 # Using a simple thread pool for background tasks.
 # For a production app, a more robust solution like Celery would be better.
 executor = ThreadPoolExecutor(max_workers=2)
-app.executor = executor
-
-from cyberhunter_3d.core.scan_manager import run_discovery_phase, run_url_discovery_phase
-
-def run_full_scan(scan_id, app):
-    """Runs both discovery and URL discovery phases."""
-    # Submit the discovery phase to the executor
-    future = app.executor.submit(run_discovery_phase, scan_id, app)
-    # Wait for the discovery phase to complete
-    future.result()
-
-    # Run the URL discovery phase
-    run_url_discovery_phase(scan_id, app)
-
-from cyberhunter_3d.web.views.dashboard import dashboard_bp
 
 # Register the API blueprint
 app.register_blueprint(api_bp)
-app.register_blueprint(dashboard_bp)
-
-@app.route('/sync-hackerone', methods=['POST'])
-@login_required
-def sync_hackerone():
-    # Placeholder for a real implementation
-    flash('HackerOne sync is not implemented yet.', 'info')
-    return redirect(url_for('dashboard'))
 
 @app.route('/submit-targets', methods=['POST'])
 @login_required
@@ -210,7 +181,6 @@ def submit_targets():
 
     # 2. Get targets from file
     if target_file and target_file.filename != '':
-        # It's good practice to secure the filename, though we don't save the file
         filename = secure_filename(target_file.filename)
         if filename.endswith('.txt') or filename.endswith('.csv'):
             try:
@@ -220,37 +190,49 @@ def submit_targets():
                 flash(f"Error reading file: {e}", 'danger')
                 return redirect(url_for('dashboard'))
 
-    # 3. Clean and validate targets
-    targets = {line.strip() for line in raw_targets if line.strip()}
+    # 3. Parse and validate targets
+    parsed_targets = []
+    invalid_targets = []
+    for raw_target in raw_targets:
+        if not raw_target.strip():
+            continue
 
-    if not targets:
-        flash('No valid targets submitted.', 'danger')
+        value, type = parse_single_target(raw_target)
+        if type not in ['unknown', 'empty']:
+            parsed_targets.append({'value': value, 'type': type})
+        else:
+            invalid_targets.append(raw_target)
+
+    if not parsed_targets:
+        flash('No valid targets were submitted.', 'danger')
+        if invalid_targets:
+            flash(f"The following {len(invalid_targets)} targets were invalid: {', '.join(invalid_targets)}", 'warning')
         return redirect(url_for('dashboard'))
 
     # 4. Create Scan and Target objects in DB
     new_scan = Scan(user_id=current_user.id, status='QUEUED')
     db.session.add(new_scan)
+    db.session.flush()  # Get new_scan.id
 
-    # We need to flush to get the new_scan.id before creating targets
-    db.session.flush()
-
-    for target_value in targets:
-        new_target = Target(value=target_value, scan_id=new_scan.id)
+    for p_target in parsed_targets:
+        new_target = Target(
+            value=p_target['value'],
+            type=p_target['type'],
+            scan_id=new_scan.id
+        )
         db.session.add(new_target)
 
     db.session.commit()
 
     # Trigger the scan in the background
-    executor.submit(run_full_scan, new_scan.id, app)
+    executor.submit(run_discovery_phase, new_scan.id, app)
 
-    flash(f'{len(targets)} targets have been queued for scanning.', 'success')
+    # Flash messages to the user
+    flash(f'{len(parsed_targets)} targets have been queued for scanning.', 'success')
+    if invalid_targets:
+        flash(f"The following {len(invalid_targets)} targets were invalid and have been ignored: {', '.join(invalid_targets)}", 'warning')
+
     return redirect(url_for('dashboard'))
-
-
-@app.route('/profile')
-@login_required
-def profile():
-    return render_template('profile.html')
 
 
 @app.route('/dashboard')
@@ -267,45 +249,6 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
-from collections import defaultdict
-
-@app.route('/scan/<int:scan_id>/graph')
-@login_required
-def graph_view(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    if scan.user_id != current_user.id:
-        flash('You are not authorized to view this scan.', 'danger')
-        return redirect(url_for('dashboard'))
-    return render_template('graph_view.html', scan=scan)
-
-from cyberhunter_3d.core.reconnaissance.utils import load_config
-from cyberhunter_3d.utils.file_utils import get_results_dir
-import json
-
-from flask import send_from_directory
-from cyberhunter_3d.reporting.pdf_generator import generate_pdf_report
-
-@app.route('/scan/<int:scan_id>/report/download')
-@login_required
-def download_report(scan_id):
-    scan = Scan.query.get_or_404(scan_id)
-    if scan.user_id != current_user.id:
-        flash('You are not authorized to access this report.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    target_domain = scan.targets[0].value if scan.targets else 'report'
-    results_dir = get_results_dir(target_domain, scan_id)
-    pdf_path = os.path.join(results_dir, f"scan_report_{scan_id}.pdf")
-
-    if not os.path.exists(pdf_path):
-        # Generate the report if it doesn't exist
-        generate_pdf_report(scan_id, target_domain, app)
-        if not os.path.exists(pdf_path):
-            flash('Failed to generate PDF report.', 'danger')
-            return redirect(url_for('scan_results', scan_id=scan_id))
-
-    return send_from_directory(directory=results_dir, path=f"scan_report_{scan_id}.pdf", as_attachment=True)
-
 @app.route('/scan/<int:scan_id>')
 @login_required
 def scan_results(scan_id):
@@ -315,46 +258,10 @@ def scan_results(scan_id):
         flash('You are not authorized to view this scan.', 'danger')
         return redirect(url_for('dashboard'))
 
-    # Group assets by type for organized display
-    grouped_assets = defaultdict(list)
-    for asset in scan.assets:
-        grouped_assets[asset.type].append(asset)
-
-    # Load the final JSON report to get URL and vulnerability data
-    url_data = {}
-    vulnerability_data = []
-    content_discovery_data = {}
-    js_analysis_data = {}
-    config = load_config()
-    # Assuming the results are stored in a directory named after the first target
-    # This might need to be more robust if there are multiple targets.
-    if scan.targets:
-        target_domain = scan.targets[0].value
-        results_dir = get_results_dir(target_domain, scan_id)
-        final_report_path = os.path.join(results_dir, config['final_recon_file'])
-        if os.path.exists(final_report_path):
-            with open(final_report_path, 'r') as f:
-                try:
-                    report_data = json.load(f)
-                    url_data = report_data.get("url_discovery", {})
-                    vulnerability_data = report_data.get("vulnerabilities", [])
-                    content_discovery_data = report_data.get("content_discovery", {})
-                    js_analysis_data = report_data.get("js_analysis", {})
-                except json.JSONDecodeError:
-                    flash('Error reading scan report file.', 'danger')
-
-    return render_template(
-        'scan_results.html',
-        scan=scan,
-        grouped_assets=grouped_assets,
-        url_data=url_data,
-        vulnerabilities=vulnerability_data,
-        content_discovery=content_discovery_data,
-        js_analysis=js_analysis_data
-    )
+    return render_template('scan_results.html', scan=scan)
 
 # --- Main Execution ---
 if __name__ == '__main__':
-    init_database(app.app_context())
+    init_database()
     # In a real deployment, use a proper WSGI server like Gunicorn.
     app.run(debug=True, port=5001)

@@ -1,147 +1,41 @@
-# Configuration for the V3 Reconnaissance Phase
+# Configuration for the V2 Reconnaissance Phase
 
 # Paths to tools
-# Tools are expected to be in the system's PATH.
+# If the tool is in the system's PATH, you can just use the tool name.
+# Otherwise, provide the full path.
 tools:
-  gobuster: gobuster
-  massdns: massdns
-  puredns: puredns
-  dnsgen: dnsgen
-  gotator: gotator
-  linkfinder: linkfinder
-  gowitness: gowitness
-  aquatone: aquatone
-  wappalyzer: wappalyzer
-  naabu: naabu
-  nmap: nmap
-  httpx: httpx
-  subfinder: subfinder
-  amass: amass
-  assetfinder: assetfinder
-  waybackurls: waybackurls
-  katana: katana
-  hakrawler: hakrawler
-  unfurl: unfurl
-  subjs: subjs
-  dalfox: dalfox
-  sqlmap: sqlmap
-  dirsearch: dirsearch
-  trufflehog: trufflehog
-  subzy: subzy
-  nuclei: nuclei
-  dnsx: dnsx
-  gospider: gospider
-  gau: gau
-  sublist3r: sublist3r
-  gh_dork: gh-dork.py # Assumes gh-dork repo is cloned and script is in PATH
-  s3scanner: s3scanner
+  gobuster: /usr/bin/gobuster
+  massdns: /usr/local/bin/massdns
+  puredns: /root/go/bin/puredns
+  dnsgen: /usr/local/bin/dnsgen
+  gotator: /root/go/bin/gotator
+  linkfinder: /usr/local/bin/linkfinder.py # This will be installed via setup.py, so it should be in the path
+  gowitness: /root/go/bin/gowitness
+  aquatone: /usr/local/bin/aquatone
+  wappalyzer: /root/.local/bin/wappalyzer # pipx path
+  naabu: /root/go/bin/naabu
+  nmap: /usr/bin/nmap
+  httpx: /root/go/bin/httpx
+  subfinder: /root/go/bin/subfinder
+  amass: /root/go/bin/amass
+  assetfinder: /root/go/bin/assetfinder
+  subzy: /root/go/bin/subzy
+  nuclei: /root/go/bin/nuclei
+  dnsx: /root/go/bin/dnsx
+  gospider: /root/go/bin/gospider
+  gau: /root/go/bin/gau
+  sublist3r: /usr/bin/sublist3r
+  gh_dork: gh-dork/gh-dork.py # Relative path to the cloned repo
 
 # Paths to wordlists
-# These paths need to be updated for the Docker container.
-# I will handle this in the Dockerfile by placing the wordlists in a known location.
 wordlists:
-  dns_bruteforce: /wordlists/subdomains-top1million-5000.txt
-  dir_bruteforce: /wordlists/directory-list-2.3-medium.txt
-  resolvers: /wordlists/resolvers.txt
-  github_dorks: /app/gh-dork/dorks.txt
+  dns_bruteforce: /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+  resolvers: /usr/share/seclists/Discovery/DNS/resolvers.txt
+  github_dorks: gh-dork/dorks.txt
 
 # Other settings
 recon_output_dir: recon_results
-screenshot_dir: screenshots
-nmap_output_dir: nmap
-final_recon_file: final_recon_data.json
-master_subdomains_file: master_subdomains.txt
-
-# Command templates for external tools
-tool_commands:
-  # 1. Multi-Source URL Collection
-  gau: "gau --subs {target}"
-  waybackurls: "waybackurls {target}"
-  katana: "katana -u {target} -silent"
-  hakrawler: "echo {target} | hakrawler -u -insecure"
-  gau_file: "cat {input_file} | gau --subs"
-  katana_list: "katana -list {input_file} -silent"
-
-  # 2. Aggregation, Normalization & Deduplication
-  unfurl_normalize: "unfurl format %s://%d%p"
-
-  # 3. Liveness & Enrichment Probe (HTTPX)
-  httpx_enrich: "httpx -l {input_file} -json -o {output_file} -silent -status-code -tech-detect -title -follow-redirects -timeout 10 -retries 2"
-
-  # 4A. Data Triage & Analysis (jq)
-  jq_2xx: "jq 'select(.status_code >= 200 and .status_code < 300) | .url' {input_file} > {output_file}"
-  jq_params: "jq -r '.url | select(contains(\"?\"))' {input_file} > {output_file}"
-  jq_js: "jq -r '.url | select(endswith(\".js\"))' {input_file} > {output_file}"
-
-  # 4B. Visual Recon (Gowitness)
-  gowitness_file: "gowitness file -f {input_file} -P {output_dir} --no-redirect"
-
-  # 5. JavaScript Recursive Analysis
-  subjs: "subjs -i {input_file}"
-  linkfinder_file: "linkfinder.py -i {input_file} -o {output_file}"
-  trufflehog_file: "trufflehog filesystem {url} --json"
-
-  # Vulnerability Scanning
-  nuclei_scan: "nuclei -l {input_file} -t {nuclei_templates} -json -o {output_file} -silent"
-  nuclei_takeover_scan: "nuclei -l {input_file} -t http/takeovers/ -json -silent"
-  naabu_scan: "naabu -l {input_file} -top-ports {top_ports} -json -silent"
-  dalfox_scan: "dalfox file {input_file} -o {output_file}"
-  sqlmap_scan: "sqlmap -m {input_file} --batch --output-dir={output_dir} --risk=3 --level=5"
-  dirsearch_scan: "dirsearch -L {input_file} --json-report={output_file}"
-
-  # --- New Scanners from Diagram ---
-
-  # XSS Hunting
-  gxss_scan: "cat {input_file} | Gxss -c 100 -p Xss -o {output_file}"
-  kxss_scan: "kxss -l {input_file} -o {output_file}"
-  xsstrike_scan: "xsstrike -u {target_url} --fuzzer --batch" # Note: XSStrike is often interactive, might need wrapper
-
-  # SQL Injection
-  ghauri_scan: "ghauri -l {input_file} --batch -o {output_file}"
-
-  # LFI Testing
-  # Often done with custom scripts or nuclei templates. No single tool command.
-
-  # CORS Scanning
-  corscanner_scan: "python3 CORScanner/cors_scan.py -i {input_file} -o {output_file}"
-
-  # Sensitive Data
-  git_exposure_check: "httpx -l {input_file} -path /.git/config -status-code -mc 200"
-  backup_file_check: "nuclei -l {input_file} -t exposures/backups/ -o {output_file}"
-  config_file_check: "nuclei -l {input_file} -t exposures/configs/ -o {output_file}"
-
-  # SSRF/XXE
-  ssrf_callback_test: "nuclei -l {input_file} -t ssrf/ -o {output_file}" # Assumes interactsh server is configured
-  xxe_test: "nuclei -l {input_file} -t xxe/ -o {output_file}"
-
-# Filenames for output artifacts
-output_filenames:
-  discovered_paths: "discovered_paths_{scan_id}.json"
-  js_endpoints: "js_endpoints_{scan_id}.json"
-  js_secrets: "js_secrets_{scan_id}.json"
-  httpx_results: "results.json"
-  vulnerabilities: "vulnerabilities_{scan_id}.json"
-
-# External service configurations
-external_services:
-  nvd_api:
-    base_url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
-
-# Plugin settings
-plugins:
-  enabled:
-    - "Passive Enumeration"
-    - "Active Enumeration"
-    - "Permutation Enumeration"
-    # The new URL discovery and vuln scanning pipeline plugins
-    - "URL Discovery"
-    - "URL Aggregation"
-    - "URL Processor"
-    - "Visual Recon"
-    - "JavaScript Analyzer"
-    - "Vulnerability Scanner"
-    # Other existing plugins
-    - "Technology Fingerprinting"
-    - "Subdomain Takeover"
-    - "Cloud Enumeration"
-    - "CVE Mapper"
+screenshot_dir: recon_results/screenshots
+nmap_output_dir: recon_results/nmap
+final_recon_file: recon_results/final_recon_data.json
+master_subdomains_file: recon_results/master_subdomains.txt

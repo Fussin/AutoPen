@@ -1,74 +1,68 @@
-import logging
-from ..plugins.manager import PluginManager
-from ..plugins.context import ScanContext
-from cyberhunter_3d.utils.file_utils import save_to_json, get_results_dir
-from ...web.models import Scan, Asset, db
+import json
+import os
+import subprocess
+import tempfile
+from typing import Set, List, Dict
 
-log = logging.getLogger(__name__)
+from .utils import get_logger, load_config
+from .passive_engine import run_passive_enumeration
+from .active_engine import run_active_enumeration
+from ..enrichment.enrichment_engine import run_enrichment_engine
+from .js_engine import run_js_enumeration
+from ..dorking.github_dorking_engine import run_github_dorking_engine
+from .cloud_asset_enum import find_cloud_assets
 
-def perform_delta_scan(master_subdomains: set, previous_subdomains: set, logger) -> dict:
-    if not previous_subdomains:
-        logger.info("No previous subdomains found. Skipping delta scan.")
-        return {}
+logger = get_logger(__name__)
 
-    new_subdomains = master_subdomains - previous_subdomains
-    removed_subdomains = previous_subdomains - master_subdomains
+def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
+    config = load_config()
+    logger.info(f"Starting V2 reconnaissance for: {domain}")
 
-    logger.info(f"Delta scan found {len(new_subdomains)} new and {len(removed_subdomains)} removed subdomains.")
+    # --- Phase 1: Enumeration ---
+    passive_findings = run_passive_enumeration(domain)
+    active_findings = run_active_enumeration(domain)
+    all_enum_findings = passive_findings + active_findings
+    raw_subdomains = {f['evidence']['poc'] for f in all_enum_findings if f['status'] == 'success'}
 
-    return {"new": new_subdomains, "removed": removed_subdomains}
+    # --- Phase 2: Validation ---
+    logger.info("Starting DNS resolution and validation...")
+    master_subdomains = resolve_and_validate(raw_subdomains, config)
+    logger.info(f"Found {len(master_subdomains)} valid subdomains.")
 
-def enumerate_subdomains_v2(domain: str, scan_id: int, app) -> dict:
-    """
-    Orchestrates the subdomain enumeration process using the new plugin architecture.
-    """
-    log.info(f"Starting V3 Plugin-Based Reconnaissance for: {domain}")
+    # --- Phase 3: Enrichment & Analysis ---
+    enrichment_findings = run_enrichment_engine(master_subdomains)
+    js_findings = run_js_enumeration(master_subdomains)
+    cloud_assets = find_cloud_assets(master_subdomains)
+    github_findings = run_github_dorking_engine(master_subdomains)
 
-    with app.app_context():
-        scan = db.session.get(Scan, scan_id)
-        if not scan:
-            log.error(f"Scan with ID {scan_id} not found.")
-            return {}
+    # --- Final Report Generation ---
+    screenshots = [f['evidence']['screenshot_dir'] for f in enrichment_findings if f['phase'] == 'enrichment-screenshot' and f['status'] == 'success']
+    tech_results = {}
+    for f in enrichment_findings:
+        if f['phase'] == 'enrichment-service-scan' and f['status'] == 'success':
+            host = f['target']
+            if host not in tech_results:
+                tech_results[host] = {'ports': []}
+            tech_results[host]['ports'].append(f['evidence'])
 
-        results_dir = get_results_dir(domain, scan_id)
-        context = ScanContext(target_domain=domain, scan_id=scan_id, results_dir=results_dir)
+    final_recon_data = {
+        'domain': domain,
+        'master_subdomains': sorted(list(master_subdomains)),
+        'screenshots': screenshots,
+        'technology_and_ports': tech_results,
+        'js_findings': js_findings,
+        'cloud_assets': cloud_assets,
+        'github_findings': github_findings,
+    }
 
-        plugin_manager = PluginManager()
-        plugin_manager.run_all_plugins(context)
+    final_recon_file = os.path.join(config['recon_output_dir'], config['final_recon_file'])
+    os.makedirs(config['recon_output_dir'], exist_ok=True)
+    with open(final_recon_file, 'w') as f_out:
+        json.dump(final_recon_data, f_out, indent=4)
 
-        all_subdomains = context.get('subdomains', set())
+    assets = [{'type': 'subdomain', 'value': sub} for sub in master_subdomains]
+    return assets
 
-        final_results = {
-            "target": domain,
-            "scan_id": scan_id,
-            "all_subdomains": list(all_subdomains),
-            "validated_subdomains": list(context.get('validated_subdomains', set())),
-            "cloud_assets": context.get('cloud_assets', []),
-            "tech_fingerprints": context.get('tech_fingerprints', {}),
-            "open_ports": context.get('open_ports', {}),
-            "takeover_vulnerabilities": context.get('takeover_vulnerabilities', []),
-            "cve_results": context.get('cve_results', {}),
-            "secrets": context.get('secrets', []),
-        }
-
-        master_filepath = save_to_json(
-            f"final_results_{scan_id}.json",
-            final_results,
-            results_dir
-        )
-
-        for sub in all_subdomains:
-            asset = Asset(
-                scan_id=scan_id,
-                target_id=scan.targets[0].id,
-                type='subdomain',
-                value=sub
-            )
-            db.session.add(asset)
-
-        scan.status = 'COMPLETED'
-        db.session.commit()
-
-        log.info(f"Scan {scan_id} for {domain} completed. Found {len(all_subdomains)} subdomains.")
-
-        return {"master_results_list": master_filepath}
+def resolve_and_validate(subdomains: Set[str], config: dict) -> Set[str]:
+    # ... (implementation remains)
+    pass

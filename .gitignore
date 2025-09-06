@@ -133,5 +133,10 @@ cyberhunter.db
 subdomains_alive.txt
 subdomains_dead.txt
 *.log
-logs/
-gh-dork/
+
+# General database files
+*.db
+
+# OS-specific files
+.DS_Store
+Thumbs.db

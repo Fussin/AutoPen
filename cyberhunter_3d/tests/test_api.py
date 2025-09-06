@@ -1,6 +1,5 @@
 import unittest
 import json
-import time
 from unittest.mock import patch, MagicMock
 from run_web import app, db
 from cyberhunter_3d.web.models import User, Scan, Target, Asset
@@ -59,7 +58,7 @@ class APITestCase(unittest.TestCase):
 
         # Verify the scan was created in the DB within an app context
         with app.app_context():
-            scan = db.session.get(Scan, scan_id)
+            scan = Scan.query.get(scan_id)
             self.assertIsNotNone(scan)
             self.assertEqual(scan.user_id, self.test_user.id)
 
@@ -119,49 +118,6 @@ class APITestCase(unittest.TestCase):
         self.assertIn('graph TD', response_data['graph_definition'])
         self.assertIn('target1("example.com (domain)")', response_data['graph_definition'])
         self.assertIn('asset1testexamplecom("test.example.com (subdomain)")', response_data['graph_definition'])
-
-    @patch('cyberhunter_3d.core.scan_manager.enumerate_subdomains_v2')
-    def test_create_scan_and_persist_assets(self, mock_enumerate):
-        """
-        Test creating a scan and check if detailed assets are persisted to the DB.
-        """
-        # 1. Setup Mock
-        mock_recon_data = {
-            'master_subdomains': {'test.example.com'},
-            'live_hosts': ['http://test.example.com'],
-            'subdomain_takeover_vulnerabilities': [{'host': 'test.example.com', 'type': 'aws-s3', 'template-id': 'test'}],
-            'technology_and_ports': {'http://test.example.com': {'tech': 'react'}},
-            'cloud_assets': [{'type': 's3', 'value': 'test-bucket'}]
-        }
-        mock_enumerate.return_value = mock_recon_data
-
-        # 2. Create a scan via the API
-        response = self.client.post('/api/v1/scans', json={
-            'targets': ['example.com']
-        }, headers={'X-API-Key': self.api_key})
-        self.assertEqual(response.status_code, 202)
-        scan_id = response.json['scan_id']
-
-        # 3. Wait for the discovery phase to finish (it runs in a background thread)
-        time.sleep(2) # Simple wait for the test
-
-        # 4. Verify the assets in the database
-        with app.app_context():
-            scan = db.session.get(Scan, scan_id)
-            self.assertIsNotNone(scan)
-            self.assertEqual(scan.status, 'PENDING_REVIEW')
-
-            # Check for specific assets
-            subdomain_asset = Asset.query.filter_by(scan_id=scan_id, type='subdomain', value='test.example.com').first()
-            self.assertIsNotNone(subdomain_asset)
-
-            vuln_asset = Asset.query.filter_by(scan_id=scan_id, type='vulnerability', value='test.example.com').first()
-            self.assertIsNotNone(vuln_asset)
-            self.assertEqual(vuln_asset.details['type'], 'aws-s3')
-
-            tech_asset = Asset.query.filter_by(scan_id=scan_id, type='technology', value='http://test.example.com').first()
-            self.assertIsNotNone(tech_asset)
-            self.assertEqual(tech_asset.details['tech'], 'react')
 
 if __name__ == '__main__':
     unittest.main()

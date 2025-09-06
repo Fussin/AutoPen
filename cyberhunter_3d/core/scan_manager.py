@@ -6,118 +6,35 @@ from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
-from cyberhunter_3d.core.reconnaissance.url_discovery_manager import discover_urls
-
-def run_url_discovery_phase(scan_id, app):
-    """
-    Performs the URL discovery and vulnerability scanning phase.
-    """
-    with app.app_context():
-        scan = db.session.get(Scan, scan_id)
-        if not scan:
-            print(f"Error: Scan {scan_id} not found for URL discovery phase.")
-            return
-
-        for target in scan.targets:
-            # Assuming the main target for URL discovery is the 'domain' type
-            if target.type == 'domain':
-                discover_urls(target.value, scan_id, app)
-
-def _create_asset_if_new(scan_id, asset_type, value, validator, details=None):
-    """Helper to create a new asset if it is in scope and doesn't already exist."""
-    if not validator.is_in_scope(value):
-        return False, 'out_of_scope'
-
-    if not Asset.query.filter_by(scan_id=scan_id, type=asset_type, value=value).first():
-        asset = Asset(
-            scan_id=scan_id,
-            type=asset_type,
-            value=value,
-            details=details
-        )
-        db.session.add(asset)
-        return True, 'created'
-    return False, 'exists'
+from cyberhunter_3d.core.decision_tree import DecisionTree
 
 def run_discovery_phase(scan_id, app):
     """
-    Performs the initial discovery and expansion phases of a scan.
-    This includes subdomain enumeration and expansion from ASN/Org targets.
-    It persists discovered assets and sets the scan status to PENDING_REVIEW.
+    Performs the initial discovery and expansion phases of a scan using the DecisionTree.
     """
     with app.app_context():
-        scan = db.session.get(Scan, scan_id)
+        scan = Scan.query.get(scan_id)
         if not scan:
             print(f"Error: Scan {scan_id} not found for discovery phase.")
             return
 
         try:
+            # 1. Initialization
             scan.status = 'RUNNING'
             db.session.commit()
             print(f"Scan {scan_id} discovery phase started.")
-            validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
 
-            in_scope_count = 0
-            out_of_scope_count = 0
+            # 2. Use DecisionTree to process targets
+            decision_tree = DecisionTree(scan_id, app)
+            initial_targets = list(scan.targets) # Create a copy
+            for target in initial_targets:
+                decision_tree.process_target(target)
 
-            targets_to_scan = list(scan.targets)
-            i = 0
-            while i < len(targets_to_scan):
-                target = targets_to_scan[i]
-                i += 1
+            # 3. Persist the results from the DecisionTree
+            in_scope_count, out_of_scope_count = decision_tree.persist_discovered_assets()
 
-                if target.type in ['asn', 'org_name']:
-                    print(f"Expanding {target.type}: {target.value}")
-                    assets_to_add = []
-                    if target.type == 'asn':
-                        assets_to_add = get_cidrs_for_asn(target.value)
-                    elif target.type == 'org_name':
-                        assets_to_add = get_assets_for_org(target.value)
-
-                    for asset_data in assets_to_add:
-                        targets_to_scan.append(Target(value=asset_data['value'], type=asset_data['type']))
-                    continue
-
-                elif target.type in ['domain', 'wildcard_domain']:
-                    print(f"Finding subdomains for '{target.value}'...")
-                    recon_data = enumerate_subdomains_v2(target.value)
-
-                    # Persist assets directly from the recon data dictionary
-                    for sub in recon_data.get('master_subdomains', []):
-                        created, status = _create_asset_if_new(scan.id, 'subdomain', sub, validator)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for host in recon_data.get('live_hosts', []):
-                        created, status = _create_asset_if_new(scan.id, 'live_host', host, validator)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for vuln in recon_data.get('subdomain_takeover_vulnerabilities', []):
-                        host = vuln.get('host', 'unknown_host')
-                        created, status = _create_asset_if_new(scan.id, 'vulnerability', host, validator, details=vuln)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for tech, details in recon_data.get('technology_and_ports', {}).items():
-                        created, status = _create_asset_if_new(scan.id, 'technology', tech, validator, details=details)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                    for asset in recon_data.get('cloud_assets', []):
-                        value = asset.get('value', 'unknown_asset')
-                        created, status = _create_asset_if_new(scan.id, 'cloud_asset', value, validator, details=asset)
-                        if created: in_scope_count += 1
-                        elif status == 'out_of_scope': out_of_scope_count += 1
-
-                elif target.type in ['ip_address', 'cidr']:
-                    created, status = _create_asset_if_new(scan.id, target.type, target.value, validator)
-                    if created: in_scope_count += 1
-                    elif status == 'out_of_scope': out_of_scope_count += 1
-
-                db.session.commit()
-
-            scan.results = f"Discovery phase complete. Found {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
+            # 4. Finalize Discovery Phase
+            scan.results = f"Discovery phase complete. Found {in_scope_count} new assets. Skipped {out_of_scope_count} out-of-scope items. Awaiting review to start intensive scan."
             scan.status = 'PENDING_REVIEW'
             print(f"Scan {scan_id} discovery phase complete.")
 
