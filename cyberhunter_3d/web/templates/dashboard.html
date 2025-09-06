@@ -4,95 +4,50 @@
     <h2>Dashboard</h2>
     <div>
       <span style="margin-right: 1em;">Welcome, {{ current_user.username }}!</span>
-      <a href="{{ url_for('profile') }}" class="button">Profile</a>
       <a href="{{ url_for('logout') }}" class="button" style="background-color: #d9534f; margin-left: 1em;">Logout</a>
     </div>
   </div>
 
-  <h3>Submit New Scan</h3>
-  <form method="post" action="{{ url_for('submit_targets') }}" enctype="multipart/form-data">
-    <label for="targets">Enter Targets (one per line)</label>
-    <textarea id="targets" name="targets" rows="5" placeholder="example.com&#10;*.example.com&#10;192.168.1.1&#10;10.0.0.0/8&#10;AS15169&#10;org:&quot;Example University&quot;"></textarea>
-    <small style="color: #bbb; display: block; margin-top: 0.5em;">
-      Accepted formats: domains, wildcards, IPs, CIDRs, ASNs (AS12345), and Orgs (org:"Example LLC").
-    </small>
+  <h3>Create New Workspace</h3>
+  <form method="post" action="{{ url_for('create_workspace') }}">
+    <label for="name">Workspace Name</label>
+    <input type="text" id="name" name="name" required>
 
-    <label for="target_file" style="margin-top: 1em;">Or Upload a File</label>
-    <input type="file" id="target_file" name="target_file">
+    <label for="description" style="margin-top: 1em;">Description (Optional)</label>
+    <textarea id="description" name="description" rows="3"></textarea>
 
-    <div style="display: flex; gap: 2em; margin-top: 1em;">
-      <div style="flex: 1;">
-        <label for="in_scope_rules">In-Scope Rules (one per line)</label>
-        <textarea id="in_scope_rules" name="in_scope_rules" rows="4" placeholder="*.example.com&#10;another-domain.net"></textarea>
-        <small style="color: #bbb; display: block; margin-top: 0.5em;">
-          Define the assets that are explicitly in scope. Wildcards (*) are supported.
-        </small>
-      </div>
-      <div style="flex: 1;">
-        <label for="out_of_scope_rules">Out-of-Scope Rules (one per line)</label>
-        <textarea id="out_of_scope_rules" name="out_of_scope_rules" rows="4" placeholder="*.dev.example.com&#10;legacy.another-domain.net"></textarea>
-        <small style="color: #bbb; display: block; margin-top: 0.5em;">
-          Define assets to explicitly exclude. Takes precedence over in-scope rules.
-        </small>
-      </div>
-    </div>
-
-    <button type="submit" class="button" style="margin-top: 1.5em;">Start Scan</button>
+    <button type="submit" class="button" style="margin-top: 1.5em;">Create Workspace</button>
   </form>
 
   <hr style="border-color: #444; margin: 2em 0;">
 
-  <h3>Automated Feeds</h3>
-  <form method="post" action="{{ url_for('sync_hackerone') }}">
-      <button type="submit" class="button">Sync Programs from HackerOne</button>
-  </form>
-  <small style="color: #bbb; display: block; margin-top: 0.5em;">
-    This will create a new scan for each of your programs on HackerOne. Requires a valid H1 API Key to be set in your profile.
-  </small>
-
-  <hr style="border-color: #444; margin: 2em 0;">
-
-  <h3>Your Scans</h3>
-  {% if scans %}
+  <h3>Your Workspaces</h3>
+  {% if workspaces %}
     <table style="width: 100%; border-collapse: collapse;">
       <thead>
         <tr>
-          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">ID</th>
-          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Targets</th>
-          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Status</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Name</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Owner</th>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Members</th>
           <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Created</th>
           <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Actions</th>
         </tr>
       </thead>
       <tbody>
-        {% for scan in scans %}
+        {% for workspace in workspaces %}
           <tr>
-            <td style="padding: 8px; border-bottom: 1px solid #444;">#{{ scan.id }}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ scan.targets|map(attribute='value')|join(', ') }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ workspace.name }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ workspace.owner.username }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ workspace.members.count() }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ workspace.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
             <td style="padding: 8px; border-bottom: 1px solid #444;">
-                <span style="padding: 0.2em 0.5em; border-radius: 4px; color: white; background-color:
-                {% if scan.status == 'COMPLETED' %}#28a745
-                {% elif scan.status == 'RUNNING' %}#007bff
-                {% elif scan.status == 'PENDING_REVIEW' %}#ffc107
-                {% elif scan.status == 'FAILED' %}#dc3545
-                {% else %}#6c757d
-                {% endif %};">
-                {{ scan.status }}
-                </span>
-            </td>
-            <td style="padding: 8px; border-bottom: 1px solid #444;">{{ scan.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #444;">
-              {% if scan.status == 'PENDING_REVIEW' %}
-                <a href="{{ url_for('review_scan', scan_id=scan.id) }}" style="font-weight: bold;">Review & Launch</a>
-              {% elif scan.status in ['COMPLETED', 'FAILED', 'RUNNING'] %}
-                <a href="{{ url_for('scan_results', scan_id=scan.id) }}">View Results</a>
-              {% endif %}
+              <a href="{{ url_for('view_workspace', workspace_id=workspace.id) }}">Open Workspace</a>
             </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   {% else %}
-    <p>You have not submitted any scans yet.</p>
+    <p>You are not a member of any workspaces yet. Create one to get started!</p>
   {% endif %}
 {% endblock %}

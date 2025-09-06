@@ -2,7 +2,7 @@ import unittest
 import json
 from unittest.mock import patch, MagicMock
 from run_web import app, db
-from cyberhunter_3d.web.models import User, Scan, Target, Asset
+from cyberhunter_3d.web.models import User, Workspace, Scan, Target, Asset
 
 class APITestCase(unittest.TestCase):
     def setUp(self):
@@ -13,10 +13,18 @@ class APITestCase(unittest.TestCase):
         with app.app_context():
             db.create_all()
             # Create a test user
-            self.test_user = User(username='testuser', password_hash='somehash', otp_secret='secret')
-            db.session.add(self.test_user)
+            test_user = User(username='testuser', password_hash='somehash', otp_secret='secret')
+            db.session.add(test_user)
             db.session.commit()
-            self.api_key = self.test_user.api_key
+            self.api_key = test_user.api_key
+            self.user_id = test_user.id
+
+            # Create a test workspace
+            workspace = Workspace(name="Test Workspace", owner_id=self.user_id)
+            workspace.members.append(test_user)
+            db.session.add(workspace)
+            db.session.commit()
+            self.workspace_id = workspace.id
 
     def tearDown(self):
         """Clean up the database after each test."""
@@ -38,11 +46,11 @@ class APITestCase(unittest.TestCase):
     @patch('cyberhunter_3d.web.api.get_executor')
     def test_create_scan_api(self, mock_get_executor):
         """Test creating a scan via the API."""
-        # Mock the executor to avoid running background tasks
         mock_executor = MagicMock()
         mock_get_executor.return_value = mock_executor
 
         payload = {
+            "workspace_id": self.workspace_id,
             "targets": ["example.com", "1.1.1.1"],
             "in_scope_rules": "*.example.com"
         }
@@ -56,35 +64,32 @@ class APITestCase(unittest.TestCase):
         self.assertIn('scan_id', response_data)
         scan_id = response_data['scan_id']
 
-        # Verify the scan was created in the DB within an app context
         with app.app_context():
             scan = Scan.query.get(scan_id)
             self.assertIsNotNone(scan)
-            self.assertEqual(scan.user_id, self.test_user.id)
+            self.assertEqual(scan.owner_id, self.user_id)
+            self.assertEqual(scan.workspace_id, self.workspace_id)
 
-        # Verify that the background task was called
         mock_executor.submit.assert_called_once()
 
     def test_get_scan_status_api(self):
         """Test getting scan status via the API."""
         with app.app_context():
-            # First, create a scan to check
-            scan = Scan(user_id=self.test_user.id, status='COMPLETED', results='Test summary')
+            scan = Scan(owner_id=self.user_id, workspace_id=self.workspace_id, status='COMPLETED', results='Test summary')
             db.session.add(scan)
             db.session.commit()
             scan_id = scan.id
 
-        response = self.client.get(f'/api/v1/scans/{scan_id}/status', headers={'X-API-Key': self.api_key})
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.data)
-        self.assertEqual(response_data['status'], 'COMPLETED')
-        self.assertEqual(response_data['summary'], 'Test summary')
+            response = self.client.get(f'/api/v1/scans/{scan_id}/status', headers={'X-API-Key': self.api_key})
+            self.assertEqual(response.status_code, 200)
+            response_data = json.loads(response.data)
+            self.assertEqual(response_data['status'], 'COMPLETED')
+            self.assertEqual(response_data['summary'], 'Test summary')
 
     def test_get_scan_results_api(self):
         """Test getting scan results via the API."""
         with app.app_context():
-            # Create a scan and some assets
-            scan = Scan(user_id=self.test_user.id, status='COMPLETED')
+            scan = Scan(owner_id=self.user_id, workspace_id=self.workspace_id, status='COMPLETED')
             db.session.add(scan)
             db.session.flush()
             asset1 = Asset(scan_id=scan.id, type='subdomain', value='test.example.com')
@@ -93,16 +98,16 @@ class APITestCase(unittest.TestCase):
             db.session.commit()
             scan_id = scan.id
 
-        response = self.client.get(f'/api/v1/scans/{scan_id}/results', headers={'X-API-Key': self.api_key})
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.data)
-        self.assertEqual(len(response_data['assets']), 2)
-        self.assertEqual(response_data['assets'][0]['value'], 'test.example.com')
+            response = self.client.get(f'/api/v1/scans/{scan_id}/results', headers={'X-API-Key': self.api_key})
+            self.assertEqual(response.status_code, 200)
+            response_data = json.loads(response.data)
+            self.assertEqual(len(response_data['assets']), 2)
+            self.assertEqual(response_data['assets'][0]['value'], 'test.example.com')
 
     def test_get_scan_graph_api(self):
         """Test getting scan graph data via the API."""
         with app.app_context():
-            scan = Scan(user_id=self.test_user.id, status='COMPLETED')
+            scan = Scan(owner_id=self.user_id, workspace_id=self.workspace_id, status='COMPLETED')
             db.session.add(scan)
             db.session.flush()
             t1 = Target(scan_id=scan.id, type='domain', value='example.com')
@@ -111,13 +116,13 @@ class APITestCase(unittest.TestCase):
             db.session.commit()
             scan_id = scan.id
 
-        response = self.client.get(f'/api/v1/scans/{scan_id}/graph', headers={'X-API-Key': self.api_key})
-        self.assertEqual(response.status_code, 200)
-        response_data = json.loads(response.data)
-        self.assertIn('graph_definition', response_data)
-        self.assertIn('graph TD', response_data['graph_definition'])
-        self.assertIn('target1("example.com (domain)")', response_data['graph_definition'])
-        self.assertIn('asset1testexamplecom("test.example.com (subdomain)")', response_data['graph_definition'])
+            response = self.client.get(f'/api/v1/scans/{scan_id}/graph', headers={'X-API-Key': self.api_key})
+            self.assertEqual(response.status_code, 200)
+            response_data = json.loads(response.data)
+            self.assertIn('graph_definition', response_data)
+            self.assertIn('graph TD', response_data['graph_definition'])
+            self.assertIn('target1("example.com (domain)")', response_data['graph_definition'])
+            self.assertIn('asset1testexamplecom("test.example.com (subdomain)")', response_data['graph_definition'])
 
 if __name__ == '__main__':
     unittest.main()
