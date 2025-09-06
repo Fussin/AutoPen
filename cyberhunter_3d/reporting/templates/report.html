@@ -41,5 +41,25 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <h2>Discovered Assets</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Value</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for asset in assets %}
+            <tr>
+                <td>{{ asset.type }}</td>
+                <td>{{ asset.value }}</td>
+                <td>{{ asset.details | tojson }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </body>
 </html>
