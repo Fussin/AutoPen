@@ -13,6 +13,8 @@ class TestReportingModule(unittest.TestCase):
         self.report_html_file = "report.html"
         self.report_pdf_file = "report.pdf"
         self.report_csv_file = "report.csv"
+        self.stats_file = "scan_statistics.txt"
+        self.html_with_error = "test_report_with_error.html"
         self.test_data = {
             "subdomains": ["b.test.com", "a.test.com", "b.test.com"],
             "other_data": "some_value"
@@ -29,6 +31,8 @@ class TestReportingModule(unittest.TestCase):
             self.report_html_file,
             self.report_pdf_file,
             self.report_csv_file,
+            self.stats_file,
+            self.html_with_error,
         ]
         for f in files_to_remove:
             if os.path.exists(f):
@@ -102,6 +106,29 @@ class TestReportingModule(unittest.TestCase):
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[0], ["a.test.com"])
             self.assertEqual(rows[1], ["b.test.com"])
+
+    def test_07_grammar_check(self):
+        """Test the grammar and spelling check."""
+        with open(self.html_with_error, 'w') as f:
+            f.write("<html><body>This is a test with a speling mistake.</body></html>")
+
+        checklist = ExitChecklist(self.results_file)
+        with self.assertLogs('cyberhunter_3d.common.utils', level='WARNING') as cm:
+            checklist._grammar_and_spelling_check(html_report_file=self.html_with_error)
+            self.assertIn("Found 1 potential grammar/spelling issues:", cm.output[0])
+
+    def test_08_scan_statistics(self):
+        """Test the scan statistics generation."""
+        checklist = ExitChecklist(self.results_file)
+        checklist.run_data_finalization() # To populate final_data
+        report_files = ["report.pdf", "report.html"]
+        checklist._update_scan_statistics(report_files=report_files)
+        self.assertTrue(os.path.exists(self.stats_file))
+        with open(self.stats_file, 'r') as f:
+            content = f.read()
+        self.assertIn("Number of subdomains found: 2", content)
+        self.assertIn("report.pdf", content)
+        self.assertIn("report.html", content)
 
 
 if __name__ == '__main__':

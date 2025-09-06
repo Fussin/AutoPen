@@ -2,6 +2,9 @@ import hashlib
 import json
 import os
 import tarfile
+import time
+import language_tool_python
+from bs4 import BeautifulSoup
 from ..common.utils import LOG
 from .exceptions import DataFinalizationError
 
@@ -17,11 +20,13 @@ class ExitChecklist:
         """
         self.results_file = results_file
         self.final_data = None
+        self.performance_metrics = []
 
     def run_data_finalization(self):
         """
         Executes the data finalization part of the checklist.
         """
+        ts = time.time()
         LOG.info("Starting data finalization...")
         try:
             self._merge_temp_files()
@@ -32,26 +37,57 @@ class ExitChecklist:
             LOG.info("Data finalization complete. Checksum: %s", checksum)
         except Exception as e:
             raise DataFinalizationError(f"Data finalization failed: {e}")
+        finally:
+            te = time.time()
+            self.performance_metrics.append(("run_data_finalization", te - ts))
 
-    def run_quality_assurance(self):
+    def run_quality_assurance(self, html_report_file=None):
         """
         Executes the quality assurance part of the checklist.
         """
+        ts = time.time()
         LOG.info("Starting quality assurance...")
         self._automated_report_review()
-        self._grammar_and_spelling_check()
+        self._grammar_and_spelling_check(html_report_file)
         self._technical_accuracy_validation()
         self._screenshot_quality_verification()
         self._poc_reproducibility_check()
         LOG.info("Quality assurance complete.")
+        te = time.time()
+        self.performance_metrics.append(("run_quality_assurance", te - ts))
 
     def _automated_report_review(self):
         LOG.info("Automated report review...")
         pass
 
-    def _grammar_and_spelling_check(self):
+    def _grammar_and_spelling_check(self, html_report_file=None):
+        """
+        Checks the grammar and spelling of the HTML report.
+        """
+        if not html_report_file or not os.path.exists(html_report_file):
+            LOG.warning("HTML report file not provided or does not exist. Skipping grammar check.")
+            return
+
         LOG.info("Grammar and spelling check...")
-        pass
+        try:
+            with open(html_report_file, 'r') as f:
+                html_content = f.read()
+
+            soup = BeautifulSoup(html_content, 'html.parser')
+            text = soup.get_text()
+
+            tool = language_tool_python.LanguageTool('en-US')
+            matches = tool.check(text)
+
+            if matches:
+                LOG.warning(f"Found {len(matches)} potential grammar/spelling issues:")
+                for match in matches:
+                    LOG.warning(f"  - {match}")
+            else:
+                LOG.info("No grammar or spelling issues found.")
+
+        except Exception as e:
+            LOG.error(f"An error occurred during grammar and spelling check: {e}")
 
     def _technical_accuracy_validation(self):
         LOG.info("Technical accuracy validation...")
@@ -69,6 +105,7 @@ class ExitChecklist:
         """
         Executes the distribution part of the checklist.
         """
+        ts = time.time()
         LOG.info("Starting distribution...")
         self._email_reports_to_stakeholders()
         self._upload_to_bug_bounty_platforms()
@@ -76,6 +113,8 @@ class ExitChecklist:
         self._sync_with_ticketing_systems()
         self._archive_to_secure_storage()
         LOG.info("Distribution complete.")
+        te = time.time()
+        self.performance_metrics.append(("run_distribution", te - ts))
 
     def _email_reports_to_stakeholders(self):
         LOG.info("Emailing reports to stakeholders...")
@@ -154,26 +193,41 @@ class ExitChecklist:
             tar.add(self.results_file, arcname=os.path.basename(self.results_file))
         LOG.info("Archive created at %s", archive_name)
 
-    def run_cleanup_and_optimization(self):
+    def run_cleanup_and_optimization(self, report_files=None):
         """
         Executes the cleanup and optimization part of the checklist.
         """
+        ts = time.time()
         LOG.info("Starting cleanup and optimization...")
-        self._clear_temporary_files()
+        self._clear_temporary_files(report_files)
         self._reset_tool_configurations()
-        self._update_scan_statistics()
+        self._update_scan_statistics(report_files=report_files)
         self._log_performance_metrics()
         self._free_allocated_resources()
         LOG.info("Cleanup and optimization complete.")
+        te = time.time()
+        self.performance_metrics.append(("run_cleanup_and_optimization", te - ts))
 
-    def _clear_temporary_files(self):
+    def _clear_temporary_files(self, report_files=None):
         """
         Clears all temporary files created during the scan.
-        Placeholder for now.
         """
         LOG.info("Clearing temporary files...")
-        # Placeholder for temp file cleanup
-        pass
+        files_to_remove = [
+            self.results_file,
+            self.results_file + ".sha256",
+            self.results_file + ".tar.gz",
+        ]
+        if report_files:
+            files_to_remove.extend(report_files)
+
+        for f in files_to_remove:
+            if os.path.exists(f):
+                try:
+                    os.remove(f)
+                    LOG.info(f"Removed temporary file: {f}")
+                except OSError as e:
+                    LOG.error(f"Error removing file {f}: {e}")
 
     def _reset_tool_configurations(self):
         """
@@ -184,23 +238,37 @@ class ExitChecklist:
         # Placeholder for config reset
         pass
 
-    def _update_scan_statistics(self):
+    def _update_scan_statistics(self, report_files=None):
         """
         Updates scan statistics.
-        Placeholder for now.
         """
         LOG.info("Updating scan statistics...")
-        # Placeholder for statistics update
-        pass
+        stats_file = "scan_statistics.txt"
+        total_duration = sum(duration for _, duration in self.performance_metrics)
+        num_subdomains = len(self.final_data.get("subdomains", []))
+
+        try:
+            with open(stats_file, 'w') as f:
+                f.write("--- Scan Statistics ---\n")
+                f.write(f"Number of subdomains found: {num_subdomains}\n")
+                f.write(f"Total scan duration: {total_duration:.2f} seconds\n")
+                if report_files:
+                    f.write("\nGenerated Reports:\n")
+                    for report_file in report_files:
+                        f.write(f"  - {report_file}\n")
+                f.write("-----------------------\n")
+            LOG.info(f"Scan statistics saved to {stats_file}")
+        except Exception as e:
+            LOG.error(f"Failed to update scan statistics: {e}")
 
     def _log_performance_metrics(self):
         """
         Logs performance metrics for the scan.
-        Placeholder for now.
         """
-        LOG.info("Logging performance metrics...")
-        # Placeholder for metrics logging
-        pass
+        LOG.info("--- Performance Metrics ---")
+        for method_name, duration in self.performance_metrics:
+            LOG.info(f"  - {method_name}: {duration:.2f} seconds")
+        LOG.info("-------------------------")
 
     def _free_allocated_resources(self):
         """
