@@ -1,7 +1,7 @@
 import secrets
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timezone
 
 # This db object will be initialized in our main application file (run_web.py)
 db = SQLAlchemy()
@@ -31,8 +31,8 @@ class Scan(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     status = db.Column(db.String(20), nullable=False, default='QUEUED')
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     targets = db.relationship('Target', backref='scan', lazy=True, cascade="all, delete-orphan")
     results = db.Column(db.Text, nullable=True)
@@ -70,8 +70,8 @@ class Asset(db.Model):
     value = db.Column(db.String(255), nullable=False)
     details = db.Column(db.JSON, nullable=True) # For extra info like port details
     is_approved_for_scan = db.Column(db.Boolean, nullable=False, default=True)
-    first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    first_seen = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    last_seen = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
 
     def __repr__(self):

@@ -22,7 +22,7 @@ login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # --- Database Initialization ---
 def init_database():
@@ -124,7 +124,7 @@ def verify_2fa():
         return redirect(url_for('login'))
     if request.method == 'POST':
         user_id = session['user_id_for_2fa']
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         token = request.form.get('token')
         totp = pyotp.TOTP(user.otp_secret)
         if totp.verify(token):
