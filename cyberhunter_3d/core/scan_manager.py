@@ -7,6 +7,7 @@ from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
 from cyberhunter_3d.core.reconnaissance.analytics_correlation import find_related_domains_by_analytics
 from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
+from cyberhunter_3d.core.triage_engine import run_triage_on_scan
 
 def run_discovery_phase(scan_id, app):
     """
@@ -124,6 +125,10 @@ def run_execution_phase(scan_id, app):
             )
             scan.status = 'COMPLETED'
             print(f"Scan {scan_id} execution phase complete.")
+
+            # 5. Automated Triage
+            print(f"Starting automated triage for scan {scan_id}...")
+            run_triage_on_scan(scan_id, db)
 
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")

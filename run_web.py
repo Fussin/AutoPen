@@ -3,7 +3,7 @@ from flask import Flask, jsonify
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_socketio import SocketIO, join_room, leave_room
-from cyberhunter_3d.web.models import db, User, Workspace, Scan, Target, Finding, Note
+from cyberhunter_3d.web.models import db, User, Workspace, Scan, Target, Finding, Note, ScanSchedule
 
 # --- App Initialization ---
 app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
@@ -172,6 +172,22 @@ def view_workspace(workspace_id):
 
     return render_template('workspace.html', workspace=workspace)
 
+@app.route('/workspace/<int:workspace_id>/settings/update', methods=['POST'])
+@login_required
+def update_workspace_settings(workspace_id):
+    """Handles updating workspace settings, like the Slack webhook."""
+    workspace = Workspace.query.get_or_404(workspace_id)
+    if current_user.id != workspace.owner_id:
+        flash('Only the workspace owner can change settings.', 'danger')
+        return redirect(url_for('view_workspace', workspace_id=workspace_id))
+
+    slack_webhook = request.form.get('slack_webhook_url', '')
+    workspace.slack_webhook_url = slack_webhook
+    db.session.commit()
+
+    flash('Workspace settings updated successfully!', 'success')
+    return redirect(url_for('view_workspace', workspace_id=workspace_id))
+
 @app.route('/workspace/<int:workspace_id>/invite', methods=['POST'])
 @login_required
 def invite_to_workspace(workspace_id):
@@ -192,6 +208,35 @@ def invite_to_workspace(workspace_id):
         db.session.commit()
         flash(f'User "{username}" has been added to the workspace.', 'success')
 
+    return redirect(url_for('view_workspace', workspace_id=workspace_id))
+
+@app.route('/workspace/<int:workspace_id>/schedules/create', methods=['POST'])
+@login_required
+def create_schedule(workspace_id):
+    """Handles the creation of a new scan schedule."""
+    workspace = Workspace.query.get_or_404(workspace_id)
+    if current_user not in workspace.members:
+        flash('You are not authorized to create schedules in this workspace.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    name = request.form.get('schedule_name')
+    targets = request.form.get('schedule_targets')
+    interval = request.form.get('schedule_interval')
+
+    if not all([name, targets, interval]):
+        flash('All schedule fields are required.', 'danger')
+        return redirect(url_for('view_workspace', workspace_id=workspace_id))
+
+    new_schedule = ScanSchedule(
+        name=name,
+        targets=targets,
+        interval=interval,
+        workspace_id=workspace.id
+    )
+    db.session.add(new_schedule)
+    db.session.commit()
+
+    flash('New scan schedule created successfully!', 'success')
     return redirect(url_for('view_workspace', workspace_id=workspace_id))
 
 @app.route('/workspace/<int:workspace_id>/submit-scan', methods=['POST'])
@@ -282,7 +327,58 @@ def handle_new_note(data):
         'content': content
     }, room=workspace_id)
 
+# --- Scheduler Setup ---
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime, timedelta
+
+def run_scheduled_scans(app_context):
+    """Job to run scans that are due."""
+    with app_context():
+        now = datetime.utcnow()
+        schedules = ScanSchedule.query.filter(ScanSchedule.is_enabled == True, ScanSchedule.next_run_at <= now).all()
+        for schedule in schedules:
+            print(f"Running scheduled scan: {schedule.name}")
+            # This is a simplified version of submitting a scan
+            # In a real app, you would reuse the submit_scan logic more directly
+            raw_targets = schedule.targets.strip().splitlines()
+            parsed_targets = [parse_single_target(rt) for rt in raw_targets if rt.strip()]
+
+            if parsed_targets:
+                new_scan = Scan(
+                    workspace_id=schedule.workspace_id,
+                    owner_id=schedule.workspace.owner_id,  # Run as workspace owner
+                    status='QUEUED'
+                )
+                db.session.add(new_scan)
+                db.session.flush()
+
+                for value, type in parsed_targets:
+                    if type not in ['unknown', 'empty']:
+                        db.session.add(Target(value=value, type=type, scan_id=new_scan.id))
+
+                # Update schedule's next run time
+                if schedule.interval == 'daily':
+                    schedule.next_run_at = now + timedelta(days=1)
+                elif schedule.interval == 'weekly':
+                    schedule.next_run_at = now + timedelta(weeks=1)
+
+                schedule.last_run_at = now
+                db.session.commit()
+
+                executor.submit(run_discovery_phase, new_scan.id, app)
+        db.session.commit()
+
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database()
+
+    # In debug mode, Flask's reloader will start the app twice.
+    # We only want the scheduler to run in the main process.
+    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(func=run_scheduled_scans, args=[app.app_context], trigger="interval", hours=1)
+        scheduler.start()
+        print("Scheduler started.")
+
+    # Start the Flask app
     socketio.run(app, debug=True, port=5001)

@@ -56,6 +56,20 @@
 
   <!-- Right Column: Collaboration -->
   <div style="flex: 1;">
+    <!-- Settings Section -->
+    <h3>Settings</h3>
+    {% if current_user.id == workspace.owner_id %}
+    <form action="{{ url_for('update_workspace_settings', workspace_id=workspace.id) }}" method="post">
+        <label for="slack_webhook_url">Slack Webhook URL</label>
+        <input type="text" name="slack_webhook_url" id="slack_webhook_url" value="{{ workspace.slack_webhook_url or '' }}" placeholder="https://hooks.slack.com/services/...">
+        <button type="submit" class="button" style="margin-top: 1em;">Save Settings</button>
+    </form>
+    {% else %}
+    <p>Only the workspace owner can change settings.</p>
+    {% endif %}
+
+    <hr style="border-color: #444; margin: 2em 0;">
+
     <!-- Members Section -->
     <h3>Members</h3>
     <ul>
@@ -69,6 +83,30 @@
       <button type="submit">Invite</button>
     </form>
     {% endif %}
+
+    <hr style="border-color: #444; margin: 2em 0;">
+
+    <!-- Schedules Section -->
+    <h3>Scan Schedules</h3>
+    <div id="schedules-list">
+        {% for schedule in workspace.schedules %}
+        <div class="schedule-card" style="margin-bottom: 1em; padding: 1em; background-color: #3e3e3e; border-radius: 5px;">
+            <p><strong>{{ schedule.name }}</strong> ({{ schedule.interval }})</p>
+            <p>Targets: {{ schedule.targets.replace('\n', ', ') }}</p>
+            <p>Next Run: {{ schedule.next_run_at.strftime('%Y-%m-%d %H:%M') if schedule.next_run_at else 'Not scheduled' }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    <form action="{{ url_for('create_schedule', workspace_id=workspace.id) }}" method="post">
+        <h4>Create New Schedule</h4>
+        <input type="text" name="schedule_name" placeholder="Schedule Name" required>
+        <textarea name="schedule_targets" rows="3" placeholder="Targets (one per line)" required></textarea>
+        <select name="schedule_interval" required>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+        </select>
+        <button type="submit" class="button" style="margin-top: 1em;">Create Schedule</button>
+    </form>
 
     <hr style="border-color: #444; margin: 2em 0;">
 

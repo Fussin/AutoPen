@@ -47,9 +47,38 @@ class Workspace(db.Model):
 
     scans = db.relationship('Scan', backref='workspace', lazy='dynamic', cascade="all, delete-orphan")
     notes = db.relationship('Note', backref='workspace', lazy='dynamic', cascade="all, delete-orphan")
+    schedules = db.relationship('ScanSchedule', backref='workspace', lazy='dynamic', cascade="all, delete-orphan")
+
+    # Notification settings
+    slack_webhook_url = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
         return f'<Workspace {self.name}>'
+
+class ScanSchedule(db.Model):
+    """
+    Model for storing scan schedules.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    is_enabled = db.Column(db.Boolean, default=True)
+
+    # Storing targets as a simple text field, one per line
+    targets = db.Column(db.Text, nullable=False)
+
+    # Schedule interval, e.g., 'daily', 'weekly', 'monthly'
+    interval = db.Column(db.String(50), nullable=False)
+
+    # Time of day to run the scan, e.g., '03:00'
+    run_time = db.Column(db.String(5), nullable=True)
+
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    next_run_at = db.Column(db.DateTime, nullable=True)
+
+    workspace_id = db.Column(db.Integer, db.ForeignKey('workspace.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<ScanSchedule {self.name} ({self.interval})>'
 
 class Scan(db.Model):
     """
@@ -86,6 +115,8 @@ class Finding(db.Model):
     description = db.Column(db.Text, nullable=False)
     severity = db.Column(db.String(50), nullable=False) # e.g., Critical, High, Medium, Low, Informational
     is_validated = db.Column(db.Boolean, default=False)
+    is_triaged = db.Column(db.Boolean, default=False) # For automated triage
+    confidence = db.Column(db.String(50), nullable=True) # e.g., High, Medium, Low
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
