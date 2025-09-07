@@ -58,7 +58,7 @@ class OutputManager:
         with (self.base_dir / "metadata.json").open('w') as f:
             json.dump(metadata, f, indent=2)
 
-    def finalize(self, scan, generate_pdf=False, generate_docx=False):
+    def finalize(self, generate_pdf=False, generate_docx=False):
         summary = {
             "total_assets": len(self.assets),
             "vulnerabilities": len(self.vulnerabilities),
@@ -66,22 +66,22 @@ class OutputManager:
         }
 
         if generate_pdf:
-            pdf_path = self._generate_pdf_report(scan)
+            pdf_path = self._generate_pdf_report()
             summary["reports"].append({"type": "pdf", "path": str(pdf_path)})
 
         if generate_docx:
-            docx_path = self._generate_docx_report(scan)
+            docx_path = self._generate_docx_report()
             summary["reports"].append({"type": "docx", "path": str(docx_path)})
 
         return summary
 
-    def _generate_pdf_report(self, scan):
+    def _generate_pdf_report(self):
         logger.info("Generating PDF report...")
         template_env = Environment(loader=FileSystemLoader("cyberhunter_3d/reporting/templates/"))
         template = template_env.get_template("report.html")
 
         context = {
-            "scan_id": scan.id,
+            "scan_id": self.base_dir.name,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "summary": {
                 "total_assets": len(self.assets),
@@ -89,8 +89,6 @@ class OutputManager:
             },
             "vulnerabilities": self.vulnerabilities,
             "assets": self.assets,
-            "in_scope": scan.in_scope_rules,
-            "out_of_scope": scan.out_of_scope_rules,
         }
 
         html_out = template.render(context)
@@ -99,22 +97,16 @@ class OutputManager:
         logger.info(f"PDF report generated at: {pdf_path}")
         return pdf_path
 
-    def _generate_docx_report(self, scan):
+    def _generate_docx_report(self):
         logger.info("Generating DOCX report...")
         doc = Document()
         doc.add_heading('Scan Report', 0)
-        doc.add_paragraph(f"Scan ID: {scan.id}")
+        doc.add_paragraph(f"Scan ID: {self.base_dir.name}")
         doc.add_paragraph(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
         doc.add_heading('Summary', level=1)
         doc.add_paragraph(f"Total assets found: {len(self.assets)}")
         doc.add_paragraph(f"Vulnerabilities found: {len(self.vulnerabilities)}")
-
-        doc.add_heading('Scan Configuration', level=1)
-        doc.add_heading('In-Scope Rules', level=2)
-        doc.add_paragraph(scan.in_scope_rules)
-        doc.add_heading('Out-of-Scope Rules', level=2)
-        doc.add_paragraph(scan.out_of_scope_rules)
 
         doc.add_heading('Vulnerabilities', level=1)
         table = doc.add_table(rows=1, cols=4)

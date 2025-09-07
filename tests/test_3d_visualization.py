@@ -27,9 +27,8 @@ class Test3DVisualization(unittest.TestCase):
             db.session.remove()
             db.drop_all()
 
-    @patch('cyberhunter_3d.core.feeds.feed_manager.check_for_new_targets')
     @patch('cyberhunter_3d.core.scan_manager.run_discovery_phase')
-    def test_graph_data_api_and_view(self, mock_run_discovery_phase, mock_check_for_new_targets):
+    def test_graph_data_api_and_view(self, mock_run_discovery_phase):
         with app.app_context():
             user = User.query.filter_by(username='testuser').first()
             self.assertIsNotNone(user)
