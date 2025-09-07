@@ -88,8 +88,6 @@ def run_discovery_phase(scan_id, app):
             scan.status = 'FAILED'
             scan.results = f"Discovery failed with error: {e}"
         finally:
-            if om:
-                om.produce_metadata()
             db.session.commit()
             print(f"Final discovery status for scan {scan_id} is {scan.status}.")
 
@@ -227,6 +225,60 @@ class VulnerabilityScanningPhase:
         print("Successfully saved findings.")
 
 
+class ExpansionPhase:
+    """
+    Encapsulates the logic for the asset expansion phase.
+    """
+    def __init__(self, scan_id, app, output_manager):
+        self.scan_id = scan_id
+        self.app = app
+        self.om = output_manager
+        self.scan = db.session.get(Scan, self.scan_id)
+        self.validator = ScopeValidator(self.scan.in_scope_rules, self.scan.out_of_scope_rules)
+        self.out_of_scope_count = 0
+
+    def run(self):
+        print("Starting Expansion Phase...")
+        self._run_reverse_dns()
+        self._run_analytics_correlation()
+        print("Expansion Phase complete.")
+
+    def _run_reverse_dns(self):
+        print("Starting Expansion: Reverse DNS")
+        ip_assets = Asset.query.filter(Asset.scan_id == self.scan_id, Asset.type == 'host_with_open_ports').all()
+        unique_ips = list(set(asset.value for asset in ip_assets))
+        rdns_found_count = 0
+        if unique_ips:
+            hostnames = get_hostnames_for_ips(unique_ips)
+            self.om.write_discovery_file("reverse_dns_results.txt", "\n".join(hostnames))
+            for hostname in hostnames:
+                self.om.add_asset({'type': 'subdomain', 'value': hostname})
+                if self.validator.is_in_scope(hostname) and not Asset.query.filter_by(scan_id=self.scan_id, value=hostname).first():
+                    db.session.add(Asset(type='subdomain', value=hostname, scan_id=self.scan_id))
+                    rdns_found_count += 1
+                elif not self.validator.is_in_scope(hostname):
+                    self.out_of_scope_count += 1
+        print(f"rDNS complete. Found {rdns_found_count} new hostnames.")
+        db.session.commit()
+
+    def _run_analytics_correlation(self):
+        print("Starting Expansion: Analytics Correlation")
+        domain_assets = Asset.query.filter(Asset.scan_id == self.scan_id, Asset.is_approved_for_scan == True, Asset.type.in_(['domain', 'subdomain'])).all()
+        unique_domains = list(set(asset.value for asset in domain_assets))
+        analytics_found_count = 0
+        if unique_domains:
+            related_domains = find_related_domains_by_analytics(unique_domains)
+            self.om.write_discovery_file("analytics_correlation_results.txt", "\n".join(related_domains))
+            for domain in related_domains:
+                self.om.add_asset({'type': 'subdomain', 'value': domain})
+                if self.validator.is_in_scope(domain) and not Asset.query.filter_by(scan_id=self.scan_id, value=domain).first():
+                    db.session.add(Asset(type='subdomain', value=domain, scan_id=self.scan_id))
+                    analytics_found_count += 1
+                elif not self.validator.is_in_scope(domain):
+                    self.out_of_scope_count += 1
+        print(f"Analytics complete. Found {analytics_found_count} new domains.")
+        db.session.commit()
+
 def run_execution_phase(scan_id, app):
     """
     Performs the intensive execution phase of a scan on assets that have
@@ -251,9 +303,6 @@ def run_execution_phase(scan_id, app):
             else:
                 om = OutputManager(Path(scan.output_dir))
 
-            validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
-            out_of_scope_count = 0
-
             # 1. Vulnerability Scanning
             vuln_scanning_phase = VulnerabilityScanningPhase(scan_id, app, om)
             vuln_scanning_phase.run()
@@ -261,40 +310,9 @@ def run_execution_phase(scan_id, app):
             # 2. Prioritization
             prioritize_vulnerabilities(scan_id)
 
-            # 3. Expansion Phase (Reverse DNS)
-            print("Starting Expansion: Reverse DNS")
-            ip_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'host_with_open_ports').all()
-            unique_ips = list(set(asset.value for asset in ip_assets))
-            rdns_found_count = 0
-            if unique_ips:
-                hostnames = get_hostnames_for_ips(unique_ips)
-                om.write_discovery_file("reverse_dns_results.txt", "\n".join(hostnames))
-                for hostname in hostnames:
-                    om.add_asset({'type': 'subdomain', 'value': hostname})
-                    if validator.is_in_scope(hostname) and not Asset.query.filter_by(scan_id=scan.id, value=hostname).first():
-                        db.session.add(Asset(type='subdomain', value=hostname, scan_id=scan.id))
-                        rdns_found_count += 1
-                    elif not validator.is_in_scope(hostname):
-                        out_of_scope_count += 1
-            print(f"rDNS complete. Found {rdns_found_count} new hostnames.")
-            db.session.commit()
-
-            # 3. Expansion Phase (Analytics Correlation)
-            print("Starting Expansion: Analytics Correlation")
-            domain_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.is_approved_for_scan == True, Asset.type.in_(['domain', 'subdomain'])).all()
-            unique_domains = list(set(asset.value for asset in domain_assets))
-            analytics_found_count = 0
-            if unique_domains:
-                related_domains = find_related_domains_by_analytics(unique_domains)
-                om.write_discovery_file("analytics_correlation_results.txt", "\n".join(related_domains))
-                for domain in related_domains:
-                    om.add_asset({'type': 'subdomain', 'value': domain})
-                    if validator.is_in_scope(domain) and not Asset.query.filter_by(scan_id=scan.id, value=domain).first():
-                        db.session.add(Asset(type='subdomain', value=domain, scan_id=scan.id))
-                        analytics_found_count += 1
-                    elif not validator.is_in_scope(domain):
-                        out_of_scope_count += 1
-            print(f"Analytics complete. Found {analytics_found_count} new domains.")
+            # 3. Expansion
+            expansion_phase = ExpansionPhase(scan_id, app, om)
+            expansion_phase.run()
 
             # 4. Finalize Scan
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
@@ -308,13 +326,17 @@ def run_execution_phase(scan_id, app):
             for asset in all_db_assets:
                 om.add_asset({'type': asset.type, 'value': asset.value, 'details': asset.details})
 
-            # Run post-scan operations
-            run_post_scan_operations(scan_id, app, om)
+            # Run post-scan operations in the finally block to ensure they always run
+            # run_post_scan_operations(scan_id, app, om)
 
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")
             scan.status = 'FAILED'
             scan.results = f"Execution failed with error: {e}"
         finally:
+            if om:
+                om.produce_metadata()
+                # Run post-scan operations after everything else is complete
+                run_post_scan_operations(scan_id, app, om)
             db.session.commit()
             print(f"Final execution status for scan {scan_id} is {scan.status}.")

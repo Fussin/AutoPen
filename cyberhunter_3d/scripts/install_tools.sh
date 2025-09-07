@@ -2,6 +2,7 @@
 
 # Exit on any error
 set -e
+set -x
 
 # --- Check for root privileges ---
 if [ "$EUID" -ne 0 ]; then

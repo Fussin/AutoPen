@@ -12,14 +12,22 @@ logger = logging.getLogger(__name__)
 def final_validation(scan_id, om: OutputManager):
     """Checks if the backup archive was created successfully."""
     logger.info(f"[{scan_id}] Performing final validation...")
-    archive_path = Path("archive") / f"{om.base_dir.name}.zip"
+    archive_path = om.base_dir.parent / f"{om.base_dir.name}.zip"
     if archive_path.exists():
         logger.info(f"Validation successful: Archive found at {archive_path}")
     else:
         logger.error(f"Validation failed: Archive not found at {archive_path}")
     logger.info(f"[{scan_id}] Final validation complete.")
 
-def notification_dispatch(scan_id, app, om: OutputManager):
+def report_generation(scan_id, om: OutputManager):
+    """Generates the final reports for the scan."""
+    logger.info(f"[{scan_id}] Generating reports...")
+    summary = om.finalize(generate_pdf=True, generate_docx=True)
+    print("Generated reports summary:", summary)
+    logger.info(f"[{scan_id}] Report generation complete.")
+    return summary.get("reports", [])
+
+def notification_dispatch(scan_id, app, reports: list):
     """Sends email notifications to stakeholders if enabled."""
     logger.info(f"[{scan_id}] Dispatching notifications...")
 
@@ -32,9 +40,12 @@ def notification_dispatch(scan_id, app, om: OutputManager):
     if user and user.is_email_notifications_enabled and user.email:
         logger.info(f"[{scan_id}] Email notifications enabled for user {user.username}.")
 
-        # Generate the PDF report
-        summary = om.finalize(generate_pdf=True)
-        pdf_report_path = summary.get("reports", [{}])[0].get("path")
+        # Find the PDF report path from the generated reports
+        pdf_report_path = None
+        for report in reports:
+            if report.get("type") == "pdf":
+                pdf_report_path = report.get("path")
+                break
 
         if pdf_report_path:
             with app.app_context():
@@ -185,7 +196,8 @@ def run_post_scan_operations(scan_id, app, om: OutputManager):
     with app.app_context():
         logger.info(f"[{scan_id}] Starting post-scan operations...")
 
-        notification_dispatch(scan_id, app, om)
+        reports = report_generation(scan_id, om)
+        notification_dispatch(scan_id, app, reports)
         backup_creation(scan_id, om)
         final_validation(scan_id, om)
         data_archival(scan_id, om)
@@ -193,9 +205,9 @@ def run_post_scan_operations(scan_id, app, om: OutputManager):
         analytics_update(scan_id, om)
         schedule_next_scan(scan_id)
         monitoring_activation(scan_id)
-        cleanup_operations(scan_id, om)
         session_termination(scan_id)
         platform_logout(scan_id)
         session_closed(scan_id)
+        cleanup_operations(scan_id, om) # This should be last
 
         logger.info(f"[{scan_id}] All post-scan operations completed.")
