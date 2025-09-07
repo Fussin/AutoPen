@@ -95,6 +95,7 @@
     <table style="width: 100%; border-collapse: collapse;">
       <thead>
         <tr>
+          <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Priority</th>
           <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Severity</th>
           <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Title</th>
           <th style="text-align: left; padding: 8px; border-bottom: 1px solid #555;">Asset</th>
@@ -102,8 +103,18 @@
         </tr>
       </thead>
       <tbody>
-        {% for vuln in scan.vulnerabilities|sort(attribute='severity') %}
+        {% for vuln in scan.vulnerabilities|sort(attribute='priority') %}
           <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #444; text-align: center;">
+                <span style="font-size: 1.2em; font-weight: bold; color:
+                    {% if vuln.priority == 1 %}#dc3545
+                    {% elif vuln.priority == 2 %}#fd7e14
+                    {% elif vuln.priority == 3 %}#ffc107
+                    {% else %}#6c757d
+                    {% endif %};">
+                    P{{ vuln.priority }}
+                </span>
+            </td>
             <td style="padding: 8px; border-bottom: 1px solid #444;">
               <span style="padding: 0.2em 0.5em; border-radius: 4px; color: white; background-color:
                 {% if vuln.severity == 'critical' %}#dc3545

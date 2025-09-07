@@ -13,6 +13,7 @@ from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
 from .output_manager import OutputManager
 from .post_scan_operations import run_post_scan_operations
+from cyberhunter_3d.core.analysis.prioritization_engine import prioritize_vulnerabilities
 from concurrent.futures import ThreadPoolExecutor
 
 executor = ThreadPoolExecutor(max_workers=2)
@@ -257,7 +258,10 @@ def run_execution_phase(scan_id, app):
             vuln_scanning_phase = VulnerabilityScanningPhase(scan_id, app, om)
             vuln_scanning_phase.run()
 
-            # 2. Expansion Phase (Reverse DNS)
+            # 2. Prioritization
+            prioritize_vulnerabilities(scan_id)
+
+            # 3. Expansion Phase (Reverse DNS)
             print("Starting Expansion: Reverse DNS")
             ip_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'host_with_open_ports').all()
             unique_ips = list(set(asset.value for asset in ip_assets))
