@@ -4,17 +4,19 @@ import unittest.mock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
-from run_web import app, db, bcrypt
+from run_web import app, db
+from flask_bcrypt import Bcrypt
 from cyberhunter_3d.web.models import User, Scan
 from cyberhunter_3d.core.post_scan_operations import run_post_scan_operations
 from cyberhunter_3d.core.output_manager import OutputManager
 from pathlib import Path
 
-def setup_test_db():
+def setup_test_db(app_context):
     """Sets up a clean database for the test."""
     if os.path.exists('cyberhunter.db'):
         os.remove('cyberhunter.db')
     db.create_all()
+    bcrypt = Bcrypt(app_context)
     password_hash = bcrypt.generate_password_hash('password').decode('utf-8')
     otp_secret = "FWPQ7CKOCOA7P4S7IS3CXONMB756FAED"
     user = User(
@@ -31,7 +33,7 @@ def setup_test_db():
 class TestEmailReporting(unittest.TestCase):
     def test_email_reporting(self):
         with app.app_context():
-            setup_test_db()
+            setup_test_db(app)
             user = User.query.filter_by(username='test').first()
             scan = Scan(user_id=user.id)
             db.session.add(scan)
