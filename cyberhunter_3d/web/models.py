@@ -89,6 +89,7 @@ class Vulnerability(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
+    source = db.Column(db.String(50), nullable=True)
     severity = db.Column(db.String(50), nullable=False)
     priority = db.Column(db.Integer, nullable=True)
     description = db.Column(db.Text, nullable=False)
