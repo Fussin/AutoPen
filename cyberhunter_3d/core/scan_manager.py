@@ -4,6 +4,7 @@ from cyberhunter_3d.web.models import db, Scan, Target, Asset, Vulnerability
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.plugins.vulnerability.nuclei import run_nuclei_scan
+from cyberhunter_3d.plugins.recon.gospider import run_gospider_scan
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
@@ -109,6 +110,9 @@ class VulnerabilityScanningPhase:
         Runs the vulnerability scanning process using Nuclei.
         """
         print("Starting Vulnerability Scanning Phase...")
+
+        self._run_url_discovery()
+
         web_targets = self._get_web_targets()
         if not web_targets:
             print("No web targets found to scan.")
@@ -120,27 +124,61 @@ class VulnerabilityScanningPhase:
 
         print("Vulnerability Scanning Phase complete.")
 
-    def _get_web_targets(self) -> list[tuple[Asset, str]]:
+    def _run_url_discovery(self):
         """
-        Identifies assets that are web servers and returns a list of URLs to scan.
-        Returns a list of tuples, where each tuple contains the Asset object and the URL.
+        Runs gospider to discover URLs for all approved web assets.
         """
-        targets = []
-        # Query for approved subdomains and domains that might be web servers
-        potential_web_assets = Asset.query.filter(
+        print("URL_DISCOVERY: Starting URL discovery...")
+        # Get approved subdomains and domains to use as a base for crawling
+        base_targets = Asset.query.filter(
             Asset.scan_id == self.scan_id,
             Asset.is_approved_for_scan == True,
             Asset.type.in_(['subdomain', 'domain'])
         ).all()
 
-        # This is a simplified approach. A better method would be to use httpx
-        # to confirm which of these are running web servers.
-        for asset in potential_web_assets:
-            # Assume both http and https might be running
-            targets.append((asset, f"http://{asset.value}"))
-            targets.append((asset, f"https://{asset.value}"))
+        all_discovered_urls = set()
+        for asset in base_targets:
+            # We should ideally use httpx to find live http/https services first
+            # For now, we'll just try https
+            site_url = f"https://{asset.value}"
+            discovered_urls = run_gospider_scan(site_url)
+            for url in discovered_urls:
+                all_discovered_urls.add(url)
 
-        print(f"Generated {len(targets)} web URLs for Nuclei scanning.")
+        print(f"URL_DISCOVERY: Found {len(all_discovered_urls)} unique URLs.")
+
+        # Save the discovered URLs as new assets
+        for url in all_discovered_urls:
+            # Avoid adding duplicates
+            if not Asset.query.filter_by(scan_id=self.scan_id, value=url).first():
+                new_asset = Asset(
+                    type='url',
+                    value=url,
+                    scan_id=self.scan_id,
+                    is_approved_for_scan=True # URLs from in-scope assets are also in-scope
+                )
+                db.session.add(new_asset)
+
+        db.session.commit()
+        print(f"URL_DISCOVERY: Saved new URL assets to the database.")
+
+    def _get_web_targets(self) -> list[tuple[Asset, str]]:
+        """
+        Gets all assets of type 'url' to be scanned by Nuclei.
+        Returns a list of tuples, where each tuple contains the Asset object and the URL.
+        """
+        targets = []
+        # Query for all approved URLs discovered by gospider
+        url_assets = Asset.query.filter(
+            Asset.scan_id == self.scan_id,
+            Asset.is_approved_for_scan == True,
+            Asset.type == 'url'
+        ).all()
+
+        for asset in url_assets:
+            targets.append((asset, asset.value))
+
+        print(f"Found {len(targets)} URLs for Nuclei scanning.")
         return targets
 
     def _run_nuclei_on_targets(self, targets: list[tuple[Asset, str]]) -> list[dict]:
