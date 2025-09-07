@@ -46,9 +46,20 @@ from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from cyberhunter_3d.core.target_parser import parse_single_target
+from apscheduler.schedulers.background import BackgroundScheduler
+from cyberhunter_3d.core.feeds.feed_manager import check_for_new_targets
 
 # --- Background Task Executor ---
 executor = ThreadPoolExecutor(max_workers=2)
+
+# --- Scheduler Setup ---
+# Initialized in the global scope to ensure it's started when run
+# with a production WSGI server like Gunicorn.
+scheduler = BackgroundScheduler()
+# Run the job every 4 hours
+scheduler.add_job(check_for_new_targets, 'interval', hours=4, args=[app])
+scheduler.start()
+print("Scheduler started successfully.")
 
 # Register the API blueprint
 app.register_blueprint(api_bp)
@@ -113,37 +124,28 @@ def login():
 @app.route('/verify-2fa', methods=['GET', 'POST'])
 def verify_2fa():
     if 'user_id_for_2fa' not in session:
-        print("2FA_DEBUG: No user_id_for_2fa in session.")
         flash('Please log in first.', 'danger')
         return redirect(url_for('login'))
 
-    user_id = session['user_id_for_2fa']
-    user = db.session.get(User, user_id)
-    if not user:
-        print(f"2FA_DEBUG: User with id {user_id} not found.")
-        flash('User not found, please log in again.', 'danger')
-        return redirect(url_for('login'))
-
     if request.method == 'POST':
+        user_id = session['user_id_for_2fa']
+        user = db.session.get(User, user_id)
+
+        if not user:
+            flash('User not found, please log in again.', 'danger')
+            session.pop('user_id_for_2fa', None)
+            return redirect(url_for('login'))
+
         token = request.form.get('token')
-        print(f"2FA_DEBUG: Received token '{token}' for user '{user.username}'.")
-
         totp = pyotp.TOTP(user.otp_secret)
-        is_valid = totp.verify(token)
 
-        print(f"2FA_DEBUG: User secret: {user.otp_secret}")
-        print(f"2FA_DEBUG: Current OTP: {totp.now()}")
-        print(f"2FA_DEBUG: Verification result: {is_valid}")
-
-        if is_valid:
+        if totp.verify(token):
             login_user(user)
             session.pop('user_id_for_2fa', None)
             flash('Logged in successfully!', 'success')
-            print("2FA_DEBUG: Login successful, redirecting to dashboard.")
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid 2FA token.', 'danger')
-            print("2FA_DEBUG: Invalid token, redirecting back to verify_2fa.")
             return redirect(url_for('verify_2fa'))
 
     return render_template('verify_2fa.html')
@@ -199,6 +201,35 @@ def dashboard():
     scans = Scan.query.filter_by(user_id=current_user.id).order_by(Scan.created_at.desc()).all()
     return render_template('dashboard.html', scans=scans)
 
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    if request.method == 'POST':
+        form_name = request.form.get('form_name')
+
+        if form_name == 'api_key':
+            current_user.regenerate_api_key()
+            db.session.commit()
+            flash('API key has been regenerated.', 'success')
+
+        elif form_name == 'h1_key':
+            h1_username = request.form.get('h1_username')
+            h1_key = request.form.get('h1_key')
+            current_user.hackerone_username = h1_username
+            current_user.hackerone_api_key = h1_key
+            db.session.commit()
+            flash('HackerOne credentials updated.', 'success')
+
+        elif form_name == 'autonomous_scanning':
+            is_enabled = 'autonomous_enabled' in request.form
+            current_user.is_autonomous_scanning_enabled = is_enabled
+            db.session.commit()
+            flash(f"Autonomous scanning has been {'enabled' if is_enabled else 'disabled'}.", 'success')
+
+        return redirect(url_for('profile'))
+
+    return render_template('profile.html')
+
 @app.route('/logout')
 @login_required
 def logout():
@@ -228,4 +259,6 @@ def vulnerability_details(vuln_id):
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database()
-    app.run(debug=True, port=5001)
+    # The scheduler is started in the global scope, so we don't need to start it here.
+    # use_reloader=False is important to prevent the scheduler from running twice.
+    app.run(debug=True, port=5001, use_reloader=False)

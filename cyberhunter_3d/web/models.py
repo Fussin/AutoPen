@@ -16,6 +16,8 @@ class User(UserMixin, db.Model):
     otp_secret = db.Column(db.String(16), nullable=False)
     api_key = db.Column(db.String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
     hackerone_api_key = db.Column(db.String(255), nullable=True)
+    hackerone_username = db.Column(db.String(255), nullable=True)
+    is_autonomous_scanning_enabled = db.Column(db.Boolean, nullable=False, default=False)
     scans = db.relationship('Scan', backref='user', lazy=True)
 
     def __repr__(self):
@@ -44,6 +46,7 @@ class Scan(db.Model):
     assets = db.relationship('Asset', backref='scan', lazy=True, cascade="all, delete-orphan")
     vulnerabilities = db.relationship('Vulnerability', backref='scan_ref', lazy=True, cascade="all, delete-orphan")
     output_dir = db.Column(db.String(255), nullable=True)
+    hackerone_program_handle = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
         return f'<Scan {self.id} - {self.status}>'
