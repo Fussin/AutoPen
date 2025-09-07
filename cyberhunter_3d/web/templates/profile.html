@@ -111,4 +111,21 @@ input:checked + .slider:before {
     <span style="margin-left: 1em; vertical-align: middle;">Enable Autonomous Scanning</span>
   </form>
 
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Email Notifications</h3>
+  <form method="post" action="{{ url_for('profile') }}">
+    <input type="hidden" name="form_name" value="email_notifications">
+    <label for="email">Notification Email</label>
+    <input type="email" id="email" name="email" value="{{ current_user.email or '' }}" style="margin-bottom: 1em;">
+
+    <label class="switch">
+      <input type="checkbox" name="email_enabled" {% if current_user.is_email_notifications_enabled %}checked{% endif %}>
+      <span class="slider round"></span>
+    </label>
+    <span style="margin-left: 1em; vertical-align: middle;">Enable Email Notifications</span>
+
+    <button type="submit" class="button" style="display: block; margin-top: 1em;">Save Email Settings</button>
+  </form>
+
 {% endblock %}

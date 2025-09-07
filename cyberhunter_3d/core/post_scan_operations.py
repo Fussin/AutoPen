@@ -3,7 +3,8 @@ import shutil
 import requests
 from pathlib import Path
 from .output_manager import OutputManager
-from cyberhunter_3d.web.models import db, Scan, Target
+from cyberhunter_3d.web.models import db, Scan, Target, User
+from cyberhunter_3d.core.reporting.email_service import send_report_email
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,23 +19,30 @@ def final_validation(scan_id, om: OutputManager):
         logger.error(f"Validation failed: Archive not found at {archive_path}")
     logger.info(f"[{scan_id}] Final validation complete.")
 
-def report_generation(scan_id, om: OutputManager):
-    """Generates the final reports for the scan."""
-    logger.info(f"[{scan_id}] Generating reports...")
-    summary = om.finalize(generate_pdf=True, generate_docx=True)
-    print("Generated reports summary:", summary)
-    logger.info(f"[{scan_id}] Report generation complete.")
-
-def notification_dispatch(scan_id):
-    """Simulates sending email notifications to stakeholders."""
+def notification_dispatch(scan_id, app, om: OutputManager):
+    """Sends email notifications to stakeholders if enabled."""
     logger.info(f"[{scan_id}] Dispatching notifications...")
 
-    # In a real implementation, you would fetch these from a database or config
-    stakeholders = ["admin@example.com", "security-team@example.com"]
+    scan = Scan.query.get(scan_id)
+    if not scan:
+        logger.error(f"[{scan_id}] Could not find scan for notification dispatch.")
+        return
 
-    for email in stakeholders:
-        print(f"[{scan_id}] Simulating sending email to {email}...")
-        # Here you would use a library like smtplib to send the actual email
+    user = scan.user
+    if user and user.is_email_notifications_enabled and user.email:
+        logger.info(f"[{scan_id}] Email notifications enabled for user {user.username}.")
+
+        # Generate the PDF report
+        summary = om.finalize(generate_pdf=True)
+        pdf_report_path = summary.get("reports", [{}])[0].get("path")
+
+        if pdf_report_path:
+            with app.app_context():
+                send_report_email(user.email, scan, pdf_report_path)
+        else:
+            logger.error(f"[{scan_id}] PDF report was not generated. Cannot send email.")
+    else:
+        logger.info(f"[{scan_id}] Email notifications are disabled for user {user.username}.")
 
     logger.info(f"[{scan_id}] Notification dispatch complete.")
 
@@ -177,11 +185,10 @@ def run_post_scan_operations(scan_id, app, om: OutputManager):
     with app.app_context():
         logger.info(f"[{scan_id}] Starting post-scan operations...")
 
-        report_generation(scan_id, om)
+        notification_dispatch(scan_id, app, om)
         backup_creation(scan_id, om)
         final_validation(scan_id, om)
         data_archival(scan_id, om)
-        notification_dispatch(scan_id)
         integration_updates(scan_id)
         analytics_update(scan_id, om)
         schedule_next_scan(scan_id)

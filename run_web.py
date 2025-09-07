@@ -2,21 +2,20 @@ import os
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
+from config import Config
 from cyberhunter_3d.web.models import db, User
 
 # --- App Initialization ---
 app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
+app.config.from_object(Config)
 
-# --- Configuration ---
-app.config['SECRET_KEY'] = 'a-very-secret-key-that-should-be-changed'
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+from cyberhunter_3d.core.reporting.email_service import mail
 
 # --- Extensions Initialization ---
 db.init_app(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
+mail.init_app(app)
 login_manager.login_view = 'login'
 
 @login_manager.user_loader
@@ -25,7 +24,7 @@ def load_user(user_id):
 
 # --- Database Initialization ---
 def init_database():
-    if not os.path.exists(db_path):
+    if not os.path.exists(app.config['DB_PATH']):
         with app.app_context():
             print("Creating database and tables...")
             db.create_all()
@@ -225,6 +224,14 @@ def profile():
             current_user.is_autonomous_scanning_enabled = is_enabled
             db.session.commit()
             flash(f"Autonomous scanning has been {'enabled' if is_enabled else 'disabled'}.", 'success')
+
+        elif form_name == 'email_notifications':
+            email = request.form.get('email')
+            is_enabled = 'email_enabled' in request.form
+            current_user.email = email
+            current_user.is_email_notifications_enabled = is_enabled
+            db.session.commit()
+            flash('Email notification settings updated.', 'success')
 
         return redirect(url_for('profile'))
 
