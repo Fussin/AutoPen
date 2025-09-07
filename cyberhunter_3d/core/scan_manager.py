@@ -12,6 +12,9 @@ from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
 from .output_manager import OutputManager
 from .post_scan_operations import run_post_scan_operations
+from concurrent.futures import ThreadPoolExecutor
+
+executor = ThreadPoolExecutor(max_workers=2)
 
 def run_discovery_phase(scan_id, app):
     """
@@ -58,11 +61,25 @@ def run_discovery_phase(scan_id, app):
 
             # 4. Persist the results from the DecisionTree
             in_scope_count, out_of_scope_count = decision_tree.persist_discovered_assets()
-
-            # 5. Finalize Discovery Phase
             scan.results = f"Discovery phase complete. Found {in_scope_count} new assets. Skipped {out_of_scope_count} out-of-scope items."
-            scan.status = 'PENDING_REVIEW'
-            print(f"Scan {scan_id} discovery phase complete.")
+            db.session.commit()
+
+            # 5. Auto-Approval Phase
+            print(f"AUTONOMOUS_MODE: Starting auto-approval for scan {scan_id}...")
+            validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
+            unapproved_assets = Asset.query.filter_by(scan_id=scan.id, is_approved_for_scan=False).all()
+            approved_count = 0
+            for asset in unapproved_assets:
+                if validator.is_in_scope(asset.value):
+                    asset.is_approved_for_scan = True
+                    approved_count += 1
+
+            db.session.commit()
+            print(f"AUTONOMOUS_MODE: Auto-approved {approved_count} assets.")
+
+            # 6. Chain to Execution Phase
+            print(f"AUTONOMOUS_MODE: Chaining scan {scan_id} to execution phase.")
+            executor.submit(run_execution_phase, scan_id, app)
 
         except Exception as e:
             print(f"FATAL: Error in discovery phase for scan {scan_id}: {e}")
@@ -201,12 +218,6 @@ def run_execution_phase(scan_id, app):
             # 1. Vulnerability Scanning
             vuln_scanning_phase = VulnerabilityScanningPhase(scan_id, app, om)
             vuln_scanning_phase.run()
-
-            # Placeholders for future implementation
-            om.write_discovery_file("Way_kat.txt", "# Data from Wayback Machine / Katana - Not yet implemented\n")
-            om.write_discovery_file("api_endpoints.json", "[] # API endpoints - Not yet implemented\n")
-            om.write_discovery_file("parameters.json", "[] # Discovered parameters - Not yet implemented\n")
-            om.write_discovery_file("javascript_files.txt", "# Discovered Javascript files - Not yet implemented\n")
 
             # 2. Expansion Phase (Reverse DNS)
             print("Starting Expansion: Reverse DNS")
