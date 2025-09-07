@@ -386,8 +386,13 @@ def run_execution_phase(scan_id, app):
             for asset in all_db_assets:
                 om.add_asset({'type': asset.type, 'value': asset.value, 'details': asset.details})
 
+
+            # Run post-scan operations
+            run_post_scan_operations(scan, app, om)
+
             # Run post-scan operations in the finally block to ensure they always run
             # run_post_scan_operations(scan_id, app, om)
+
 
         except Exception as e:
             print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")
