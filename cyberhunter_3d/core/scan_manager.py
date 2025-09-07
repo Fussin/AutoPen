@@ -4,6 +4,7 @@ from cyberhunter_3d.web.models import db, Scan, Target, Asset, Vulnerability
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.plugins.vulnerability.nuclei import run_nuclei_scan
+from cyberhunter_3d.plugins.vulnerability.sqlmap import run_sqlmap_scan
 from cyberhunter_3d.plugins.recon.gospider import run_gospider_scan
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
@@ -92,6 +93,8 @@ def run_discovery_phase(scan_id, app):
             print(f"Final discovery status for scan {scan_id} is {scan.status}.")
 
 
+import csv
+
 class VulnerabilityScanningPhase:
     """
     Encapsulates the logic for the vulnerability scanning phase.
@@ -102,11 +105,13 @@ class VulnerabilityScanningPhase:
         self.om = output_manager
         self.scan = db.session.get(Scan, self.scan_id)
         self.nuclei_output_dir = self.om.base_dir / "nuclei"
+        self.sqlmap_output_dir = self.om.base_dir / "sqlmap"
         self.nuclei_output_dir.mkdir(exist_ok=True)
+        self.sqlmap_output_dir.mkdir(exist_ok=True)
 
     def run(self):
         """
-        Runs the vulnerability scanning process using Nuclei.
+        Runs the vulnerability scanning process using multiple tools.
         """
         print("Starting Vulnerability Scanning Phase...")
 
@@ -117,9 +122,22 @@ class VulnerabilityScanningPhase:
             print("No web targets found to scan.")
             return
 
-        nuclei_findings = self._run_nuclei_on_targets(web_targets)
-        if nuclei_findings:
-            self._save_nuclei_findings(nuclei_findings)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            # Run Nuclei scans in a separate thread
+            nuclei_future = executor.submit(self._run_nuclei_on_targets, web_targets)
+
+            # Run sqlmap scans in a separate thread
+            sqlmap_future = executor.submit(self._run_sqlmap_on_targets, web_targets)
+
+            # Process Nuclei results
+            nuclei_findings = nuclei_future.result()
+            if nuclei_findings:
+                self._save_nuclei_findings(nuclei_findings)
+
+            # Process sqlmap results
+            sqlmap_findings = sqlmap_future.result()
+            if sqlmap_findings:
+                self._save_sqlmap_findings(sqlmap_findings)
 
         print("Vulnerability Scanning Phase complete.")
 
@@ -197,13 +215,13 @@ class VulnerabilityScanningPhase:
         """
         Parses Nuclei's JSON output and saves it to the database.
         """
-        print(f"Saving {len(findings)} findings to the database...")
+        print(f"Saving {len(findings)} Nuclei findings to the database...")
         for finding in findings:
             info = finding.get('info', {})
 
-            # Create a new Vulnerability object
             new_vulnerability = Vulnerability(
                 title=info.get('name', 'N/A'),
+                source='nuclei',
                 severity=info.get('severity', 'unknown'),
                 description=info.get('description', 'No description provided.'),
                 evidence={
@@ -216,13 +234,55 @@ class VulnerabilityScanningPhase:
                 scan_id=self.scan_id,
                 asset_id=finding.get('asset_id')
             )
-
-            # Add to session and commit
             db.session.add(new_vulnerability)
             self.om.add_vulnerability(finding, severity=info.get('severity', 'unknown'))
 
         db.session.commit()
-        print("Successfully saved findings.")
+        print("Successfully saved Nuclei findings.")
+
+    def _run_sqlmap_on_targets(self, targets: list[tuple[Asset, str]]) -> list[dict]:
+        """
+        Runs sqlmap on a list of target URLs.
+        """
+        all_findings = []
+        for asset, url in targets:
+            output_dir = run_sqlmap_scan(url, self.sqlmap_output_dir)
+            if output_dir:
+                # sqlmap saves results in a log file in the output directory
+                log_path = output_dir / "log"
+                if log_path.exists():
+                    with open(log_path, 'r') as f:
+                        log_content = f.read()
+                        # This is a very basic way to check for findings.
+                        # A more robust parser would be needed for a real application.
+                        if "vulnerable" in log_content.lower():
+                            all_findings.append({
+                                'url': url,
+                                'log_path': str(log_path),
+                                'asset_id': asset.id
+                            })
+        return all_findings
+
+    def _save_sqlmap_findings(self, findings: list[dict]):
+        """
+        Parses sqlmap findings and saves them to the database.
+        """
+        print(f"Saving {len(findings)} sqlmap findings to the database...")
+        for finding in findings:
+            new_vulnerability = Vulnerability(
+                title=f"SQL Injection found at {finding['url']}",
+                source='sqlmap',
+                severity='critical', # SQLi is always critical
+                description=f"sqlmap found a SQL injection vulnerability at the specified URL. Check the logs for details: {finding['log_path']}",
+                evidence={'url': finding['url'], 'log_path': finding['log_path']},
+                scan_id=self.scan_id,
+                asset_id=finding.get('asset_id')
+            )
+            db.session.add(new_vulnerability)
+            self.om.add_vulnerability(finding, severity='critical')
+
+        db.session.commit()
+        print("Successfully saved sqlmap findings.")
 
 
 class ExpansionPhase:
