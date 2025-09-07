@@ -4,132 +4,62 @@
     <meta charset="UTF-8">
     <title>Scan Report</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-
-        body {
-            font-family: 'Roboto', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f8f9fa;
-            color: #333;
-        }
-        .container {
-            width: 80%;
-            margin: 20px auto;
-            background-color: #fff;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        .header h1 {
-            margin: 0;
-            color: #2c3e50;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            padding-top: 10px;
-            border-top: 2px solid #eee;
-            font-size: 0.8em;
-            color: #777;
-        }
-        h2 {
-            color: #2980b9;
-            border-bottom: 1px solid #2980b9;
-            padding-bottom: 5px;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-top: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
-        }
-        th {
-            background-color: #3498db;
-            color: white;
-        }
-        tr:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-        .severity-High { background-color: #e74c3c; color: white; }
-        .severity-Medium { background-color: #f39c12; color: white; }
-        .severity-Low { background-color: #f1c40f; color: black; }
-        .severity-Informational { background-color: #3498db; color: white; }
+        body { font-family: sans-serif; }
+        h1, h2 { color: #333; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Scan Report</h1>
-        </div>
+    <h1>Scan Report</h1>
+    <p><strong>Scan ID:</strong> {{ scan_id }}</p>
+    <p><strong>Timestamp:</strong> {{ timestamp }}</p>
 
-        <p><strong>Scan ID:</strong> {{ scan_id }}</p>
-        <p><strong>Timestamp:</strong> {{ timestamp }}</p>
+    <h2>Summary</h2>
+    <p>Total assets found: {{ summary.total_assets }}</p>
+    <p>Vulnerabilities found: {{ summary.vulnerabilities }}</p>
 
-        <h2>Summary</h2>
-        <p>Total assets found: {{ summary.total_assets }}</p>
-        <p>Vulnerabilities found: {{ summary.vulnerabilities }}</p>
+    <h2>Vulnerabilities</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Severity</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vuln in vulnerabilities %}
+            <tr>
+                <td>{{ vuln.id }}</td>
+                <td>{{ vuln.title }}</td>
+                <td>{{ vuln.severity }}</td>
+                <td>{{ vuln.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-        <h2>Scan Configuration</h2>
-        <h3>In-Scope Rules</h3>
-        <pre>{{ in_scope }}</pre>
-        <h3>Out-of-Scope Rules</h3>
-        <pre>{{ out_of_scope }}</pre>
-
-        <h2>Vulnerabilities</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Title</th>
-                    <th>Severity</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for vuln in vulnerabilities %}
-                <tr>
-                    <td>{{ vuln.id }}</td>
-                    <td>{{ vuln.title }}</td>
-                    <td class="severity-{{ vuln.severity }}">{{ vuln.severity }}</td>
-                    <td>{{ vuln.description }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <h2>Discovered Assets</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Type</th>
-                    <th>Value</th>
-                    <th>Details</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for asset in assets %}
-                <tr>
-                    <td>{{ asset.type }}</td>
-                    <td>{{ asset.value }}</td>
-                    <td>{{ asset.details | tojson }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <div class="footer">
-            <p>Report generated on {{ timestamp }}</p>
-        </div>
-    </div>
+    <h2>Discovered Assets</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Value</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for asset in assets %}
+            <tr>
+                <td>{{ asset.type }}</td>
+                <td>{{ asset.value }}</td>
+                <td>{{ asset.details | tojson }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </body>
 </html>

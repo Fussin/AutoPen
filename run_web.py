@@ -46,7 +46,7 @@ from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from cyberhunter_3d.core.target_parser import parse_single_target
 from apscheduler.schedulers.background import BackgroundScheduler
-from cyberhunter_3d.core.feeds.feed_manager import check_for_new_targets
+# from cyberhunter_3d.core.feeds.feed_manager import check_for_new_targets
 
 # --- Background Task Executor ---
 executor = ThreadPoolExecutor(max_workers=2)
@@ -56,7 +56,7 @@ executor = ThreadPoolExecutor(max_workers=2)
 # with a production WSGI server like Gunicorn.
 scheduler = BackgroundScheduler()
 # Run the job every 4 hours
-scheduler.add_job(check_for_new_targets, 'interval', hours=4, args=[app])
+# scheduler.add_job(check_for_new_targets, 'interval', hours=4, args=[app])
 scheduler.start()
 print("Scheduler started successfully.")
 

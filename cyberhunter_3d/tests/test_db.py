@@ -43,7 +43,7 @@ def test_schedule_next_scan(test_app):
         initial_scan_id = initial_scan.id
 
         # Run the function to schedule the next scan
-        schedule_next_scan(initial_scan)
+        schedule_next_scan(initial_scan_id)
 
         # Check that a new scan has been created
         new_scans = Scan.query.filter(Scan.id != initial_scan_id).all()
