@@ -3,8 +3,7 @@ import shutil
 import requests
 from pathlib import Path
 from .output_manager import OutputManager
-from cyberhunter_3d.web.models import db, Scan, Target, User
-from cyberhunter_3d.core.reporting.email_service import send_report_email
+from cyberhunter_3d.web.models import db, Scan, Target
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,7 +15,11 @@ def final_validation(scan, om: OutputManager):
     archive_path = Path("archive") / f"{om.base_dir.name}.zip"
 
     logger.info(f"[{scan_id}] Performing final validation...")
+
+    archive_path = Path("archive") / f"{om.base_dir.name}.zip"
+
     archive_path = om.base_dir.parent / f"{om.base_dir.name}.zip"
+
 
     if archive_path.exists():
         logger.info(f"Validation successful: Archive found at {archive_path}")
@@ -37,11 +40,18 @@ def notification_dispatch(scan):
     logger.info(f"[{scan.id}] Dispatching notifications...")
 
     logger.info(f"[{scan_id}] Report generation complete.")
-    return summary.get("reports", [])
 
-def notification_dispatch(scan_id, app, reports: list):
-    """Sends email notifications to stakeholders if enabled."""
+def notification_dispatch(scan_id):
+    """Simulates sending email notifications to stakeholders."""
     logger.info(f"[{scan_id}] Dispatching notifications...")
+
+
+    # In a real implementation, you would fetch these from a database or config
+    stakeholders = ["admin@example.com", "security-team@example.com"]
+
+    for email in stakeholders:
+        print(f"[{scan_id}] Simulating sending email to {email}...")
+        # Here you would use a library like smtplib to send the actual email
 
 
     scan = Scan.query.get(scan_id)
@@ -72,6 +82,7 @@ def notification_dispatch(scan_id, app, reports: list):
             logger.error(f"[{scan_id}] PDF report was not generated. Cannot send email.")
     else:
         logger.info(f"[{scan_id}] Email notifications are disabled for user {user.username}.")
+
 
 
     logger.info(f"[{scan.id}] Notification dispatch complete.")
@@ -234,19 +245,19 @@ def run_post_scan_operations(scan, app, om: OutputManager):
 
         logger.info(f"[{scan_id}] Starting post-scan operations...")
 
-        reports = report_generation(scan_id, om)
-        notification_dispatch(scan_id, app, reports)
+        report_generation(scan_id, om)
         backup_creation(scan_id, om)
         final_validation(scan_id, om)
         data_archival(scan_id, om)
+        notification_dispatch(scan_id)
         integration_updates(scan_id)
         analytics_update(scan_id, om)
         schedule_next_scan(scan_id)
         monitoring_activation(scan_id)
+        cleanup_operations(scan_id, om)
         session_termination(scan_id)
         platform_logout(scan_id)
         session_closed(scan_id)
-        cleanup_operations(scan_id, om) # This should be last
 
         logger.info(f"[{scan_id}] All post-scan operations completed.")
 

@@ -20,6 +20,7 @@ class OutputManager:
         self.vulnerabilities = []
         self.assets = []
 
+        self.base_dir.mkdir(exist_ok=True)
         self.recon_dir.mkdir(exist_ok=True)
         self.network_dir.mkdir(exist_ok=True)
         self.discovery_dir.mkdir(exist_ok=True)
@@ -29,7 +30,6 @@ class OutputManager:
     def create_for_timestamp(cls, base_path):
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         scan_dir = Path(base_path) / timestamp
-        scan_dir.mkdir(parents=True, exist_ok=True)
         return cls(scan_dir)
 
     def write_recon_file(self, filename, content):

@@ -126,15 +126,15 @@ def verify_2fa():
         flash('Please log in first.', 'danger')
         return redirect(url_for('login'))
 
+    user_id = session['user_id_for_2fa']
+    user = db.session.get(User, user_id)
+
+    if not user:
+        flash('User not found, please log in again.', 'danger')
+        session.pop('user_id_for_2fa', None)
+        return redirect(url_for('login'))
+
     if request.method == 'POST':
-        user_id = session['user_id_for_2fa']
-        user = db.session.get(User, user_id)
-
-        if not user:
-            flash('User not found, please log in again.', 'danger')
-            session.pop('user_id_for_2fa', None)
-            return redirect(url_for('login'))
-
         token = request.form.get('token')
         totp = pyotp.TOTP(user.otp_secret)
 
@@ -252,6 +252,15 @@ def scan_results(scan_id):
         flash('You are not authorized to view this scan.', 'danger')
         return redirect(url_for('dashboard'))
     return render_template('scan_results.html', scan=scan)
+
+@app.route('/scan/<int:scan_id>/graph_view')
+@login_required
+def graph_view(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    if scan.user_id != current_user.id:
+        flash('You are not authorized to view this scan.', 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('graph_view.html', scan=scan)
 
 @app.route('/vulnerability/<int:vuln_id>')
 @login_required
