@@ -21,7 +21,7 @@ def require_api_key(f):
         return f(*args, **kwargs)
     return decorated_function
 
-from cyberhunter_3d.web.models import db, Scan, Target, Asset
+from cyberhunter_3d.web.models import db, Scan, Target, Asset, Vulnerability
 from cyberhunter_3d.core.target_parser import parse_targets
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from concurrent.futures import ThreadPoolExecutor
@@ -151,3 +151,32 @@ def get_scan_graph(scan_id):
         graph_definition += f'    {scan_node} --> {asset_node}\n'
 
     return jsonify({'graph_definition': graph_definition})
+
+@api_bp.route('/scans/<int:scan_id>/graph_data', methods=['GET'])
+@require_api_key
+def get_scan_graph_data(scan_id):
+    scan = Scan.query.get_or_404(scan_id)
+    user = User.query.filter_by(api_key=request.headers.get('X-API-Key')).first()
+    if scan.user_id != user.id:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    nodes = []
+    links = []
+
+    # Scan node
+    scan_node_id = f"scan_{scan.id}"
+    nodes.append({"id": scan_node_id, "name": f"Scan #{scan.id}", "type": "scan"})
+
+    # Asset nodes and links from scan to assets
+    for asset in scan.assets:
+        asset_node_id = f"asset_{asset.id}"
+        nodes.append({"id": asset_node_id, "name": asset.value, "type": "asset"})
+        links.append({"source": scan_node_id, "target": asset_node_id})
+
+        # Vulnerability nodes and links from assets to vulnerabilities
+        for vuln in asset.vulnerabilities:
+            vuln_node_id = f"vuln_{vuln.id}"
+            nodes.append({"id": vuln_node_id, "name": vuln.title, "type": "vulnerability", "severity": vuln.severity})
+            links.append({"source": asset_node_id, "target": vuln_node_id})
+
+    return jsonify({"nodes": nodes, "links": links})

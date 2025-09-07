@@ -1,30 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2em;">
-    <h2>Visual Scope Graph for Scan #{{ scan.id }}</h2>
+    <h2>3D Visual Scope Graph for Scan #{{ scan.id }}</h2>
     <div>
         <a href="{{ url_for('scan_results', scan_id=scan.id) }}" class="button">Back to Results</a>
         <a href="{{ url_for('dashboard') }}" class="button">Back to Dashboard</a>
     </div>
   </div>
 
-  <div id="graph-container" style="width: 100%; min-height: 80vh; background-color: #1e1e1e; border-radius: 8px; padding: 1em;">
-    <div class="mermaid">
-      graph TD
-          A["Loading Graph..."]
-    </div>
-  </div>
+  <div id="3d-graph" style="width: 100%; min-height: 80vh; background-color: #000011; border-radius: 8px;"></div>
 
+  <script src="{{ url_for('static', filename='3d-force-graph.min.js') }}"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      // The API key is available in the profile page, but for simplicity in the template,
-      // we'll assume it can be passed here if needed, or fetched. For now, we rely on the user's session cookie
-      // for the fetch request, which works for browser-based JS calls to our own backend.
-
-      const graphContainer = document.querySelector('.mermaid');
+      const graphContainer = document.getElementById('3d-graph');
       const scanId = {{ scan.id }};
 
-      fetch(`/api/v1/scans/${scanId}/graph`)
+      fetch(`/api/v1/scans/${scanId}/graph_data`)
         .then(response => {
           if (!response.ok) {
             throw new Error('Network response was not ok');
@@ -32,24 +24,23 @@
           return response.json();
         })
         .then(data => {
-          if (data.graph_definition) {
-            // Update the content of the mermaid container
-            graphContainer.textContent = data.graph_definition;
-            // Remove the 'data-processed' attribute to force mermaid to re-render
-            graphContainer.removeAttribute('data-processed');
-            // Re-initialize mermaid for the updated content
-            mermaid.run({
-              nodes: [graphContainer]
+          const Graph = ForceGraph3D()
+            (graphContainer)
+            .graphData(data)
+            .nodeLabel('name')
+            .nodeAutoColorBy('type')
+            .linkSource('source')
+            .linkTarget('target')
+            .onNodeHover(node => graphContainer.style.cursor = node ? 'pointer' : null)
+            .onNodeClick(node => {
+              if (node.type === 'vulnerability') {
+                window.open(`/vulnerability/${node.id.split('_')[1]}`, '_blank');
+              }
             });
-          } else {
-            graphContainer.textContent = 'graph TD\n    A["Error: Could not load graph data."]'
-            mermaid.run();
-          }
         })
         .catch(error => {
           console.error('Error fetching graph data:', error);
-          graphContainer.textContent = 'graph TD\n    A["Error: Failed to fetch graph data."]'
-          mermaid.run();
+          graphContainer.innerHTML = '<p style="color: white; text-align: center;">Error loading graph data.</p>';
         });
     });
   </script>
