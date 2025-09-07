@@ -88,6 +88,7 @@ class Vulnerability(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     severity = db.Column(db.String(50), nullable=False)
+    priority = db.Column(db.Integer, nullable=True)
     description = db.Column(db.Text, nullable=False)
     evidence = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
