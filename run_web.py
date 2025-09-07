@@ -2,21 +2,20 @@ import os
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
+from config import Config
 from cyberhunter_3d.web.models import db, User
 
 # --- App Initialization ---
 app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
+app.config.from_object(Config)
 
-# --- Configuration ---
-app.config['SECRET_KEY'] = 'a-very-secret-key-that-should-be-changed'
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cyberhunter.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+from cyberhunter_3d.core.reporting.email_service import mail
 
 # --- Extensions Initialization ---
 db.init_app(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
+mail.init_app(app)
 login_manager.login_view = 'login'
 
 @login_manager.user_loader
@@ -25,7 +24,7 @@ def load_user(user_id):
 
 # --- Database Initialization ---
 def init_database():
-    if not os.path.exists(db_path):
+    if not os.path.exists(app.config['DB_PATH']):
         with app.app_context():
             print("Creating database and tables...")
             db.create_all()
@@ -41,14 +40,25 @@ import pyotp
 import qrcode
 import io
 import base64
-from cyberhunter_3d.web.models import Scan, Target
+from cyberhunter_3d.web.models import Scan, Target, Vulnerability
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from cyberhunter_3d.core.target_parser import parse_single_target
+from apscheduler.schedulers.background import BackgroundScheduler
+from cyberhunter_3d.core.feeds.feed_manager import check_for_new_targets
 
 # --- Background Task Executor ---
 executor = ThreadPoolExecutor(max_workers=2)
+
+# --- Scheduler Setup ---
+# Initialized in the global scope to ensure it's started when run
+# with a production WSGI server like Gunicorn.
+scheduler = BackgroundScheduler()
+# Run the job every 4 hours
+scheduler.add_job(check_for_new_targets, 'interval', hours=4, args=[app])
+scheduler.start()
+print("Scheduler started successfully.")
 
 # Register the API blueprint
 app.register_blueprint(api_bp)
@@ -115,11 +125,19 @@ def verify_2fa():
     if 'user_id_for_2fa' not in session:
         flash('Please log in first.', 'danger')
         return redirect(url_for('login'))
+
     if request.method == 'POST':
         user_id = session['user_id_for_2fa']
         user = db.session.get(User, user_id)
+
+        if not user:
+            flash('User not found, please log in again.', 'danger')
+            session.pop('user_id_for_2fa', None)
+            return redirect(url_for('login'))
+
         token = request.form.get('token')
         totp = pyotp.TOTP(user.otp_secret)
+
         if totp.verify(token):
             login_user(user)
             session.pop('user_id_for_2fa', None)
@@ -128,6 +146,7 @@ def verify_2fa():
         else:
             flash('Invalid 2FA token.', 'danger')
             return redirect(url_for('verify_2fa'))
+
     return render_template('verify_2fa.html')
 
 @app.route('/submit-targets', methods=['POST'])
@@ -181,6 +200,43 @@ def dashboard():
     scans = Scan.query.filter_by(user_id=current_user.id).order_by(Scan.created_at.desc()).all()
     return render_template('dashboard.html', scans=scans)
 
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    if request.method == 'POST':
+        form_name = request.form.get('form_name')
+
+        if form_name == 'api_key':
+            current_user.regenerate_api_key()
+            db.session.commit()
+            flash('API key has been regenerated.', 'success')
+
+        elif form_name == 'h1_key':
+            h1_username = request.form.get('h1_username')
+            h1_key = request.form.get('h1_key')
+            current_user.hackerone_username = h1_username
+            current_user.hackerone_api_key = h1_key
+            db.session.commit()
+            flash('HackerOne credentials updated.', 'success')
+
+        elif form_name == 'autonomous_scanning':
+            is_enabled = 'autonomous_enabled' in request.form
+            current_user.is_autonomous_scanning_enabled = is_enabled
+            db.session.commit()
+            flash(f"Autonomous scanning has been {'enabled' if is_enabled else 'disabled'}.", 'success')
+
+        elif form_name == 'email_notifications':
+            email = request.form.get('email')
+            is_enabled = 'email_enabled' in request.form
+            current_user.email = email
+            current_user.is_email_notifications_enabled = is_enabled
+            db.session.commit()
+            flash('Email notification settings updated.', 'success')
+
+        return redirect(url_for('profile'))
+
+    return render_template('profile.html')
+
 @app.route('/logout')
 @login_required
 def logout():
@@ -197,7 +253,19 @@ def scan_results(scan_id):
         return redirect(url_for('dashboard'))
     return render_template('scan_results.html', scan=scan)
 
+@app.route('/vulnerability/<int:vuln_id>')
+@login_required
+def vulnerability_details(vuln_id):
+    vuln = Vulnerability.query.get_or_404(vuln_id)
+    # Ensure the current user is authorized to see this vulnerability
+    if vuln.scan_ref.user_id != current_user.id:
+        flash('You are not authorized to view this vulnerability.', 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('vulnerability_details.html', vuln=vuln)
+
 # --- Main Execution ---
 if __name__ == '__main__':
     init_database()
-    app.run(debug=True, port=5001)
+    # The scheduler is started in the global scope, so we don't need to start it here.
+    # use_reloader=False is important to prevent the scheduler from running twice.
+    app.run(debug=True, port=5001, use_reloader=False)

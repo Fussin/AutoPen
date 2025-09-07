@@ -1,5 +1,69 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+/* The switch - the box around the slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+</style>
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <h2>Your Profile</h2>
     <a href="{{ url_for('dashboard') }}" class="button">Back to Dashboard</a>
@@ -24,12 +88,44 @@
   <hr style="border-color: #444; margin: 2em 0;">
 
   <h3>HackerOne Integration</h3>
-  <p>Add your HackerOne API key to automatically sync your program scopes.</p>
+  <p>Add your HackerOne username and API key to automatically sync your program scopes.</p>
   <form method="post" action="{{ url_for('profile') }}">
     <input type="hidden" name="form_name" value="h1_key">
+    <label for="h1_username">HackerOne Username</label>
+    <input type="text" id="h1_username" name="h1_username" value="{{ current_user.hackerone_username or '' }}" style="margin-bottom: 1em;">
     <label for="h1_key">HackerOne API Key</label>
     <input type="password" id="h1_key" name="h1_key" value="{{ current_user.hackerone_api_key or '' }}">
-    <button type="submit" class="button">Save HackerOne Key</button>
+    <button type="submit" class="button">Save HackerOne Credentials</button>
+  </form>
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Autonomous Scanning</h3>
+  <p>Enable to have CyberHunter 3D automatically discover and scan new targets from your integrated feeds.</p>
+  <form method="post" action="{{ url_for('profile') }}">
+    <input type="hidden" name="form_name" value="autonomous_scanning">
+    <label class="switch">
+      <input type="checkbox" name="autonomous_enabled" onchange="this.form.submit()" {% if current_user.is_autonomous_scanning_enabled %}checked{% endif %}>
+      <span class="slider round"></span>
+    </label>
+    <span style="margin-left: 1em; vertical-align: middle;">Enable Autonomous Scanning</span>
+  </form>
+
+  <hr style="border-color: #444; margin: 2em 0;">
+
+  <h3>Email Notifications</h3>
+  <form method="post" action="{{ url_for('profile') }}">
+    <input type="hidden" name="form_name" value="email_notifications">
+    <label for="email">Notification Email</label>
+    <input type="email" id="email" name="email" value="{{ current_user.email or '' }}" style="margin-bottom: 1em;">
+
+    <label class="switch">
+      <input type="checkbox" name="email_enabled" {% if current_user.is_email_notifications_enabled %}checked{% endif %}>
+      <span class="slider round"></span>
+    </label>
+    <span style="margin-left: 1em; vertical-align: middle;">Enable Email Notifications</span>
+
+    <button type="submit" class="button" style="display: block; margin-top: 1em;">Save Email Settings</button>
   </form>
 
 {% endblock %}
