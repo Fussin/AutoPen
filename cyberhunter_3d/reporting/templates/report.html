@@ -79,6 +79,12 @@
         <p>Total assets found: {{ summary.total_assets }}</p>
         <p>Vulnerabilities found: {{ summary.vulnerabilities }}</p>
 
+        <h2>Scan Configuration</h2>
+        <h3>In-Scope Rules</h3>
+        <pre>{{ in_scope }}</pre>
+        <h3>Out-of-Scope Rules</h3>
+        <pre>{{ out_of_scope }}</pre>
+
         <h2>Vulnerabilities</h2>
         <table>
             <thead>
