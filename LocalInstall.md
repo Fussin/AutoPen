@@ -1,163 +1,163 @@
-# CyberHunter 3D: Local Installation Guide
+# CyberHunter 3D: Installation Guide
 
-This document provides step-by-step instructions for setting up and running the CyberHunter 3D reconnaissance platform on your local machine without using Docker.
+This document provides step-by-step instructions for setting up and running the CyberHunter 3D reconnaissance platform on your local machine.
 
-## 1. Prerequisites
+## Installation Options
 
-Before you begin, ensure you have the following software installed on your system:
+You can set up CyberHunter 3D in two ways:
 
+1.  **Local Installation:** Installing the platform and all its dependencies directly on your machine. This provides maximum control and is ideal for development.
+2.  **Docker Installation:** (Coming Soon) A containerized setup that simplifies dependency management and provides a consistent environment.
+
+---
+
+## 1. Local Installation
+
+This section guides you through setting up the platform on a local machine.
+
+### 1.1. Prerequisites
+
+Before you begin, ensure your system meets the following requirements.
+
+#### System Requirements
+*   **Operating System:** A Debian-based Linux distribution (e.g., Ubuntu, Kali Linux) is recommended, as the `install_tools.sh` script is tailored for it.
 *   **Git:** For cloning the repository.
-*   **Python 3:** (Version 3.8 or higher) with `pip`.
-*   **Go:** (Version 1.18 or higher) for installing various security tools.
-*   **A C compiler and related build tools** (like `build-essential` on Debian/Ubuntu) for compiling certain dependencies.
-*   **Tesseract OCR Engine:** For the AI-powered screenshot analysis feature. On Debian/Ubuntu, you can install it with `sudo apt-get install tesseract-ocr`.
+*   **Python:** Version 3.8 or higher, with `pip`.
+*   **Go:** Version 1.18 or higher.
+*   **C Compiler:** Build tools like `build-essential` are needed for some dependencies.
+*   **Tesseract OCR:** Required for the screenshot analysis feature (`tesseract-ocr`).
+*   **wkhtmltopdf:** For converting HTML reports to PDF.
 
-## 2. Installation
+#### External Security Tools
+The platform integrates a wide array of external security tools. The provided `install_tools.sh` script automates the installation of these tools on Debian-based systems.
 
-The installation process involves cloning the repository, installing numerous command-line tools, and setting up the Python environment.
+*   **Recon & Enumeration:** `Nmap`, `Gobuster`, `Subfinder`, `Amass`, `Assetfinder`, `MassDNS`, `puredns`, `Gotator`, `Sublist3r`, `Gospider`, `gau`.
+*   **Web & Vulnerability:** `HTTPX`, `Nuclei`, `Naabu`, `SQLMap`, `gowitness`, `Aquatone`, `Subzy`, `DNSX`.
+*   **Cloud & Code Analysis:** `Goblob`, `S3Scanner`, `LinkFinder`, `gh-dork`.
+*   **Utilities:** `Wappalyzer`, `dnsgen`, `pipx`.
 
-### Step 2.1: Clone the Repository
+#### Python Dependencies
+The core platform and its web interface rely on several Python packages. These are listed in `requirements.txt` and will be installed in a later step. Key packages include:
+*   `Flask` (for the web interface)
+*   `Flask-SQLAlchemy` (for database interaction)
+*   `boto3` (for AWS integration)
+*   `playwright` (for browser automation)
+*   `shodan`, `censys-platform`, `fofa-py`, `greynoise` (for API integrations)
+*   `pytesseract`, `Pillow` (for OCR)
+*   `pandas`, `scikit-learn`, `lightgbm` (for data analysis and AI features)
 
+### 1.2. Installation Steps
+
+The installation is a three-step process:
+
+#### Step 1: Clone the Repository
 First, clone the CyberHunter 3D repository from GitHub:
-
 ```bash
 git clone https://github.com/user/repo.git
 cd repo
 ```
-*(Replace `https://github.com/user/repo.git` with the actual URL of the repository and `repo` with the repository name)*
+*(Replace `https://github.com/user/repo.git` and `repo` with the actual repository details)*
 
-### Step 2.2: Install System & Go-based Tools
+#### Step 2: Install External Tools
+The platform relies on numerous external security tools.
 
-The platform relies on a wide range of external security tools.
-
-**For Debian-based Linux (e.g., Ubuntu, Kali):**
-
-The repository includes a convenience script to automate the installation of most required tools.
-
+**Option A: Automated Installation (Recommended for Debian-based systems)**
+The repository includes a script to automate the installation of most required tools. Run it with `sudo`:
 ```bash
 sudo bash cyberhunter_3d/scripts/install_tools.sh
 ```
+**Note:** This script is designed for Debian-based distributions like Ubuntu and Kali Linux.
 
-**For other Operating Systems (or Manual Installation):**
+**Option B: Manual Installation**
+If you are not using a Debian-based OS, you must install the tools manually. Please refer to the official documentation for each tool for OS-specific instructions. You can find the full list of tools in the `cyberhunter_3d/scripts/install_tools.sh` script.
 
-If you are not using a Debian-based distribution, you will need to install the tools manually. Below is a list of the key tools. Please refer to their official installation guides for instructions specific to your OS.
+#### Step 3: Install Python Dependencies and Application
+Finally, install the CyberHunter 3D application and its Python dependencies. This command uses `pip` to install the packages listed in `setup.py` and `requirements.txt`.
 
-*   **Go tools:** Ensure your `GOPATH` is set up correctly (e.g., `export PATH=$PATH:$(go env GOPATH)/bin` in your `.bashrc` or `.zshrc`).
-    *   `subfinder`: `go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest`
-    *   `amass`: `go install -v github.com/owasp-amass/amass/v3/cmd/amass@latest`
-    *   `httpx`: `go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest`
-    *   `naabu`: `go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest`
-    *   `nuclei`: `go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest`
-    *   `gowitness`: `go install -v github.com/sensepost/gowitness@latest`
-    *   `subzy`: `go install -v github.com/PentestPad/subzy@latest`
-    *   ...and others listed in `cyberhunter_3d/scripts/install_tools.sh`.
-
-*   **Other tools:**
-    *   `nmap`, `gobuster`, `sqlmap`, etc., can typically be installed via your system's package manager (e.g., `brew install nmap` on macOS).
-
-### Step 2.3: Install Python Dependencies
-
-Install all the required Python packages using `pip`:
-
+From the root of the project directory, run:
 ```bash
-pip3 install -r requirements.txt
+pip3 install .
 ```
-
-## 3. Configuration
-
-After installing all dependencies, you need to configure the tool by providing necessary wordlists.
-
-### Step 3.1: Download Wordlists
-
-The tool requires several wordlists for enumeration and bruteforcing. The default configuration expects them to be in a `/wordlists/` directory, but you can place them anywhere and update the config file.
-
-Create a directory for your wordlists:
+For development purposes, you might prefer to install in editable mode:
 ```bash
-mkdir -p wordlists
-cd wordlists
+pip3 install -e .
 ```
+This will install the application and allow you to modify the source code without reinstalling.
 
-Download the following common wordlists:
+### 1.3. Configuration
 
-*   **Subdomain Bruteforcing:**
-    ```bash
-    wget https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/subdomains-top1million-5000.txt
-    ```
-*   **Directory Bruteforcing:**
-    ```bash
-    wget https://raw.githubusercontent.com/v0re/dirb/master/wordlists/common.txt -O directory-list-2.3-medium.txt
-    ```
-*   **DNS Resolvers:**
-    ```bash
-    wget https://raw.githubusercontent.com/janmasarik/resolvers/master/resolvers.txt
-    ```
-`cd ..` to return to the project root directory.
+After installation, you need to configure the platform. The main configuration file is `cyberhunter_3d/config/recon_config.yaml`.
 
-### Step 3.2: Update the Configuration File
+#### Tool Paths
+The `recon_config.yaml` file contains paths to the external tools. If you used the `install_tools.sh` script, it likely installed Go-based tools in `/root/go/bin/`. If you installed the tools manually or are not running as root, you **must** update these paths.
 
-Open the `recon_config.yaml` file and update the paths to the wordlists you just downloaded.
+**Example:**
+```yaml
+tools:
+  subfinder: /home/your_user/go/bin/subfinder
+  # ... other tools
+```
+**Tip:** If a tool is in your system's `PATH`, you can just use the tool's name (e.g., `subfinder:`). You can check if a tool is in your path by running `which <tool_name>`.
 
-**File:** `cyberhunter_3d/config/recon_config.yaml`
+#### Wordlists
+The configuration file also points to wordlists for DNS and directory bruteforcing. The default paths point to `/usr/share/seclists/`, which is standard on Kali Linux. If you are on a different OS or stored your wordlists elsewhere, you must update these paths.
 
-Update the `wordlists` section to point to the absolute paths of the downloaded files on your system. For example:
-
+**Example:**
 ```yaml
 wordlists:
-  dns_bruteforce: /path/to/your/cyberhunter-3d/wordlists/subdomains-top1million-5000.txt
-  dir_bruteforce: /path/to/your/cyberhunter-3d/wordlists/directory-list-2.3-medium.txt
-  resolvers: /path/to/your/cyberhunter-3d/wordlists/resolvers.txt
-  github_dorks: /path/to/your/cyberhunter-3d/gh-dork/dorks.txt # This should be correct if you cloned the repo
+  dns_bruteforce: /path/to/your/wordlists/subdomains.txt
+  resolvers: /path/to/your/wordlists/resolvers.txt
 ```
-*(Replace `/path/to/your/cyberhunter-3d/` with the actual absolute path to the project directory).*
+You can find links to download common wordlists in the old `LocalInstall.md` or use your own preferred lists.
 
-## 4. Database Setup
+#### API Keys (Optional)
+Some tools integrated into CyberHunter 3D can use API keys for better results (e.g., Shodan, Censys). While the platform does not yet have a centralized API key management system, individual tools may require them to be configured in their own configuration files (e.g., `~/.config/shodan/api_key`). Please refer to the documentation of each tool for details.
 
-The platform uses a SQLite database to store scan information. Before running a scan for the first time, you must initialize the database.
+### 1.4. Database Setup
 
-Run the `init_db.py` script from the root of the project directory:
+The platform uses a SQLite database to store scan information. Before running the web interface for the first time, you must initialize the database.
 
+From the root of the project directory, run:
 ```bash
 python3 init_db.py
 ```
-
 You should see a confirmation message: `Database initialized successfully.`
 
-## 5. Usage
+### 1.5. Usage
 
-You can now run reconnaissance scans from the command line or use the web interface.
+You can run reconnaissance scans from the command line or use the web interface.
 
-### Running a Scan (CLI)
-
-To run a scan on a target domain, use the `main.py` script.
+#### Command-Line Interface (CLI)
+Thanks to the `setup.py` entry point, you can use the `cyberhunter` command directly.
 
 **Basic Scan:**
 ```bash
-python3 cyberhunter_3d/main.py -d example.com
+cyberhunter example.com
 ```
+This will run a passive enumeration scan on the specified domain and print the results to the console.
 
-**Verbose Scan (more detailed output):**
-```bash
-python3 cyberhunter_3d/main.py -d example.com -v
-```
-
-**URL Discovery and Vulnerability Scan:**
-```bash
-python3 cyberhunter_3d/main.py -d example.com --url-discovery
-```
-
-Results will be saved in the `recon_results/` and `screenshots/` directories.
-
-### Running the Web Interface
-
+#### Web Interface
 To use the web-based dashboard, run the `run_web.py` script:
-
 ```bash
 python3 run_web.py
 ```
-
 The web server will start (by default on port 5001). Open your web browser and navigate to `http://127.0.0.1:5001`. You will need to register a new user and set up two-factor authentication (2FA) on your first visit.
 
-## 6. New Features
+---
+
+## 2. Docker Installation (Coming Soon)
+
+A Docker-based setup for CyberHunter 3D is not yet available. A containerized environment would offer several advantages:
+
+*   **Simplified Setup:** No need to manually install tools or manage dependencies.
+*   **Consistency:** The platform runs in the same environment, regardless of your host OS.
+*   **Isolation:** The platform and its dependencies are isolated from your host system.
+
+We are considering developing a Docker setup for the project. If this is a feature you would find valuable, please let us know by opening an issue on our GitHub repository.
+
+---
+
+## 3. New Features
 
 This version of CyberHunter 3D includes several new features that enhance its reconnaissance and vulnerability scanning capabilities.
 
