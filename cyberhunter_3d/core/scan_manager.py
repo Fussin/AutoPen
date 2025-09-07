@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
-from cyberhunter_3d.web.models import db, Scan, Target, Asset
+from cyberhunter_3d.web.models import db, Scan, Target, Asset, Vulnerability
 from cyberhunter_3d.core.reconnaissance.subdomain_enum import enumerate_subdomains_v2
 from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
+from cyberhunter_3d.plugins.vulnerability.nuclei import run_nuclei_scan
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.reconnaissance.reverse_dns import get_hostnames_for_ips
@@ -74,6 +75,102 @@ def run_discovery_phase(scan_id, app):
             print(f"Final discovery status for scan {scan_id} is {scan.status}.")
 
 
+class VulnerabilityScanningPhase:
+    """
+    Encapsulates the logic for the vulnerability scanning phase.
+    """
+    def __init__(self, scan_id, app, output_manager):
+        self.scan_id = scan_id
+        self.app = app
+        self.om = output_manager
+        self.scan = db.session.get(Scan, self.scan_id)
+        self.nuclei_output_dir = self.om.base_dir / "nuclei"
+        self.nuclei_output_dir.mkdir(exist_ok=True)
+
+    def run(self):
+        """
+        Runs the vulnerability scanning process using Nuclei.
+        """
+        print("Starting Vulnerability Scanning Phase...")
+        web_targets = self._get_web_targets()
+        if not web_targets:
+            print("No web targets found to scan.")
+            return
+
+        nuclei_findings = self._run_nuclei_on_targets(web_targets)
+        if nuclei_findings:
+            self._save_nuclei_findings(nuclei_findings)
+
+        print("Vulnerability Scanning Phase complete.")
+
+    def _get_web_targets(self) -> list[tuple[Asset, str]]:
+        """
+        Identifies assets that are web servers and returns a list of URLs to scan.
+        Returns a list of tuples, where each tuple contains the Asset object and the URL.
+        """
+        targets = []
+        # Query for approved subdomains and domains that might be web servers
+        potential_web_assets = Asset.query.filter(
+            Asset.scan_id == self.scan_id,
+            Asset.is_approved_for_scan == True,
+            Asset.type.in_(['subdomain', 'domain'])
+        ).all()
+
+        # This is a simplified approach. A better method would be to use httpx
+        # to confirm which of these are running web servers.
+        for asset in potential_web_assets:
+            # Assume both http and https might be running
+            targets.append((asset, f"http://{asset.value}"))
+            targets.append((asset, f"https://{asset.value}"))
+
+        print(f"Generated {len(targets)} web URLs for Nuclei scanning.")
+        return targets
+
+    def _run_nuclei_on_targets(self, targets: list[tuple[Asset, str]]) -> list[dict]:
+        """
+        Runs Nuclei on a list of target URLs.
+        """
+        all_findings = []
+        for asset, url in targets:
+            findings = run_nuclei_scan(url, self.nuclei_output_dir)
+            # Add asset context to each finding for later use
+            for finding in findings:
+                finding['asset_id'] = asset.id
+            all_findings.extend(findings)
+        return all_findings
+
+    def _save_nuclei_findings(self, findings: list[dict]):
+        """
+        Parses Nuclei's JSON output and saves it to the database.
+        """
+        print(f"Saving {len(findings)} findings to the database...")
+        for finding in findings:
+            info = finding.get('info', {})
+
+            # Create a new Vulnerability object
+            new_vulnerability = Vulnerability(
+                title=info.get('name', 'N/A'),
+                severity=info.get('severity', 'unknown'),
+                description=info.get('description', 'No description provided.'),
+                evidence={
+                    'host': finding.get('host'),
+                    'matched-at': finding.get('matched-at'),
+                    'template': finding.get('template'),
+                    'curl-command': finding.get('curl-command'),
+                    'matcher-name': finding.get('matcher-name'),
+                },
+                scan_id=self.scan_id,
+                asset_id=finding.get('asset_id')
+            )
+
+            # Add to session and commit
+            db.session.add(new_vulnerability)
+            self.om.add_vulnerability(finding, severity=info.get('severity', 'unknown'))
+
+        db.session.commit()
+        print("Successfully saved findings.")
+
+
 def run_execution_phase(scan_id, app):
     """
     Performs the intensive execution phase of a scan on assets that have
@@ -101,42 +198,15 @@ def run_execution_phase(scan_id, app):
             validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
             out_of_scope_count = 0
 
-            # 1. Port Scanning and Simulated Vulnerability Reporting
-            ip_targets = Asset.query.filter(Asset.scan_id == scan.id, Asset.is_approved_for_scan == True, Asset.type.in_(['ip_address', 'cidr'])).all()
-            all_ports_data = []
-            vuln_id_counter = 1
-            for target in ip_targets:
-                print(f"Port scanning '{target.value}'...")
-                ip_scan_assets = scan_ip_target(target.value)
-                for asset_data in ip_scan_assets:
-                    om.add_asset(asset_data)
-                    all_ports_data.append(asset_data)
-                    if not Asset.query.filter_by(scan_id=scan.id, type=asset_data['type'], value=asset_data['value']).first():
-                        db.session.add(Asset(type=asset_data['type'], value=asset_data['value'], details=asset_data.get('details'), scan_id=scan.id))
+            # 1. Vulnerability Scanning
+            vuln_scanning_phase = VulnerabilityScanningPhase(scan_id, app, om)
+            vuln_scanning_phase.run()
 
-                    # This is a simulation of vulnerability reporting.
-                    # In a real application, a vulnerability scanner would be used here.
-                    port_info = asset_data.get('details', {})
-                    port = port_info.get('port', 'N/A')
-                    om.add_vulnerability({
-                        "id": f"VULN-{scan.id}-{vuln_id_counter}",
-                        "title": f"Informational: Port {port} Open on {target.value}",
-                        "description": f"An open port ({port}) was discovered on host {target.value}. This is for informational purposes and should be reviewed to ensure it is expected.",
-                        "severity": "informational",
-                        "evidence": {"host": target.value, "port": port, "protocol": port_info.get('protocol', 'tcp')}
-                    }, severity="informational")
-                    vuln_id_counter += 1
-
-            om.write_network_json("open_ports.json", all_ports_data)
-            om.write_network_json("services.json", {})
-            om.write_network_json("ssl_issues.json", {})
-
+            # Placeholders for future implementation
             om.write_discovery_file("Way_kat.txt", "# Data from Wayback Machine / Katana - Not yet implemented\n")
             om.write_discovery_file("api_endpoints.json", "[] # API endpoints - Not yet implemented\n")
             om.write_discovery_file("parameters.json", "[] # Discovered parameters - Not yet implemented\n")
             om.write_discovery_file("javascript_files.txt", "# Discovered Javascript files - Not yet implemented\n")
-
-            db.session.commit()
 
             # 2. Expansion Phase (Reverse DNS)
             print("Starting Expansion: Reverse DNS")

@@ -42,6 +42,7 @@ class Scan(db.Model):
 
     # Relationship to discovered assets
     assets = db.relationship('Asset', backref='scan', lazy=True, cascade="all, delete-orphan")
+    vulnerabilities = db.relationship('Vulnerability', backref='scan_ref', lazy=True, cascade="all, delete-orphan")
     output_dir = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
@@ -72,6 +73,24 @@ class Asset(db.Model):
     first_seen = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     last_seen = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    vulnerabilities = db.relationship('Vulnerability', backref='asset', lazy=True)
 
     def __repr__(self):
         return f'<Asset {self.value} ({self.type})>'
+
+class Vulnerability(db.Model):
+    """
+    Vulnerability model to store findings from a scan.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    severity = db.Column(db.String(50), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    evidence = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=True)
+
+    def __repr__(self):
+        return f'<Vulnerability {self.id}: {self.title}>'
