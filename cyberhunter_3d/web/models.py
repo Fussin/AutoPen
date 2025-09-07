@@ -18,6 +18,8 @@ class User(UserMixin, db.Model):
     hackerone_api_key = db.Column(db.String(255), nullable=True)
     hackerone_username = db.Column(db.String(255), nullable=True)
     is_autonomous_scanning_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    email = db.Column(db.String(255), nullable=True)
+    is_email_notifications_enabled = db.Column(db.Boolean, nullable=False, default=False)
     scans = db.relationship('Scan', backref='user', lazy=True)
 
     def __repr__(self):
