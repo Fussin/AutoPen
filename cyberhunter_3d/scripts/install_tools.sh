@@ -15,7 +15,7 @@ echo "Starting installation of CyberHunter 3D V2 reconnaissance tools..."
 echo "Installing system packages..."
 apt-get update
 apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip wkhtmltopdf sqlmap golang-go tesseract-ocr
-apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip seclists
+apt-get install -y nmap gobuster libpcap-dev firefox git wget unzip
 echo "System packages installed successfully."
 
 # --- Go tools installation ---
@@ -82,6 +82,10 @@ go install -v github.com/lc/gau/v2/cmd/gau@latest
 echo "Go-based tools installed successfully."
 
 # --- Python tools installation ---
+echo "Installing SecLists via snap..."
+snap install seclists
+echo "SecLists installed successfully."
+
 echo "Checking for Python and pip installation..."
 if ! [ -x "$(command -v python3)" ] || ! [ -x "$(command -v pip3)" ]; then
   echo "Error: python3 and/or pip3 are not installed. Please install them and try again." >&2

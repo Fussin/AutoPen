@@ -41,7 +41,7 @@ import pyotp
 import qrcode
 import io
 import base64
-from cyberhunter_3d.web.models import Scan, Target
+from cyberhunter_3d.web.models import Scan, Target, Vulnerability
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
@@ -113,21 +113,39 @@ def login():
 @app.route('/verify-2fa', methods=['GET', 'POST'])
 def verify_2fa():
     if 'user_id_for_2fa' not in session:
+        print("2FA_DEBUG: No user_id_for_2fa in session.")
         flash('Please log in first.', 'danger')
         return redirect(url_for('login'))
+
+    user_id = session['user_id_for_2fa']
+    user = db.session.get(User, user_id)
+    if not user:
+        print(f"2FA_DEBUG: User with id {user_id} not found.")
+        flash('User not found, please log in again.', 'danger')
+        return redirect(url_for('login'))
+
     if request.method == 'POST':
-        user_id = session['user_id_for_2fa']
-        user = db.session.get(User, user_id)
         token = request.form.get('token')
+        print(f"2FA_DEBUG: Received token '{token}' for user '{user.username}'.")
+
         totp = pyotp.TOTP(user.otp_secret)
-        if totp.verify(token):
+        is_valid = totp.verify(token)
+
+        print(f"2FA_DEBUG: User secret: {user.otp_secret}")
+        print(f"2FA_DEBUG: Current OTP: {totp.now()}")
+        print(f"2FA_DEBUG: Verification result: {is_valid}")
+
+        if is_valid:
             login_user(user)
             session.pop('user_id_for_2fa', None)
             flash('Logged in successfully!', 'success')
+            print("2FA_DEBUG: Login successful, redirecting to dashboard.")
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid 2FA token.', 'danger')
+            print("2FA_DEBUG: Invalid token, redirecting back to verify_2fa.")
             return redirect(url_for('verify_2fa'))
+
     return render_template('verify_2fa.html')
 
 @app.route('/submit-targets', methods=['POST'])
@@ -196,6 +214,16 @@ def scan_results(scan_id):
         flash('You are not authorized to view this scan.', 'danger')
         return redirect(url_for('dashboard'))
     return render_template('scan_results.html', scan=scan)
+
+@app.route('/vulnerability/<int:vuln_id>')
+@login_required
+def vulnerability_details(vuln_id):
+    vuln = Vulnerability.query.get_or_404(vuln_id)
+    # Ensure the current user is authorized to see this vulnerability
+    if vuln.scan_ref.user_id != current_user.id:
+        flash('You are not authorized to view this vulnerability.', 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('vulnerability_details.html', vuln=vuln)
 
 # --- Main Execution ---
 if __name__ == '__main__':
