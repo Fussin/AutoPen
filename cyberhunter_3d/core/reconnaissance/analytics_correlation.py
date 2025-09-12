@@ -3,6 +3,9 @@ import tempfile
 import os
 import re
 from typing import List, Set, Dict
+from cyberhunter_3d.common.log import get_rich_logger
+
+logger = get_rich_logger(__name__)
 
 # Regex for Google Analytics IDs (both old and new formats)
 GA_ID_REGEX = re.compile(r'(UA-\d{4,9}-\d{1,4}|G-[A-Z0-9]+)', re.IGNORECASE)
@@ -12,7 +15,7 @@ def _find_analytics_ids_for_domain(domain: str) -> Set[str]:
     Uses gospider to find analytics IDs on a single domain.
     """
     ids = set()
-    print(f"Searching for analytics IDs on {domain} with gospider...")
+    logger.info(f"Searching for analytics IDs on {domain} with gospider...")
     try:
         # gospider -s <domain> -c 10 -d 1 --other-source
         # We want to look for "other sources" which is where it finds analytics IDs
@@ -24,9 +27,9 @@ def _find_analytics_ids_for_domain(domain: str) -> Set[str]:
             ids.update(GA_ID_REGEX.findall(output))
 
     except FileNotFoundError:
-        print(f"Error: 'gospider' not found. Please ensure it is installed.")
+        logger.error("'gospider' not found. Please ensure it is installed.")
     except Exception as e:
-        print(f"An error occurred while running gospider on {domain}: {e}")
+        logger.error(f"An error occurred while running gospider on {domain}: {e}")
 
     return ids
 
@@ -35,7 +38,7 @@ def _find_domains_for_analytics_id(analytics_id: str) -> Set[str]:
     Uses gau to find other domains that share the same analytics ID.
     """
     domains = set()
-    print(f"Searching for domains sharing analytics ID {analytics_id} with gau...")
+    logger.info(f"Searching for domains sharing analytics ID {analytics_id} with gau...")
     try:
         # gau --subs <analytics_id>
         command = ['gau', '--subs', analytics_id]
@@ -51,9 +54,9 @@ def _find_domains_for_analytics_id(analytics_id: str) -> Set[str]:
                     domains.add(domain_match.group(1))
 
     except FileNotFoundError:
-        print(f"Error: 'gau' not found. Please ensure it is installed.")
+        logger.error("'gau' not found. Please ensure it is installed.")
     except Exception as e:
-        print(f"An error occurred while running gau for {analytics_id}: {e}")
+        logger.error(f"An error occurred while running gau for {analytics_id}: {e}")
 
     return domains
 
@@ -70,11 +73,11 @@ def find_related_domains_by_analytics(domains: List[str]) -> Set[str]:
     for domain in domains:
         ids = _find_analytics_ids_for_domain(domain)
         if ids:
-            print(f"Found IDs on {domain}: {ids}")
+            logger.info(f"Found IDs on {domain}: {ids}")
             all_analytics_ids.update(ids)
 
     if not all_analytics_ids:
-        print("No analytics IDs found on seed domains. Skipping expansion.")
+        logger.info("No analytics IDs found on seed domains. Skipping expansion.")
         return set()
 
     # Phase 2: Find all domains related to those analytics IDs
@@ -82,13 +85,13 @@ def find_related_domains_by_analytics(domains: List[str]) -> Set[str]:
     for analytics_id in all_analytics_ids:
         newly_found_domains = _find_domains_for_analytics_id(analytics_id)
         if newly_found_domains:
-            print(f"Found {len(newly_found_domains)} domains for ID {analytics_id}")
+            logger.info(f"Found {len(newly_found_domains)} domains for ID {analytics_id}")
             related_domains.update(newly_found_domains)
 
     # Remove the original seed domains from the result set to only return *new* domains
     final_domains = related_domains - set(domains)
 
-    print(f"Analytics expansion finished. Found {len(final_domains)} new related domains.")
+    logger.info(f"Analytics expansion finished. Found {len(final_domains)} new related domains.")
     return final_domains
 
 if __name__ == '__main__':

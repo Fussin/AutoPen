@@ -1,6 +1,9 @@
 import subprocess
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any
+from cyberhunter_3d.common.log import get_rich_logger
+
+logger = get_rich_logger(__name__)
 
 def parse_nmap_xml(xml_output: str) -> List[Dict[str, Any]]:
     """
@@ -28,7 +31,7 @@ def parse_nmap_xml(xml_output: str) -> List[Dict[str, Any]]:
                     host_info['ports'].append(port_info)
             results.append(host_info)
     except ET.ParseError as e:
-        print(f"Error parsing nmap XML output: {e}")
+        logger.error(f"Error parsing nmap XML output: {e}")
 
     return results
 
@@ -37,7 +40,7 @@ def scan_ip_target(target: str) -> List[Dict[str, Any]]:
     Runs an nmap scan on a single IP address or CIDR range.
     Returns a list of asset dictionaries.
     """
-    print(f"Starting nmap scan for target: {target}")
+    logger.info(f"Starting nmap scan for target: {target}")
     assets = []
     try:
         # -sV: Probe open ports to determine service/version info
@@ -47,7 +50,7 @@ def scan_ip_target(target: str) -> List[Dict[str, Any]]:
 
         xml_output = result.stdout
         if not xml_output:
-            print(f"nmap produced no output for target: {target}")
+            logger.warning(f"nmap produced no output for target: {target}")
             return assets
 
         parsed_data = parse_nmap_xml(xml_output)
@@ -63,13 +66,13 @@ def scan_ip_target(target: str) -> List[Dict[str, Any]]:
                     'details': {'ports': open_ports}
                 })
 
-        print(f"nmap scan for {target} completed.")
+        logger.info(f"nmap scan for {target} completed.")
         return assets
 
     except FileNotFoundError:
-        print("Error: 'nmap' command not found. Please ensure it is installed and in your PATH.")
+        logger.error("'nmap' command not found. Please ensure it is installed and in your PATH.")
         return []
     except subprocess.CalledProcessError as e:
-        print(f"Error running nmap for {target}: {e}")
-        print(f"Stderr: {e.stderr}")
+        logger.error(f"Error running nmap for {target}: {e}")
+        logger.error(f"Stderr: {e.stderr}")
         return []

@@ -1,12 +1,11 @@
-import logging
 import shutil
 import requests
 from pathlib import Path
 from .output_manager import OutputManager
 from cyberhunter_3d.web.models import db, Scan, Target
+from cyberhunter_3d.common.log import get_rich_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_rich_logger(__name__)
 
 def final_validation(scan_id, om: OutputManager):
     """Checks if the backup archive was created successfully."""
@@ -22,7 +21,7 @@ def report_generation(scan_id, om: OutputManager):
     """Generates the final reports for the scan."""
     logger.info(f"[{scan_id}] Generating reports...")
     summary = om.finalize(generate_pdf=True, generate_docx=True)
-    print("Generated reports summary:", summary)
+    logger.info(f"Generated reports summary: {summary}")
     logger.info(f"[{scan_id}] Report generation complete.")
 
 def notification_dispatch(scan_id):
@@ -33,7 +32,7 @@ def notification_dispatch(scan_id):
     stakeholders = ["admin@example.com", "security-team@example.com"]
 
     for email in stakeholders:
-        print(f"[{scan_id}] Simulating sending email to {email}...")
+        logger.info(f"[{scan_id}] Simulating sending email to {email}...")
         # Here you would use a library like smtplib to send the actual email
 
     logger.info(f"[{scan_id}] Notification dispatch complete.")
@@ -55,7 +54,7 @@ def data_archival(scan_id, om: OutputManager):
         destination_path = archive_dir / archive_filename
         shutil.move(str(source_path), str(destination_path))
 
-        print(f"[{scan_id}] Data archived to: {destination_path}")
+        logger.info(f"[{scan_id}] Data archived to: {destination_path}")
         logger.info(f"[{scan_id}] Data archival complete.")
     except Exception as e:
         logger.error(f"[{scan_id}] Data archival failed: {e}")
@@ -72,16 +71,16 @@ def integration_updates(scan_id):
     try:
         # We don't expect this to succeed as the URL is fake, but it's a more realistic simulation.
         response = requests.post(jira_webhook, json=jira_payload, timeout=5)
-        print(f"[{scan_id}] Pushed update to JIRA. Status code: {response.status_code}")
+        logger.info(f"[{scan_id}] Pushed update to JIRA. Status code: {response.status_code}")
     except requests.exceptions.RequestException as e:
-        print(f"[{scan_id}] Failed to push update to JIRA: {e}")
+        logger.warning(f"[{scan_id}] Failed to push update to JIRA: {e}")
 
     slack_payload = {"text": f"Scan {scan_id} completed. Results available at <http://example.com/scans/{scan_id}>"}
     try:
         response = requests.post(slack_webhook, json=slack_payload, timeout=5)
-        print(f"[{scan_id}] Pushed update to Slack. Status code: {response.status_code}")
+        logger.info(f"[{scan_id}] Pushed update to Slack. Status code: {response.status_code}")
     except requests.exceptions.RequestException as e:
-        print(f"[{scan_id}] Failed to push update to Slack: {e}")
+        logger.warning(f"[{scan_id}] Failed to push update to Slack: {e}")
 
     logger.info(f"[{scan_id}] Integration updates complete.")
 
@@ -90,7 +89,7 @@ def cleanup_operations(scan_id, om: OutputManager):
     logger.info(f"[{scan_id}] Performing cleanup operations...")
     try:
         shutil.rmtree(om.base_dir)
-        print(f"[{scan_id}] Cleanup successful: Deleted {om.base_dir}")
+        logger.info(f"[{scan_id}] Cleanup successful: Deleted {om.base_dir}")
         logger.info(f"[{scan_id}] Cleanup operations complete.")
     except Exception as e:
         logger.error(f"[{scan_id}] Cleanup operations failed: {e}")
@@ -98,7 +97,7 @@ def cleanup_operations(scan_id, om: OutputManager):
 def session_termination(scan_id):
     """Simulates terminating the user session."""
     logger.info(f"[{scan_id}] Terminating session...")
-    print(f"[{scan_id}] Simulating session termination: Invalidating user session token.")
+    logger.info(f"[{scan_id}] Simulating session termination: Invalidating user session token.")
     logger.info(f"[{scan_id}] Session termination complete.")
 
 def backup_creation(scan_id, om: OutputManager):
@@ -110,7 +109,7 @@ def backup_creation(scan_id, om: OutputManager):
             format='zip',
             root_dir=om.base_dir
         )
-        print(f"[{scan_id}] Backup created at: {archive_path}")
+        logger.info(f"[{scan_id}] Backup created at: {archive_path}")
         logger.info(f"[{scan_id}] Backup creation complete.")
     except Exception as e:
         logger.error(f"[{scan_id}] Backup creation failed: {e}")
@@ -128,7 +127,7 @@ def analytics_update(scan_id, om: OutputManager):
         "open_ports": len(om.vulnerabilities), # dummy value
         "vulnerabilities": len(om.vulnerabilities) # dummy value
     }
-    print(f"[{scan_id}] Simulating sending analytics data: {metrics}")
+    logger.info(f"[{scan_id}] Simulating sending analytics data: {metrics}")
 
     logger.info(f"[{scan_id}] Analytics update complete.")
 
@@ -149,25 +148,25 @@ def schedule_next_scan(scan_id):
     db.session.add(new_scan)
     db.session.commit()
 
-    print(f"[{scan_id}] Simulating scheduling next scan. New scan ID: {new_scan.id}")
+    logger.info(f"[{scan_id}] Simulating scheduling next scan. New scan ID: {new_scan.id}")
     logger.info(f"[{scan_id}] Next scan scheduled.")
 
 def monitoring_activation(scan_id):
     """Simulates activating continuous monitoring for the target."""
     logger.info(f"[{scan_id}] Activating monitoring...")
-    print(f"[{scan_id}] Simulating monitoring activation: Setting up continuous monitoring for the target.")
+    logger.info(f"[{scan_id}] Simulating monitoring activation: Setting up continuous monitoring for the target.")
     logger.info(f"[{scan_id}] Monitoring activation complete.")
 
 def platform_logout(scan_id):
     """Simulates logging out of the platform."""
     logger.info(f"[{scan_id}] Logging out of platform...")
-    print(f"[{scan_id}] Simulating platform logout: Clearing session data.")
+    logger.info(f"[{scan_id}] Simulating platform logout: Clearing session data.")
     logger.info(f"[{scan_id}] Platform logout complete.")
 
 def session_closed(scan_id):
     """Simulates closing the user session and releasing resources."""
     logger.info(f"[{scan_id}] Closing session...")
-    print(f"[{scan_id}] Simulating session closed: Releasing resources associated with the session.")
+    logger.info(f"[{scan_id}] Simulating session closed: Releasing resources associated with the session.")
     logger.info(f"[{scan_id}] Session closed.")
 
 def run_post_scan_operations(scan_id, app, om: OutputManager):
