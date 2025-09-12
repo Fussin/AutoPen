@@ -2,64 +2,84 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Scan Report</title>
+    <title>CyberHunter 3D Scan Report</title>
     <style>
-        body { font-family: sans-serif; }
-        h1, h2 { color: #333; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f7f6; color: #333; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        h1, h2, h3 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h1 { font-size: 2.5em; text-align: center; color: #3498db; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #3498db; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .severity-critical { background-color: #c0392b; color: white; }
+        .severity-high { background-color: #e74c3c; color: white; }
+        .severity-medium { background-color: #f39c12; color: black; }
+        .severity-low { background-color: #f1c40f; color: black; }
+        .severity-info { background-color: #3498db; color: white; }
+        .summary { background-color: #ecf0f1; padding: 20px; border-left: 5px solid #3498db; margin-bottom: 20px; }
+        .summary p { margin: 5px 0; }
+        code { background-color: #eee; padding: 2px 4px; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <h1>Scan Report</h1>
-    <p><strong>Scan ID:</strong> {{ scan_id }}</p>
-    <p><strong>Timestamp:</strong> {{ timestamp }}</p>
+    <div class="container">
+        <h1>CyberHunter 3D Scan Report</h1>
 
-    <h2>Summary</h2>
-    <p>Total assets found: {{ summary.total_assets }}</p>
-    <p>Vulnerabilities found: {{ summary.vulnerabilities }}</p>
+        <div class="summary">
+            <h2>Scan Summary</h2>
+            <p><strong>Target Domain:</strong> <code>{{ data.domain }}</code></p>
+            <p><strong>Live Hosts Found:</strong> {{ data.live_hosts | length }}</p>
+            <p><strong>Nuclei Findings:</strong> {{ data.nuclei_findings | length }}</p>
+        </div>
 
-    <h2>Vulnerabilities</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Severity</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for vuln in vulnerabilities %}
-            <tr>
-                <td>{{ vuln.id }}</td>
-                <td>{{ vuln.title }}</td>
-                <td>{{ vuln.severity }}</td>
-                <td>{{ vuln.description }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+        <h2>Live Hosts</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>URL</th>
+                    <th>Status Code</th>
+                    <th>Server</th>
+                    <th>Content Length</th>
+                    <th>Title</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for host in data.live_hosts %}
+                <tr>
+                    <td><a href="{{ host.url }}" target="_blank">{{ host.url }}</a></td>
+                    <td>{{ host.status_code }}</td>
+                    <td>{{ host.server | default('N/A') }}</td>
+                    <td>{{ host.content_length }}</td>
+                    <td>{{ host.title | default('N/A') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
 
-    <h2>Discovered Assets</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Type</th>
-                <th>Value</th>
-                <th>Details</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for asset in assets %}
-            <tr>
-                <td>{{ asset.type }}</td>
-                <td>{{ asset.value }}</td>
-                <td>{{ asset.details | tojson }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+        <h2>Nuclei Findings</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Template ID</th>
+                    <th>Name</th>
+                    <th>Severity</th>
+                    <th>Host</th>
+                    <th>Matched At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for finding in data.nuclei_findings %}
+                <tr>
+                    <td>{{ finding['template-id'] }}</td>
+                    <td>{{ finding.info.name }}</td>
+                    <td class="severity-{{ finding.info.severity }}">{{ finding.info.severity }}</td>
+                    <td>{{ finding.host }}</td>
+                    <td>{{ finding['matched-at'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </body>
 </html>
