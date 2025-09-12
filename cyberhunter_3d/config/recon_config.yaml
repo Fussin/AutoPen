@@ -1,41 +1,74 @@
-# Configuration for the V2 Reconnaissance Phase
+# Configuration for reconnaissance tools and settings
+# ---------------------------------------------------
 
-# Paths to tools
-# If the tool is in the system's PATH, you can just use the tool name.
-# Otherwise, provide the full path.
+# Tool paths can be absolute or just the command name if it's in the system's PATH.
+# The application will use `shutil.which()` to find the tool.
 tools:
-  gobuster: /usr/bin/gobuster
-  massdns: /usr/local/bin/massdns
-  puredns: /root/go/bin/puredns
-  dnsgen: /usr/local/bin/dnsgen
-  gotator: /root/go/bin/gotator
-  linkfinder: /usr/local/bin/linkfinder.py # This will be installed via setup.py, so it should be in the path
-  gowitness: /root/go/bin/gowitness
-  aquatone: /usr/local/bin/aquatone
-  wappalyzer: /root/.local/bin/wappalyzer # pipx path
-  naabu: /root/go/bin/naabu
-  nmap: /usr/bin/nmap
-  httpx: /root/go/bin/httpx
-  subfinder: /root/go/bin/subfinder
-  amass: /root/go/bin/amass
-  assetfinder: /root/go/bin/assetfinder
-  subzy: /root/go/bin/subzy
-  nuclei: /root/go/bin/nuclei
-  dnsx: /root/go/bin/dnsx
-  gospider: /root/go/bin/gospider
-  gau: /root/go/bin/gau
-  sublist3r: /usr/bin/sublist3r
-  gh_dork: gh-dork/gh-dork.py # Relative path to the cloned repo
+  # Passive Reconnaissance Tools
+  amass: amass
+  assetfinder: assetfinder
+  subfinder: subfinder
 
-# Paths to wordlists
-wordlists:
-  dns_bruteforce: /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt
-  resolvers: /usr/share/seclists/Discovery/DNS/resolvers.txt
-  github_dorks: gh-dork/dorks.txt
+  # Active Reconnaissance & Vulnerability Scanning
+  naabu: naabu
+  nmap: nmap
+  httpx: httpx
+  nuclei: nuclei
 
-# Other settings
-recon_output_dir: recon_results
-screenshot_dir: recon_results/screenshots
-nmap_output_dir: recon_results/nmap
-final_recon_file: recon_results/final_recon_data.json
-master_subdomains_file: recon_results/master_subdomains.txt
+  # Cloud & Storage Scanning
+  s3scanner: s3scanner
+  goblob: goblob
+
+  # JavaScript Analysis
+  linkfinder: linkfinder
+
+  # Visual Reconnaissance
+  gowitness: gowitness
+  aquatone: aquatone
+
+# Settings for various modules
+settings:
+  # Passive Engine Settings
+  passive_engine:
+    # List of commands to run for passive subdomain enumeration.
+    # Use {domain} as a placeholder for the target domain.
+    # Use {output_file} for tools that write to a file.
+    commands:
+      - [amass, enum, -passive, -d, '{domain}', -o, '{output_file}']
+      - [assetfinder, --subs-only, '{domain}']
+      - [subfinder, -d, '{domain}', -o, '{output_file}']
+
+  # Permutation Engine Settings
+  permutation_engine:
+    wordlist: /path/to/your/dns_wordlist.txt # Recommended: dns-Jhaddix.txt
+    threads: 20
+
+  # Active Engine Settings (for services like HTTP, etc.)
+  active_engine:
+    ports: "80,443,8080,8443" # Default ports to scan with naabu/nmap
+
+  # Nuclei Settings
+  nuclei:
+    # Templates to use for scanning. Can be paths or keywords.
+    # See Nuclei documentation for more info.
+    templates:
+      - "technologies"
+      - "cves"
+      - "default-logins"
+      - "exposed-panels"
+    # Severity level to report (info, low, medium, high, critical)
+    severity: "medium,high,critical"
+
+  # Reporting settings
+  reporting:
+    output_directory: "scan_reports"
+    formats: ["json", "html"] # Supported formats
+
+  # Dorking settings
+  dorking:
+    github:
+      # List of dorks to run. {domain} is the placeholder.
+      dorks:
+        - '"example.com" password'
+        - '"example.com" api_key'
+        - '"example.com" secret'
