@@ -19,9 +19,11 @@ SAMPLE_AMASS_OUTPUT = """
 
 class TestAsnLookup(unittest.TestCase):
 
+    @patch('cyberhunter_3d.core.reconnaissance.asn_lookup.check_tool')
     @patch('cyberhunter_3d.core.reconnaissance.asn_lookup.subprocess.run')
-    def test_get_cidrs_for_asn_success(self, mock_subprocess_run):
+    def test_get_cidrs_for_asn_success(self, mock_subprocess_run, mock_check_tool):
         # Mock the subprocess call to return the sample output
+        mock_check_tool.return_value = "/fake/path/to/amass"
         mock_subprocess_run.return_value.stdout = SAMPLE_AMASS_OUTPUT.strip()
         mock_subprocess_run.return_value.stderr = ""
 
@@ -29,8 +31,8 @@ class TestAsnLookup(unittest.TestCase):
 
         # Check that amass was called correctly
         mock_subprocess_run.assert_called_once_with(
-            ['amass', 'intel', '-asn', '15169'],
-            capture_output=True, text=True, check=True
+            ['/fake/path/to/amass', 'intel', '-asn', '15169'],
+            capture_output=True, text=True, check=True, timeout=300
         )
 
         # Check that the output is parsed correctly

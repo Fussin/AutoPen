@@ -46,7 +46,7 @@ from concurrent.futures import ThreadPoolExecutor
 from cyberhunter_3d.core.scan_manager import run_discovery_phase
 from cyberhunter_3d.core.target_parser import parse_single_target
 from apscheduler.schedulers.background import BackgroundScheduler
-# from cyberhunter_3d.core.feeds.feed_manager import check_for_new_targets
+from cyberhunter_3d.core.feeds.feed_manager import check_for_new_targets
 
 # --- Background Task Executor ---
 executor = ThreadPoolExecutor(max_workers=2)
@@ -56,7 +56,7 @@ executor = ThreadPoolExecutor(max_workers=2)
 # with a production WSGI server like Gunicorn.
 scheduler = BackgroundScheduler()
 # Run the job every 4 hours
-# scheduler.add_job(check_for_new_targets, 'interval', hours=4, args=[app])
+scheduler.add_job(check_for_new_targets, 'interval', hours=4, args=[app])
 scheduler.start()
 print("Scheduler started successfully.")
 
@@ -199,6 +199,20 @@ def submit_targets():
 def dashboard():
     scans = Scan.query.filter_by(user_id=current_user.id).order_by(Scan.created_at.desc()).all()
     return render_template('dashboard.html', scans=scans)
+
+@app.route('/sync-hackerone', methods=['POST'])
+@login_required
+def sync_hackerone():
+    """
+    Manually triggers a sync with HackerOne to find new programs.
+    """
+    if not current_user.hackerone_username or not current_user.hackerone_api_key:
+        flash('Please set your HackerOne username and API key in your profile.', 'danger')
+        return redirect(url_for('profile'))
+
+    flash('HackerOne sync started. This may take a few moments...', 'info')
+    executor.submit(check_for_new_targets, app)
+    return redirect(url_for('dashboard'))
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required

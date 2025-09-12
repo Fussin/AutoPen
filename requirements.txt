@@ -23,3 +23,6 @@ corscanner
 jinja2
 weasyprint
 python-docx
+APScheduler
+Flask-Mail
+rich
