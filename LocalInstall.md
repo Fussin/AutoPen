@@ -26,25 +26,44 @@ Before you begin, ensure your system meets the following requirements.
 *   **Go:** Version 1.18 or higher.
 *   **C Compiler:** Build tools like `build-essential` are needed for some dependencies.
 *   **Tesseract OCR:** Required for the screenshot analysis feature (`tesseract-ocr`).
-*   **wkhtmltopdf:** For converting HTML reports to PDF.
+*   **PDF Generation Libraries:** The project uses `weasyprint` and `pdfkit` for PDF reporting. These are installed automatically with the Python dependencies.
 
 #### External Security Tools
-The platform integrates a wide array of external security tools. The provided `install_tools.sh` script automates the installation of these tools on Debian-based systems.
+The platform integrates a wide array of external security tools. The provided `install_tools.sh` script automates the installation of these tools on Debian-based systems. The script categorizes tools as follows:
 
-*   **Recon & Enumeration:** `Nmap`, `Gobuster`, `Subfinder`, `Amass`, `Assetfinder`, `MassDNS`, `puredns`, `Gotator`, `Sublist3r`, `Gospider`, `gau`.
-*   **Web & Vulnerability:** `HTTPX`, `Nuclei`, `Naabu`, `SQLMap`, `gowitness`, `Aquatone`, `Subzy`, `DNSX`.
-*   **Cloud & Code Analysis:** `Goblob`, `S3Scanner`, `LinkFinder`, `gh-dork`.
-*   **Utilities:** `Wappalyzer`, `dnsgen`, `pipx`.
+*   **Network Recon & Scanning:**
+    *   **APT Packages:** `nmap`, `masscan`, `arp-scan`, `nbtscan`, `smbmap`, `rpcbind`
+    *   **Go-based:** `rustscan`, `amass`, `subfinder`
+    *   **Git-based:** `AutoRecon`, `dnsenum`, `Responder`, `enum4linux-ng`
+
+*   **Web Application Security:**
+    *   **Go-based:** `gobuster`, `ffuf`, `httpx`, `katana`, `hakrawler`, `gau`, `waybackurls`, `nuclei`, `dalfox`, `anew`, `qsreplace`
+    *   **Pipx-based:** `dirsearch`, `sqlmap-dev` (sqlmap), `arjun`, `paramspider`, `wafw00f`, `wfuzz`, `commix`, `nosqlmap`, `tplmap`, `sslyze`, `uro`
+    *   **APT Packages:** `dirb`, `nikto`, `whatweb`, `testssl.sh`, `sslscan`
+
+*   **Cloud & Container Security:**
+    *   **Go-based:** `trivy`
+    *   **Pipx-based:** `prowler`, `kube-hunter`, `kube-bench`, `checkov`, `terrascan`
+    *   **Git-based:** `ScoutSuite`, `cloudmapper`, `pacu`, `clair`, `docker-bench-security`, `falco`, `cloudsploit`
+    *   **APT Packages (CLIs):** `awscli`, `azure-cli`, `google-cloud-sdk`, `kubectl`, `helm`
+
+*   **Bug Bounty & OSINT:**
+    *   **Go-based:** `subjack`
+    *   **Pipx-based:** `sherlock`, `shodan-cli` (shodan), `censys-cli` (censys), `trufflehog`
+    *   **Git-based:** `aquatone`, `social-analyzer`, `recon-ng`, `spiderfoot`
+
+**Note:** The `install_tools.sh` script is the most reliable source for the complete and up-to-date list of integrated tools.
 
 #### Python Dependencies
-The core platform and its web interface rely on several Python packages. These are listed in `requirements.txt` and will be installed in a later step. Key packages include:
-*   `Flask` (for the web interface)
-*   `Flask-SQLAlchemy` (for database interaction)
-*   `boto3` (for AWS integration)
-*   `playwright` (for browser automation)
-*   `shodan`, `censys-platform`, `fofa-py`, `greynoise` (for API integrations)
-*   `pytesseract`, `Pillow` (for OCR)
-*   `pandas`, `scikit-learn`, `lightgbm` (for data analysis and AI features)
+The project's Python dependencies are listed in the `requirements.txt` file and are installed during the setup process. The full list of required packages is:
+*   **Web & Core:** `Flask`, `Flask-SQLAlchemy`, `Flask-Login`, `Flask-Bcrypt`, `requests`, `PyYAML`, `jinja2`, `APScheduler`, `Flask-Mail`, `rich`
+*   **Authentication:** `pyotp`, `qrcode[pil]`
+*   **Cloud & API Clients:** `boto3`, `shodan`, `censys-platform`, `fofa-py`, `greynoise`
+*   **Testing & Analysis:** `pytest`, `playwright`, `Pillow`, `pytesseract`, `pandas`, `scikit-learn`, `lightgbm`
+*   **Reporting:** `pdfkit`, `weasyprint`, `python-docx`
+*   **Vulnerability Scanning:** `corscanner`
+
+**Note:** The `requirements.txt` file is the single source of truth for all Python dependencies.
 
 ### 1.2. Installation Steps
 
@@ -72,17 +91,27 @@ sudo bash cyberhunter_3d/scripts/install_tools.sh
 If you are not using a Debian-based OS, you must install the tools manually. Please refer to the official documentation for each tool for OS-specific instructions. You can find the full list of tools in the `cyberhunter_3d/scripts/install_tools.sh` script.
 
 #### Step 3: Install Python Dependencies and Application
-Finally, install the CyberHunter 3D application and its Python dependencies. This command uses `pip` to install the packages listed in `setup.py` and `requirements.txt`.
+Finally, install the Python dependencies and the CyberHunter 3D application.
 
-From the root of the project directory, run:
+**1. Install Dependencies:**
+First, install all the required Python packages using the `requirements.txt` file. This is the recommended way to ensure you have all the necessary libraries.
+```bash
+pip3 install -r requirements.txt
+```
+
+**2. Install the Application:**
+After the dependencies are installed, you can install the application.
+
+For regular use, you can install it using pip:
 ```bash
 pip3 install .
 ```
-For development purposes, you might prefer to install in editable mode:
+
+For development, it's better to install in "editable" mode. This allows your code changes to be reflected immediately without reinstalling.
 ```bash
 pip3 install -e .
 ```
-This will install the application and allow you to modify the source code without reinstalling.
+**Note:** When installing in editable mode, ensure you have already installed the dependencies from `requirements.txt` as described above.
 
 ### 1.3. Configuration
 
