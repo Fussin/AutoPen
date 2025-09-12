@@ -8,6 +8,9 @@ from cyberhunter_3d.core.reconnaissance.ip_scan import scan_ip_target
 from cyberhunter_3d.core.reconnaissance.asn_lookup import get_cidrs_for_asn
 from cyberhunter_3d.core.reconnaissance.org_lookup import get_assets_for_org
 from cyberhunter_3d.core.scope_validator import ScopeValidator
+from cyberhunter_3d.common.log import get_rich_logger
+
+logger = get_rich_logger(__name__)
 
 
 class DecisionTree:
@@ -23,6 +26,8 @@ class DecisionTree:
         with self.app.app_context():
             scan = db.session.get(Scan, self.scan_id)
             if not scan:
+                # Use logger for errors that might occur
+                logger.error(f"Scan with ID {self.scan_id} not found during DecisionTree initialization.")
                 raise ValueError(f"Scan with ID {self.scan_id} not found.")
             self.scan = scan
             self.validator = ScopeValidator(scan.in_scope_rules, scan.out_of_scope_rules)
@@ -30,7 +35,7 @@ class DecisionTree:
             self.wildcard_ips = self._check_wildcard(self.scan.targets[0].value) if self.scan.targets else set()
 
     def process_target(self, target):
-        print(f"Processing target: {target.value} ({target.type})")
+        logger.info(f"Processing target: [bold cyan]{target.value}[/] ({target.type})")
         if target.type in ['domain', 'wildcard_domain']:
             self._handle_domain(target)
         elif target.type in ['ip_address', 'cidr']:
@@ -40,7 +45,7 @@ class DecisionTree:
         elif target.type == 'org_name':
             self._handle_org(target)
         else:
-            print(f"Warning: Unknown target type '{target.type}' for value '{target.value}'")
+            logger.warning(f"Unknown target type '{target.type}' for value '{target.value}'")
 
     def _is_subdomain_alive(self, subdomain):
         try:
@@ -50,39 +55,39 @@ class DecisionTree:
             return set()
 
     def _check_wildcard(self, domain):
-        # Generate a random subdomain that is unlikely to exist
         random_subdomain = f"{uuid.uuid4().hex[:10]}.{domain}"
         try:
-            # If this resolves, it's a wildcard
-            return set(socket.gethostbyname_ex(random_subdomain)[2])
+            wildcard_ips = set(socket.gethostbyname_ex(random_subdomain)[2])
+            logger.info(f"Detected wildcard DNS for [bold cyan]{domain}[/]: {wildcard_ips}")
+            return wildcard_ips
         except socket.gaierror:
             return set()
 
     def _handle_domain(self, target):
-        print(f"-> Domain path: Enumerating subdomains for {target.value}")
+        logger.info(f"-> Domain path: Enumerating subdomains for [bold cyan]{target.value}[/]")
         subdomains = enumerate_subdomains_v2(target.value)
         for sub in subdomains:
             self._handle_subdomain(sub['value'])
 
     def _handle_subdomain(self, subdomain_value):
-        print(f"  -> Subdomain Found: {subdomain_value}")
+        logger.debug(f"  -> Subdomain Found: {subdomain_value}")
         alive_ips = self._is_subdomain_alive(subdomain_value)
         if alive_ips:
-            print(f"    -> Alive: {subdomain_value} -> {alive_ips}. Adding to scanning queue.")
+            logger.info(f"    -> [green]Alive[/]: {subdomain_value} -> {alive_ips}. Adding to queue.")
             self.discovered_assets.append({'type': 'subdomain', 'value': subdomain_value})
             for ip in alive_ips:
                 self.discovered_assets.append({'type': 'ip_address', 'value': ip})
         else:
-            print(f"    -> Dead: {subdomain_value}. Marking as dead, checking for takeover.")
+            logger.debug(f"    -> [red]Dead[/]: {subdomain_value}. Marking as dead, checking for takeover.")
             # Placeholder for takeover logic
             pass
 
     def _handle_ip(self, target):
-        print(f"-> IP path: Queuing {target.value} for direct scanning.")
+        logger.info(f"-> IP path: Queuing [bold cyan]{target.value}[/] for direct scanning.")
         self.discovered_assets.append({'type': target.type, 'value': target.value})
 
     def _handle_asn(self, target):
-        print(f"-> ASN path: Expanding ASN {target.value} to CIDRs.")
+        logger.info(f"-> ASN path: Expanding ASN [bold cyan]{target.value}[/] to CIDRs.")
         cidrs = get_cidrs_for_asn(target.value)
         for cidr_data in cidrs:
             TempTarget = namedtuple('TempTarget', ['value', 'type'])
@@ -90,7 +95,7 @@ class DecisionTree:
             self.process_target(new_target)
 
     def _handle_org(self, target):
-        print(f"-> Org path: Expanding Org '{target.value}' to assets.")
+        logger.info(f"-> Org path: Expanding Org '[bold cyan]{target.value}[/]' to assets.")
         assets = get_assets_for_org(target.value)
         for asset_data in assets:
             TempTarget = namedtuple('TempTarget', ['value', 'type'])
@@ -98,12 +103,12 @@ class DecisionTree:
             self.process_target(new_target)
 
     def _handle_url(self, url_info):
-        print(f"  -> URL Discovered: {url_info['value']}")
+        logger.info(f"  -> URL Discovered: [bold blue]{url_info['value']}[/]")
         # Placeholder for URL processing logic
         pass
 
     def persist_discovered_assets(self):
-        print(f"Persisting {len(self.discovered_assets)} discovered assets...")
+        logger.info(f"Persisting {len(self.discovered_assets)} discovered assets...")
         in_scope_count = 0
         out_of_scope_count = 0
         with self.app.app_context():
@@ -116,5 +121,5 @@ class DecisionTree:
                 else:
                     out_of_scope_count += 1
             db.session.commit()
-        print(f"Persisted {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope assets.")
+        logger.info(f"Persisted {in_scope_count} new in-scope assets. Skipped {out_of_scope_count} out-of-scope assets.")
         return in_scope_count, out_of_scope_count

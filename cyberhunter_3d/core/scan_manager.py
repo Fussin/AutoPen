@@ -11,6 +11,9 @@ from cyberhunter_3d.core.scope_validator import ScopeValidator
 from cyberhunter_3d.core.decision_tree import DecisionTree
 from .output_manager import OutputManager
 from .post_scan_operations import run_post_scan_operations
+from cyberhunter_3d.common.log import get_rich_logger
+
+logger = get_rich_logger(__name__)
 
 def run_discovery_phase(scan_id, app):
     """
@@ -19,7 +22,7 @@ def run_discovery_phase(scan_id, app):
     with app.app_context():
         scan = db.session.get(Scan, scan_id)
         if not scan:
-            print(f"Error: Scan {scan_id} not found for discovery phase.")
+            logger.error(f"Scan {scan_id} not found for discovery phase.")
             return
 
         om = None
@@ -29,7 +32,7 @@ def run_discovery_phase(scan_id, app):
             om = OutputManager.create_for_timestamp(Path("scan_results"))
             scan.output_dir = str(om.base_dir)
             db.session.commit()
-            print(f"Scan {scan_id} discovery phase started. Output at: {scan.output_dir}")
+            logger.info(f"Scan {scan_id} discovery phase started. Output at: {scan.output_dir}")
 
             # 2. Use DecisionTree to process targets
             decision_tree = DecisionTree(scan_id, app)
@@ -61,17 +64,17 @@ def run_discovery_phase(scan_id, app):
             # 5. Finalize Discovery Phase
             scan.results = f"Discovery phase complete. Found {in_scope_count} new assets. Skipped {out_of_scope_count} out-of-scope items."
             scan.status = 'PENDING_REVIEW'
-            print(f"Scan {scan_id} discovery phase complete.")
+            logger.info(f"Scan {scan_id} discovery phase complete.")
 
         except Exception as e:
-            print(f"FATAL: Error in discovery phase for scan {scan_id}: {e}")
+            logger.exception(f"FATAL: Error in discovery phase for scan {scan_id}", exc_info=e)
             scan.status = 'FAILED'
             scan.results = f"Discovery failed with error: {e}"
         finally:
             if om:
                 om.produce_metadata()
             db.session.commit()
-            print(f"Final discovery status for scan {scan_id} is {scan.status}.")
+            logger.info(f"Final discovery status for scan {scan_id} is {scan.status}.")
 
 
 def run_execution_phase(scan_id, app):
@@ -82,17 +85,17 @@ def run_execution_phase(scan_id, app):
     with app.app_context():
         scan = db.session.get(Scan, scan_id)
         if not scan:
-            print(f"Error: Scan {scan_id} not found for execution phase.")
+            logger.error(f"Scan {scan_id} not found for execution phase.")
             return
 
         om = None
         try:
             scan.status = 'RUNNING'
             db.session.commit()
-            print(f"Scan {scan_id} execution phase started.")
+            logger.info(f"Scan {scan_id} execution phase started.")
 
             if not scan.output_dir:
-                print(f"Error: scan.output_dir not set for scan {scan_id}. Cannot create reports.")
+                logger.warning(f"scan.output_dir not set for scan {scan_id}. Creating new one. This may indicate an issue.")
                 om = OutputManager.create_for_timestamp(Path("scan_results"))
                 scan.output_dir = str(om.base_dir)
             else:
@@ -106,7 +109,7 @@ def run_execution_phase(scan_id, app):
             all_ports_data = []
             vuln_id_counter = 1
             for target in ip_targets:
-                print(f"Port scanning '{target.value}'...")
+                logger.info(f"Port scanning '{target.value}'...")
                 ip_scan_assets = scan_ip_target(target.value)
                 for asset_data in ip_scan_assets:
                     om.add_asset(asset_data)
@@ -139,7 +142,7 @@ def run_execution_phase(scan_id, app):
             db.session.commit()
 
             # 2. Expansion Phase (Reverse DNS)
-            print("Starting Expansion: Reverse DNS")
+            logger.info("Starting Expansion: Reverse DNS")
             ip_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.type == 'host_with_open_ports').all()
             unique_ips = list(set(asset.value for asset in ip_assets))
             rdns_found_count = 0
@@ -153,11 +156,11 @@ def run_execution_phase(scan_id, app):
                         rdns_found_count += 1
                     elif not validator.is_in_scope(hostname):
                         out_of_scope_count += 1
-            print(f"rDNS complete. Found {rdns_found_count} new hostnames.")
+            logger.info(f"rDNS complete. Found {rdns_found_count} new hostnames.")
             db.session.commit()
 
             # 3. Expansion Phase (Analytics Correlation)
-            print("Starting Expansion: Analytics Correlation")
+            logger.info("Starting Expansion: Analytics Correlation")
             domain_assets = Asset.query.filter(Asset.scan_id == scan.id, Asset.is_approved_for_scan == True, Asset.type.in_(['domain', 'subdomain'])).all()
             unique_domains = list(set(asset.value for asset in domain_assets))
             analytics_found_count = 0
@@ -171,14 +174,14 @@ def run_execution_phase(scan_id, app):
                         analytics_found_count += 1
                     elif not validator.is_in_scope(domain):
                         out_of_scope_count += 1
-            print(f"Analytics complete. Found {analytics_found_count} new domains.")
+            logger.info(f"Analytics complete. Found {analytics_found_count} new domains.")
 
             # 4. Finalize Scan
             final_asset_count = Asset.query.filter_by(scan_id=scan.id).count()
             scan.results = f"Execution phase complete. Total assets: {final_asset_count}. See output directory for details."
             scan.status = 'COMPLETED'
             db.session.commit()
-            print(f"Scan {scan_id} execution phase complete.")
+            logger.info(f"Scan {scan_id} execution phase complete.")
 
             # Populate OutputManager with all assets from the scan for reporting
             all_db_assets = Asset.query.filter_by(scan_id=scan.id).all()
@@ -189,9 +192,9 @@ def run_execution_phase(scan_id, app):
             run_post_scan_operations(scan_id, app, om)
 
         except Exception as e:
-            print(f"FATAL: Error in execution phase for scan {scan_id}: {e}")
+            logger.exception(f"FATAL: Error in execution phase for scan {scan_id}", exc_info=e)
             scan.status = 'FAILED'
             scan.results = f"Execution failed with error: {e}"
         finally:
             db.session.commit()
-            print(f"Final execution status for scan {scan_id} is {scan.status}.")
+            logger.info(f"Final execution status for scan {scan_id} is {scan.status}.")

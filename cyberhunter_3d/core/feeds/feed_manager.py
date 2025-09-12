@@ -1,6 +1,9 @@
 from .hackerone_client import get_hackerone_scopes
 from cyberhunter_3d.web.models import db, Scan, Target, User
 from flask import Flask
+from cyberhunter_3d.common.log import get_rich_logger
+
+logger = get_rich_logger(__name__)
 
 def check_for_new_targets(app: Flask):
     """
@@ -8,7 +11,7 @@ def check_for_new_targets(app: Flask):
     This function is designed to be run in a background scheduler.
     """
     with app.app_context():
-        print("Checking for new targets from feeds...")
+        logger.info("Checking for new targets from feeds...")
         users_with_h1 = User.query.filter(
             User.is_autonomous_scanning_enabled == True,
             User.hackerone_username.isnot(None),
@@ -16,7 +19,7 @@ def check_for_new_targets(app: Flask):
         ).all()
 
         for user in users_with_h1:
-            print(f"Checking HackerOne for user: {user.username}")
+            logger.info(f"Checking HackerOne for user: {user.username}")
             h1_scopes = get_hackerone_scopes(user.hackerone_username, user.hackerone_api_key)
 
             for scope in h1_scopes:
@@ -31,7 +34,7 @@ def check_for_new_targets(app: Flask):
                 ).first()
 
                 if not existing_scan:
-                    print(f"Found new program '{program_name}' for user '{user.username}'. Creating new scan.")
+                    logger.info(f"Found new program '{program_name}' for user '{user.username}'. Creating new scan.")
 
                     new_scan = Scan(user_id=user.id, status='QUEUED', name=f"H1 - {program_name}")
                     db.session.add(new_scan)
@@ -48,4 +51,4 @@ def check_for_new_targets(app: Flask):
                         db.session.add(new_target)
 
                     db.session.commit()
-        print("Finished checking for new targets.")
+        logger.info("Finished checking for new targets.")

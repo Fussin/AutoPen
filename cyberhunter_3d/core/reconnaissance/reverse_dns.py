@@ -2,6 +2,9 @@ import subprocess
 import tempfile
 import os
 from typing import List, Set
+from cyberhunter_3d.common.log import get_rich_logger
+
+logger = get_rich_logger(__name__)
 
 def get_hostnames_for_ips(ips: List[str]) -> Set[str]:
     """
@@ -13,7 +16,7 @@ def get_hostnames_for_ips(ips: List[str]) -> Set[str]:
     if not ips:
         return set()
 
-    print(f"Starting reverse DNS lookup for {len(ips)} IP addresses...")
+    logger.info(f"Starting reverse DNS lookup for {len(ips)} IP addresses...")
     hostnames = set()
 
     # Create a temporary file to store the list of IPs
@@ -38,13 +41,13 @@ def get_hostnames_for_ips(ips: List[str]) -> Set[str]:
                 # The output might have a trailing dot, remove it
                 hostnames.add(line.strip().rstrip('.'))
 
-        print(f"Found {len(hostnames)} hostnames from {len(ips)} IPs.")
+        logger.info(f"Found {len(hostnames)} hostnames from {len(ips)} IPs.")
 
     except FileNotFoundError:
-        print("Error: 'dnsx' command not found. Please ensure it is installed and in your PATH.")
+        logger.error("'dnsx' command not found. Please ensure it is installed and in your PATH.")
     except subprocess.CalledProcessError as e:
-        print(f"Error running dnsx for reverse DNS: {e}")
-        print(f"Stderr: {e.stderr}")
+        logger.error(f"Error running dnsx for reverse DNS: {e}")
+        logger.error(f"Stderr: {e.stderr}")
     finally:
         # Clean up the temporary file
         os.remove(tmp_filename)

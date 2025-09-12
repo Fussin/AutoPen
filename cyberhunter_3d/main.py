@@ -1,24 +1,24 @@
 import argparse
 import subprocess
 import sys
+import os
 from .core.reconnaissance.passive_engine import run_passive_enumeration
 from .common.utils import check_tool
 from .common.exceptions import ToolNotFoundError
+from .common.log import get_rich_logger
+
+logger = get_rich_logger(__name__)
 
 def print_check(name, is_found, install_cmd):
     """Helper to print dependency check status."""
-    status = "✓" if is_found else "✘"
-    color = "\033[92m" if is_found else "\033[91m"
-    reset_color = "\033[0m"
-    print(f"[{color}{status}{reset_color}] {name}", end="")
-    if not is_found:
-        print(f" - MISSING (Install: {install_cmd})")
+    if is_found:
+        logger.info(f"[green]✓[/green] {name}")
     else:
-        print()
+        logger.warning(f"[red]✘[/red] {name} - MISSING (Install: {install_cmd})")
 
 def check_dependencies():
     """Checks for all required external tools."""
-    print("--- Checking Dependencies ---")
+    logger.info("--- Checking Dependencies ---")
 
     tools = {
         "amass": "go install -v github.com/owasp-amass/amass/v3/cmd/amass@latest",
@@ -38,31 +38,34 @@ def check_dependencies():
             all_found = False
             print_check(tool, False, install_cmd)
 
-    print("-" * 29)
+    logger.info("-" * 29)
     if all_found:
-        print("\033[92mAll dependencies are installed!\033[0m")
+        logger.info("[bold green]All dependencies are installed![/bold green]")
         return True
     else:
-        print("\033[91mSome dependencies are missing. Please install them or run with --install-deps.\033[0m")
+        logger.error("[bold red]Some dependencies are missing. Please install them or run with --install-deps.[/bold red]")
         return False
 
 def install_dependencies():
     """Attempts to install all missing dependencies using the install script."""
-    print("--- Installing Dependencies ---")
-    script_path = "cyberhunter_3d/scripts/install_tools.sh"
+    logger.info("--- Installing Dependencies ---")
+    # Construct a robust path to the script relative to this file's location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_path = os.path.join(script_dir, '..', 'scripts', 'install_tools.sh')
+
     try:
         # Give executable permission to the script
         subprocess.run(['chmod', '+x', script_path], check=True)
         # Run the script
         subprocess.run([script_path], check=True)
-        print("\n\033[92mDependency installation script finished.\033[0m")
-        print("Please verify the installation by running --check-deps again.")
+        logger.info("[bold green]Dependency installation script finished.[/bold green]")
+        logger.info("Please verify the installation by running --check-deps again.")
     except FileNotFoundError:
-        print(f"\033[91mError: Installation script not found at '{script_path}'.\033[0m")
+        logger.error(f"Error: Installation script not found at '{script_path}'.")
         sys.exit(1)
     except subprocess.CalledProcessError as e:
-        print(f"\033[91mError: The installation script failed with exit code {e.returncode}.\033[0m")
-        print("Please run the script manually to debug.")
+        logger.error(f"Error: The installation script failed with exit code {e.returncode}.")
+        logger.error("Please run the script manually to debug.")
         sys.exit(1)
 
 def main():
@@ -82,11 +85,12 @@ def main():
         sys.exit(0)
 
     if args.domain:
-        print(f"Running passive enumeration for {args.domain}...")
+        logger.info(f"Running passive enumeration for {args.domain}...")
         subdomains = run_passive_enumeration(args.domain)
-        print(f"Found {len(subdomains)} subdomains:")
+        # Print the final output directly to the console for user consumption
+        logger.info(f"Found {len(subdomains)} subdomains:")
         for sub in sorted(list(subdomains)):
-            print(sub)
+            print(sub) # This print is intentional for clean CLI output
     else:
         parser.print_help()
 
