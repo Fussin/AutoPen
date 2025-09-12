@@ -19,9 +19,6 @@ class OutputManager:
 
         self.vulnerabilities = []
         self.assets = []
-        self.live_hosts = []
-        self.nuclei_findings = []
-        self.domain = ""
 
         self.base_dir.mkdir(exist_ok=True)
         self.recon_dir.mkdir(exist_ok=True)
@@ -51,15 +48,6 @@ class OutputManager:
 
     def add_asset(self, asset_data):
         self.assets.append(asset_data)
-
-    def set_domain(self, domain):
-        self.domain = domain
-
-    def set_live_hosts(self, live_hosts):
-        self.live_hosts = live_hosts
-
-    def set_nuclei_findings(self, nuclei_findings):
-        self.nuclei_findings = nuclei_findings
 
     def produce_metadata(self):
         metadata = {
@@ -93,19 +81,14 @@ class OutputManager:
         template = template_env.get_template("report.html")
 
         context = {
-            "data": {
-                "domain": self.domain,
-                "live_hosts": self.live_hosts,
-                "nuclei_findings": self.nuclei_findings,
-                "vulnerabilities": self.vulnerabilities,
-                "assets": self.assets,
-                "summary": {
-                    "total_assets": len(self.assets),
-                    "vulnerabilities": len(self.vulnerabilities),
-                },
-            },
             "scan_id": self.base_dir.name,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "summary": {
+                "total_assets": len(self.assets),
+                "vulnerabilities": len(self.vulnerabilities),
+            },
+            "vulnerabilities": self.vulnerabilities,
+            "assets": self.assets,
         }
 
         html_out = template.render(context)
