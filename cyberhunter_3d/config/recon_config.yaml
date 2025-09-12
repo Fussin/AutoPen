@@ -5,24 +5,11 @@
 # The application will use `shutil.which()` to find the tool.
 tools:
   # Passive Reconnaissance Tools
-  amass:
-    cmd: "amass enum -passive -d {domain}"
-  assetfinder:
-    cmd: "assetfinder --subs-only {domain}"
-  subfinder:
-    cmd: "subfinder -d {domain}"
-  hakrawler:
-    cmd: "hakrawler -url {domain} -depth 2 -plain"
+  amass: amass
+  assetfinder: assetfinder
+  subfinder: subfinder
 
-  # Active Reconnaissance Tools
-  gobuster:
-    cmd: "gobuster dns -d {domain} -w {wordlist} -q"
-  puredns:
-    cmd: "puredns bruteforce {wordlist} {domain} -r {resolvers}"
-  nmap-axfr:
-    cmd: "nmap --script dns-zone-transfer -p 53 {domain}"
-
-  # Vulnerability Scanning
+  # Active Reconnaissance & Vulnerability Scanning
   naabu: naabu
   nmap: nmap
   httpx: httpx
@@ -43,27 +30,22 @@ tools:
 settings:
   # Passive Engine Settings
   passive_engine:
-    # List of tools to run for passive subdomain enumeration.
-    # The keys should match the tool names in the 'tools' section.
-    tools:
-      - name: "amass"
-      - name: "assetfinder"
-      - name: "subfinder"
-      - name: "hakrawler"
-
-  # Active Engine Settings
-  active_engine:
-    wordlist: "/usr/share/seclists/Discovery/DNS/dns-Jhaddix.txt"
-    resolvers: "/usr/share/seclists/Discovery/DNS/resolvers.txt"
-    tools:
-      - name: "gobuster"
-      - name: "puredns"
-      - name: "nmap-axfr"
+    # List of commands to run for passive subdomain enumeration.
+    # Use {domain} as a placeholder for the target domain.
+    # Use {output_file} for tools that write to a file.
+    commands:
+      - [amass, enum, -passive, -d, '{domain}', -o, '{output_file}']
+      - [assetfinder, --subs-only, '{domain}']
+      - [subfinder, -d, '{domain}', -o, '{output_file}']
 
   # Permutation Engine Settings
   permutation_engine:
     wordlist: /path/to/your/dns_wordlist.txt # Recommended: dns-Jhaddix.txt
     threads: 20
+
+  # Active Engine Settings (for services like HTTP, etc.)
+  active_engine:
+    ports: "80,443,8080,8443" # Default ports to scan with naabu/nmap
 
   # Nuclei Settings
   nuclei:

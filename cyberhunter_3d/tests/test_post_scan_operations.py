@@ -94,9 +94,6 @@ def test_report_generation(real_om, caplog):
     scan_id = "test_scan_123"
 
     # Add some dummy data to the output manager
-    real_om.set_domain("example.com")
-    real_om.set_live_hosts([{"url": "http://example.com", "status_code": 200, "server": "TestServer", "content_length": 100, "title": "Test Title"}])
-    real_om.set_nuclei_findings([{"template-id": "test-template", "info": {"name": "Test Finding", "severity": "high"}, "host": "http://example.com", "matched-at": "http://example.com"}])
     real_om.add_vulnerability({"id": "VULN-001", "title": "Test Vuln", "severity": "High", "description": "A test vulnerability."})
     real_om.add_asset({'type': 'subdomain', 'value': 'test.example.com', 'details': {}})
 

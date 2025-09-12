@@ -1,94 +1,67 @@
 import json
 import os
+import subprocess
 import tempfile
-import asyncio
-from typing import Set, List, Dict, Any
+from typing import Set, List, Dict
 
-from ...common.log import get_rich_logger as get_logger
-from ...common.utils import load_config
+from .utils import get_logger, load_config
 from .passive_engine import run_passive_enumeration
 from .active_engine import run_active_enumeration
-from .merger import merge_and_dedupe, bulk_check_liveness
-from ..scanning.nuclei_scanner import run_nuclei_scan
-from ..reporting.html_reporter import generate_html_report
-from ..output_manager import OutputManager
+from ..enrichment.enrichment_engine import run_enrichment_engine
+from .js_engine import run_js_enumeration
+from ..dorking.github_dorking_engine import run_github_dorking_engine
+from .cloud_asset_enum import find_cloud_assets
 
 logger = get_logger(__name__)
 
-def enumerate_subdomains_v2(domain: str) -> Dict[str, Any]:
+def enumerate_subdomains_v2(domain: str) -> List[Dict[str, str]]:
     config = load_config()
-    output_dir = config.get('settings', {}).get('reporting', {}).get('output_directory', 'scan_reports')
-    domain_output_dir = os.path.join(output_dir, domain)
-
-    om = OutputManager(domain_output_dir)
-    om.set_domain(domain)
-
     logger.info(f"Starting V2 reconnaissance for: {domain}")
 
-    # Create a temporary directory for the enumeration output
-    with tempfile.TemporaryDirectory() as temp_dir:
-        logger.info(f"Created temporary directory for enumeration output: {temp_dir}")
+    # --- Phase 1: Enumeration ---
+    passive_findings = run_passive_enumeration(domain)
+    active_findings = run_active_enumeration(domain)
+    all_enum_findings = passive_findings + active_findings
+    raw_subdomains = {f['evidence']['poc'] for f in all_enum_findings if f['status'] == 'success'}
 
-        # --- Phase 1: Enumeration ---
-        passive_output_paths = run_passive_enumeration(domain, os.path.join(temp_dir, "passive"))
-        active_output_paths = run_active_enumeration(domain, os.path.join(temp_dir, "active"))
+    # --- Phase 2: Validation ---
+    logger.info("Starting DNS resolution and validation...")
+    master_subdomains = resolve_and_validate(raw_subdomains, config)
+    logger.info(f"Found {len(master_subdomains)} valid subdomains.")
 
-        all_output_paths = passive_output_paths + active_output_paths
-        logger.info(f"Enumeration finished. Raw output files are in: {temp_dir}")
+    # --- Phase 3: Enrichment & Analysis ---
+    enrichment_findings = run_enrichment_engine(master_subdomains)
+    js_findings = run_js_enumeration(master_subdomains)
+    cloud_assets = find_cloud_assets(master_subdomains)
+    github_findings = run_github_dorking_engine(master_subdomains)
 
-        # --- Phase 2: Merge and Deduplicate ---
-        unique_subdomains = merge_and_dedupe(all_output_paths)
-        logger.info(f"Found {len(unique_subdomains)} unique subdomains.")
-        for sub in unique_subdomains:
-            om.add_asset({'type': 'subdomain', 'value': sub, 'details': {}})
+    # --- Final Report Generation ---
+    screenshots = [f['evidence']['screenshot_dir'] for f in enrichment_findings if f['phase'] == 'enrichment-screenshot' and f['status'] == 'success']
+    tech_results = {}
+    for f in enrichment_findings:
+        if f['phase'] == 'enrichment-service-scan' and f['status'] == 'success':
+            host = f['target']
+            if host not in tech_results:
+                tech_results[host] = {'ports': []}
+            tech_results[host]['ports'].append(f['evidence'])
 
-        # --- Phase 3: Liveness Check ---
-        logger.info("Starting liveness check...")
-        live_hosts = asyncio.run(bulk_check_liveness(unique_subdomains))
-        logger.info(f"Found {len(live_hosts)} live hosts.")
-        om.set_live_hosts(live_hosts)
+    final_recon_data = {
+        'domain': domain,
+        'master_subdomains': sorted(list(master_subdomains)),
+        'screenshots': screenshots,
+        'technology_and_ports': tech_results,
+        'js_findings': js_findings,
+        'cloud_assets': cloud_assets,
+        'github_findings': github_findings,
+    }
 
-        # --- Phase 4: Vulnerability Scanning ---
-        logger.info("Starting vulnerability scanning with Nuclei...")
-        live_urls = [host['url'] for host in live_hosts]
-        nuclei_results_path = ""
-        if live_urls:
-            nuclei_results_path = run_nuclei_scan(live_urls, os.path.join(domain_output_dir, "scans"))
+    final_recon_file = os.path.join(config['recon_output_dir'], config['final_recon_file'])
+    os.makedirs(config['recon_output_dir'], exist_ok=True)
+    with open(final_recon_file, 'w') as f_out:
+        json.dump(final_recon_data, f_out, indent=4)
 
-        nuclei_findings = []
-        if nuclei_results_path and os.path.exists(nuclei_results_path):
-            with open(nuclei_results_path, 'r') as f:
-                for line in f:
-                    try:
-                        finding = json.loads(line)
-                        nuclei_findings.append(finding)
-                        om.add_vulnerability(finding, finding.get('info', {}).get('severity', ''))
-                    except json.JSONDecodeError:
-                        logger.warning(f"Could not decode line in nuclei output: {line}")
-
-        om.set_nuclei_findings(nuclei_findings)
-
-
-        # --- Final Report Generation ---
-        final_recon_data = {
-            'domain': domain,
-            'live_hosts': live_hosts,
-            'nuclei_findings': nuclei_findings,
-            'assets': om.assets,
-            'vulnerabilities': om.vulnerabilities,
-        }
-
-        # Save the final reports
-        os.makedirs(domain_output_dir, exist_ok=True)
-        final_json_report_path = os.path.join(domain_output_dir, "summary.json")
-        with open(final_json_report_path, 'w') as f:
-            json.dump(final_recon_data, f, indent=4)
-
-        generate_html_report(final_recon_data, domain_output_dir)
-
-        logger.info(f"Reconnaissance complete. Final reports at: {domain_output_dir}")
-
-        return final_recon_data
+    assets = [{'type': 'subdomain', 'value': sub} for sub in master_subdomains]
+    return assets
 
 def resolve_and_validate(subdomains: Set[str], config: dict) -> Set[str]:
     # ... (implementation remains)
