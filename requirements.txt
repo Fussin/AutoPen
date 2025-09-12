@@ -7,6 +7,7 @@ qrcode[pil]
 requests
 PyYAML
 pytest
+pytest-asyncio
 boto3
 playwright
 shodan
@@ -26,3 +27,4 @@ python-docx
 APScheduler
 Flask-Mail
 rich
+httpx
