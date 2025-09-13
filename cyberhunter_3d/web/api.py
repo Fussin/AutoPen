@@ -24,6 +24,7 @@ def require_api_key(f):
 from cyberhunter_3d.web.models import db, Scan, Target, Asset, Vulnerability
 from cyberhunter_3d.core.target_parser import parse_targets
 from cyberhunter_3d.tasks import run_discovery_task
+from run_web import celery_app # Assuming celery_app is accessible
 
 @api_bp.route('/ping')
 @require_api_key
@@ -35,7 +36,49 @@ def ping():
 @require_api_key
 def create_scan():
     """
-    Creates a new scan. Expects a JSON payload with targets.
+    Create and launch a new reconnaissance scan.
+    This endpoint queues a new scan based on the provided targets and scope rules.
+    ---
+    tags:
+      - Scans
+    security:
+      - ApiKeyAuth: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          id: ScanRequest
+          required:
+            - targets
+          properties:
+            targets:
+              type: array
+              items:
+                type: string
+              description: A list of targets (domains, IPs, CIDRs, etc.).
+              example: ["example.com", "*.example.com"]
+            in_scope_rules:
+              type: string
+              description: Newline-separated in-scope rules. Wildcards (*) are supported.
+              example: "*.example.com"
+            out_of_scope_rules:
+              type: string
+              description: Newline-separated out-of-scope rules.
+              example: "dev.example.com"
+    responses:
+      202:
+        description: Scan successfully queued for discovery.
+        schema:
+          properties:
+            message:
+              type: string
+            scan_id:
+              type: integer
+      400:
+        description: Bad Request - Missing or invalid targets.
+      401:
+        description: Unauthorized - API key is missing or invalid.
     """
     data = request.get_json()
     if not data or 'targets' not in data:
@@ -175,3 +218,32 @@ def get_scan_graph_data(scan_id):
             links.append({"source": asset_node_id, "target": vuln_node_id})
 
     return jsonify({"nodes": nodes, "links": links})
+
+@api_bp.route('/health')
+def health_check():
+    """
+    Health check endpoint to verify service status.
+    Checks the status of the database and the message broker (Redis).
+    ---
+    tags:
+      - Health
+    responses:
+      200:
+        description: Service is healthy.
+      503:
+        description: One or more services are unhealthy.
+    """
+    try:
+        # 1. Check database connectivity
+        db.session.execute('SELECT 1')
+
+        # 2. Check Celery worker connectivity to Redis
+        celery_app.control.ping()
+
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        # In a real app, you would log the error 'e' here
+        return jsonify({
+            "status": "error",
+            "details": "One or more downstream services are unavailable."
+        }), 503

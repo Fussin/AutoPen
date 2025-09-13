@@ -1,4 +1,5 @@
 import os
+import sentry_sdk
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
@@ -12,6 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from cyberhunter_3d.core.feeds.feed_manager import check_for_new_targets
 from cyberhunter_3d.common.log import get_rich_logger
 from celery import Celery, Task
+from flasgger import Swagger # Import Swagger
 
 # --- Extensions Initialization ---
 bcrypt = Bcrypt()
@@ -44,6 +46,13 @@ def create_app(config_class=Config):
     """
     Creates and configures the Flask application.
     """
+
+    sentry_sdk.init(
+        dsn=os.environ.get("SENTRY_DSN"),
+        # Enable performance monitoring
+        enable_tracing=True,
+    )
+
     app = Flask(__name__, template_folder='cyberhunter_3d/web/templates', static_folder='cyberhunter_3d/web/static')
     app.config.from_object(config_class)
 
@@ -75,6 +84,8 @@ def create_app(config_class=Config):
     # Register blueprints and routes
     app.register_blueprint(api_bp)
     register_routes(app, bcrypt)
+
+    Swagger(app) # Initialize Flasgger with your app instance
 
     return app
 

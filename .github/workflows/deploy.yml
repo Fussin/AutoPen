@@ -1,0 +1,29 @@
+name: Continuous Deployment
+
+# Trigger this workflow only when code is pushed to the 'main' branch
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Deploy to Server via SSH
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # Navigate to the project directory on the server
+          cd ~/cyberhunter/AutoPen
+
+          # Pull the latest changes from the main branch
+          git pull origin main
+
+          # Rebuild and restart the services with Docker Compose
+          # The --remove-orphans flag cleans up old containers
+          docker-compose up --build -d --remove-orphans

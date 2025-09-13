@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git wget curl ca-certificates gnupg \
     golang-go rustc cargo ruby ruby-dev libpcap-dev \
     python3 python3-pip python3-venv libssl-dev libxml2-dev \
-    libxslt1-dev zlib1g-dev pkg-config unzip
+    libxslt1-dev zlib1g-dev pkg-config
 
 # --- Setup Environment Paths ---
 ENV GOPATH=/go
@@ -38,9 +38,9 @@ RUN go install -v github.com/owasp-amass/amass/v3/cmd/amass@latest
 RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
 
 # Install Python-based Network Tools
-RUN python3 -m pip install --no-cache-dir pipx && pipx ensurepath
+RUN pip3 install --no-cache-dir pipx && pipx ensurepath
 RUN pipx install git+https://github.com/SECFORCE/fierce.git
-RUN pipx install git+https://github.com/ofensec/enum4linux-ng.git --force
+RUN pipx install git+https://github.com/ofensec/enum4linux-ng.git --force # Enum4linux-ng
 RUN pipx install git+https://github.com/byt3bl33d3r/NetExec.git
 RUN pipx install smbmap
 
@@ -91,6 +91,7 @@ RUN cargo install feroxbuster
 RUN gem install wpscan
 
 # NOTE: GUI-based tools like Burp Suite and ZAP Proxy are not suitable for a Docker server image.
+# They should be run on a local machine and can connect to targets deployed via Docker.
 
 # =========================================================================================
 # ☁️ Cloud & Container Security (20+ Tools)
@@ -126,21 +127,26 @@ RUN git clone https://github.com/aquasecurity/cloudsploit.git /opt/tools/cloudsp
 # =========================================================================================
 # 🔥 Bug Bounty & OSINT Arsenal (20+ Tools)
 # =========================================================================================
-# Many tools (amass, subfinder, httpx, etc.) are already installed.
+# Tools like amass, subfinder, httpx, hakrawler are already installed above.
+# Install Python-based OSINT tools
 RUN pipx install sherlock
 RUN pipx install social-analyzer
 RUN pipx install shodan
 RUN pipx install censys-cli
 RUN pipx install trufflehog
 
+# Install Go-based OSINT tools
 RUN go install -v github.com/haccer/subjack@latest
 
+# Install from other sources
 RUN wget https://github.com/michenriksen/aquatone/releases/download/v1.7.0/aquatone_linux_amd64_1.7.0.zip && \
-    unzip aquatone_linux_amd64_1.7.0.zip && mv aquatone /usr/local/bin/ && rm aquatone_linux_amd64_1.7.0.zip LICENSE.txt README.md
+    unzip aquatone_linux_amd64_1.7.0.zip && mv aquatone /usr/local/bin/ && rm aquatone_linux_amd64_1.7.0.zip
 # NOTE: Maltego is a GUI tool and not suitable for this image.
 
-RUN git clone https://github.com/lanmaster53/recon-ng.git /opt/tools/recon-ng
+# Clone Git-based OSINT tools
+RUN git clone https://github.com/laramies/recon-ng.git /opt/tools/recon-ng
 RUN git clone https://github.com/smicallef/spiderfoot.git /opt/tools/spiderfoot
+
 
 # =========================================================================================
 # STAGE 2: The Final Application Image
