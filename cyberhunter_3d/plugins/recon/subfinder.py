@@ -2,7 +2,6 @@ import shutil
 from typing import List, Dict
 from ...common.base_plugin import Plugin
 from ...common.exec import run_command
-from ...common.schema import Finding
 from ...common.exceptions import ToolExecutionError
 import datetime
 
@@ -32,11 +31,11 @@ class SubfinderPlugin(Plugin):
         findings = []
         for subdomain in raw_output.strip().split('\n'):
             if subdomain:
-                finding: Finding = {
-                    "target": target,
-                    "phase": self.phase(),
+                finding = {
                     "tool": self.name(),
-                    "evidence": {"poc": subdomain},
+                    "type": "subdomain",
+                    "severity": "Info",
+                    "evidence": {"subdomain": subdomain, "source_target": target},
                 }
                 findings.append(finding)
         return findings

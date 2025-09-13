@@ -32,3 +32,5 @@ celery
 redis
 gunicorn
 psycopg2-binary
+flasgger
+sentry-sdk[flask]

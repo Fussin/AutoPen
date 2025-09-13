@@ -97,3 +97,21 @@ class Vulnerability(db.Model):
 
     def __repr__(self):
         return f'<Vulnerability {self.id}: {self.title}>'
+
+
+class Finding(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    scan_id = db.Column(db.Integer, db.ForeignKey('scan.id'), nullable=False)
+    asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=False)
+
+    tool_name = db.Column(db.String(100), nullable=False)
+    type = db.Column(db.String(100), nullable=False)  # e.g., 'open_port', 'subdomain', 'vulnerability'
+    severity = db.Column(db.String(50), nullable=True) # e.g., 'Info', 'Low', 'Medium', 'High'
+
+    # A JSONB field is perfect for storing the unique details from each tool
+    details = db.Column(db.JSON, nullable=False)
+
+    first_seen = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f'<Finding {self.id} from {self.tool_name}>'
