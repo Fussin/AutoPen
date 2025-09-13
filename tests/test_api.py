@@ -1,6 +1,6 @@
 import pytest
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from run_web import create_app
 from cyberhunter_3d.web.models import db, User, Scan, Target, Asset
 
@@ -58,7 +58,8 @@ def test_ping_authorized(client, app, init_database):
         assert response.status_code == 200
         assert json.loads(response.data)['message'] == 'pong'
 
-def test_create_scan_api(client, app, init_database):
+@patch('cyberhunter_3d.web.api.run_discovery_task')
+def test_create_scan_api(mock_run_discovery_task, client, app, init_database):
     """Test creating a scan via the API."""
     with app.app_context():
         test_user = db.session.get(User, 1)
@@ -82,7 +83,7 @@ def test_create_scan_api(client, app, init_database):
         assert scan.user_id == test_user.id
 
     # Verify that the background task was called
-    app.executor.submit.assert_called_once()
+    mock_run_discovery_task.delay.assert_called_once_with(scan_id)
 
 def test_get_scan_status_api(client, app, init_database):
     """Test getting scan status via the API."""
