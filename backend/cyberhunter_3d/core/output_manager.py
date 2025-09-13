@@ -20,7 +20,10 @@ class OutputManager:
         self.vulnerabilities = []
         self.assets = []
 
-        self.base_dir.mkdir(exist_ok=True)
+        # --- THIS IS THE LINE TO CHANGE ---
+        # Add parents=True to ensure the 'scan_results' directory is created if missing
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
         self.recon_dir.mkdir(exist_ok=True)
         self.network_dir.mkdir(exist_ok=True)
         self.discovery_dir.mkdir(exist_ok=True)
