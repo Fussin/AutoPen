@@ -12,7 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git wget curl ca-certificates gnupg \
     golang-go rustc cargo ruby ruby-dev libpcap-dev \
     python3 python3-pip python3-venv libssl-dev libxml2-dev \
-    libxslt1-dev zlib1g-dev pkg-config
+    libxslt1-dev zlib1g-dev pkg-config \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # --- Setup Environment Paths ---
 ENV GOPATH=/go
@@ -23,7 +25,9 @@ RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" /opt/tools
 # 🔍 Network Reconnaissance & Scanning (25+ Tools)
 # =========================================================================================
 # Install from APT for simplicity and stability where possible
-RUN apt-get install -y nmap arp-scan nbtscan rpcbind
+RUN apt-get update && apt-get install -y --no-install-recommends nmap arp-scan nbtscan rpcbind \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install RustScan (fast port scanner)
 RUN wget https://github.com/RustScan/RustScan/releases/download/2.0.1/rustscan_2.0.1_amd64.deb && \
@@ -35,14 +39,15 @@ RUN git clone https://github.com/robertdavidgraham/masscan.git /opt/tools/massca
 
 # Install Go-based Network Tools
 RUN go install -v github.com/owasp-amass/amass/v3/cmd/amass@latest
-RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@v2.5.6
 
 # Install Python-based Network Tools
-RUN pip3 install --no-cache-dir pipx && pipx ensurepath
-RUN pipx install git+https://github.com/SECFORCE/fierce.git
-RUN pipx install git+https://github.com/ofensec/enum4linux-ng.git --force # Enum4linux-ng
-RUN pipx install git+https://github.com/byt3bl33d3r/NetExec.git
-RUN pipx install smbmap
+RUN pip3 install --no-cache-dir pipx
+RUN pipx ensurepath
+RUN pipx install --no-cache-dir git+https://github.com/SECFORCE/fierce.git
+RUN pipx install --no-cache-dir git+https://github.com/ofensec/enum4linux-ng.git --force # Enum4linux-ng
+RUN pipx install --no-cache-dir git+https://github.com/byt3bl33d3r/NetExec.git
+RUN pipx install --no-cache-dir smbmap
 
 # Clone Git-based Network Tools
 RUN git clone https://github.com/Tib3rius/AutoRecon.git /opt/tools/AutoRecon
@@ -69,22 +74,24 @@ RUN go install -v github.com/tomnomnom/qsreplace@latest
 RUN go install -v github.com/jaeles-project/jaeles@latest
 
 # Install Python-based Web Tools
-RUN pipx install dirsearch
-RUN pipx install sqlmap-dev
-RUN pipx install arjun
-RUN pipx install paramspider
-RUN pipx install wafw00f
-RUN pipx install sslyze
-RUN pipx install uro
-RUN pipx install jwt-tool
-RUN pipx install wfuzz
-RUN pipx install commix
-RUN pipx install nosqlmap
-RUN pipx install tplmap
-RUN pipx install X8
+RUN pipx install --no-cache-dir dirsearch
+RUN pipx install --no-cache-dir sqlmap-dev
+RUN pipx install --no-cache-dir arjun
+RUN pipx install --no-cache-dir paramspider
+RUN pipx install --no-cache-dir wafw00f
+RUN pipx install --no-cache-dir sslyze
+RUN pipx install --no-cache-dir uro
+RUN pipx install --no-cache-dir jwt-tool
+RUN pipx install --no-cache-dir wfuzz
+RUN pipx install --no-cache-dir commix
+RUN pipx install --no-cache-dir nosqlmap
+RUN pipx install --no-cache-dir tplmap
+RUN pipx install --no-cache-dir X8
 
 # Install from APT
-RUN apt-get install -y nikto dirb whatweb testssl.sh sslscan
+RUN echo "deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm main contrib non-free" > /etc/apt/sources.list.d/non-free.list && \
+    apt-get update && \
+    apt-get install -y nikto dirb whatweb testssl.sh sslscan
 
 # Install from other sources
 RUN cargo install feroxbuster
@@ -100,19 +107,23 @@ RUN gem install wpscan
 RUN go install -v github.com/aquasecurity/trivy/cmd/trivy@latest
 
 # Install Python-based Cloud/Container Tools
-RUN pipx install prowler
-RUN pipx install checkov
-RUN pipx install terrascan
-RUN pipx install awscli
-RUN pipx install azure-cli
-RUN pipx install kube-hunter
-RUN pipx install kube-bench
+RUN pipx install --no-cache-dir prowler
+RUN pipx install --no-cache-dir checkov
+RUN pipx install --no-cache-dir terrascan
+RUN pipx install --no-cache-dir awscli
+RUN pipx install --no-cache-dir azure-cli
+RUN pipx install --no-cache-dir kube-hunter
+RUN pipx install --no-cache-dir kube-bench
 
 # Install from APT/scripts
-RUN apt-get install -y kubectl helm
+RUN apt-get update && apt-get install -y --no-install-recommends kubectl helm \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://falco.org/repo/falcosecurity-3672BA8F.asc | gpg --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" | tee -a /etc/apt/sources.list.d/falco.list && \
-    apt-get update && apt-get install -y falco
+    apt-get update && apt-get install -y --no-install-recommends falco \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --disable-prompts && mv /root/google-cloud-sdk /opt/
 ENV PATH="/opt/google-cloud-sdk/bin:$PATH"
 
@@ -129,11 +140,11 @@ RUN git clone https://github.com/aquasecurity/cloudsploit.git /opt/tools/cloudsp
 # =========================================================================================
 # Tools like amass, subfinder, httpx, hakrawler are already installed above.
 # Install Python-based OSINT tools
-RUN pipx install sherlock
-RUN pipx install social-analyzer
-RUN pipx install shodan
-RUN pipx install censys-cli
-RUN pipx install trufflehog
+RUN pipx install --no-cache-dir sherlock
+RUN pipx install --no-cache-dir social-analyzer
+RUN pipx install --no-cache-dir shodan
+RUN pipx install --no-cache-dir censys-cli
+RUN pipx install --no-cache-dir trufflehog
 
 # Install Go-based OSINT tools
 RUN go install -v github.com/haccer/subjack@latest
@@ -159,7 +170,8 @@ RUN useradd --create-home --shell /bin/bash appuser
 WORKDIR /home/appuser/app
 
 # Install only necessary runtime packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN echo "deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm main contrib non-free" > /etc/apt/sources.list.d/non-free.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
     nmap arp-scan nbtscan rpcbind nikto dirb whatweb testssl.sh sslscan curl procps \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

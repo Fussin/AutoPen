@@ -1,60 +1,50 @@
 version: '3.8'
 
 services:
-  # Nginx Reverse Proxy (New Service)
+  # Nginx acts as the gateway to the application
   nginx:
     image: nginx:latest
     ports:
-      # Expose standard web ports to the host machine
       - "80:80"
-      - "443:443"
     volumes:
-      # Mount our custom nginx configuration
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
-      # Mount the application's static files so Nginx can serve them directly
-      - ./cyberhunter_3d/web/static:/var/www/static:ro
-      # (Optional) Mount your SSL certificates here for production
-      # - ./path/to/your/certs:/etc/nginx/certs:ro
     depends_on:
-      - web
+      - backend
+      - frontend
     restart: always
 
-  # PostgreSQL Database (New Service)
-  db:
-    image: postgres:15-alpine
+  # Frontend Service (React + Vite)
+  frontend:
+    build:
+      context: ./frontend
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      # These MUST match the values in your .env file's DATABASE_URL
-      - POSTGRES_USER=cyberhunter
-      - POSTGRES_PASSWORD=your_secure_password
-      - POSTGRES_DB=cyberhunter_db
+      - ./frontend:/app
+      - /app/node_modules
     restart: always
 
-  # Redis Message Broker
-  redis:
-    image: "redis:alpine"
+  # Backend Service (Python/Flask API)
+  backend:
+    build:
+      context: ./backend
     volumes:
-      - redis_data:/data
-    restart: always
-
-  # Web Server (Flask/Gunicorn) - NO LONGER EXPOSES PORTS DIRECTLY
-  web:
-    build: .
+      - ./backend/cyberhunter.db:/home/appuser/app/cyberhunter.db
     env_file:
-      - .env
+      - ./backend/.env
+    expose:
+      - "5001" # Expose port only to internal network
     depends_on:
-      - redis
       - db
+      - redis
     restart: always
     command: >
       sh -c "flask db upgrade && python3 -m gunicorn --bind 0.0.0.0:5001 --workers 4 'run_web:create_app()'"
 
-  # Celery Background Worker
+  # Celery Worker for background tasks
   worker:
-    build: .
+    build:
+      context: ./backend
     env_file:
-      - .env
+      - ./backend/.env
     depends_on:
       - redis
       - db
@@ -62,6 +52,21 @@ services:
     command: >
       sh -c "sleep 10 && celery -A run_web.celery_app worker --loglevel=info"
 
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=cyberhunter
+      - POSTGRES_PASSWORD=your_secure_password
+      - POSTGRES_DB=cyberhunter_db
+    restart: always
+
+  # Redis for Celery message queue
+  redis:
+    image: "redis:alpine"
+    restart: always
+
 volumes:
   postgres_data:
-  redis_data:
