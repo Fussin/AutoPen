@@ -63,6 +63,7 @@ def test_cleanup_operations(mock_om):
 
 def test_final_validation_success(mock_om, caplog):
     """Tests final_validation when the archive exists."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
     # Create a dummy archive file
@@ -78,6 +79,7 @@ def test_final_validation_success(mock_om, caplog):
 
 def test_final_validation_failure(mock_om, caplog):
     """Tests final_validation when the archive does not exist."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
 
@@ -110,6 +112,7 @@ def test_report_generation(real_om, caplog):
 
 def test_notification_dispatch(caplog):
     """Tests the notification_dispatch function."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
     pso.notification_dispatch(scan_id)
@@ -117,6 +120,7 @@ def test_notification_dispatch(caplog):
 
 def test_integration_updates(caplog, monkeypatch):
     """Tests the integration_updates function."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
 
@@ -130,6 +134,7 @@ def test_integration_updates(caplog, monkeypatch):
 
 def test_analytics_update(mock_om, caplog):
     """Tests the analytics_update function."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
     pso.analytics_update(scan_id, mock_om)
@@ -137,6 +142,7 @@ def test_analytics_update(mock_om, caplog):
 
 def test_session_termination(caplog):
     """Tests the session_termination function."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
     pso.session_termination(scan_id)
@@ -144,6 +150,7 @@ def test_session_termination(caplog):
 
 def test_monitoring_activation(caplog):
     """Tests the monitoring_activation function."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
     pso.monitoring_activation(scan_id)
@@ -151,6 +158,7 @@ def test_monitoring_activation(caplog):
 
 def test_platform_logout(caplog):
     """Tests the platform_logout function."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
     pso.platform_logout(scan_id)
@@ -158,6 +166,7 @@ def test_platform_logout(caplog):
 
 def test_session_closed(caplog):
     """Tests the session_closed function."""
+    pso.logger.propagate = True
     caplog.set_level(logging.INFO)
     scan_id = "test_scan_123"
     pso.session_closed(scan_id)

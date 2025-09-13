@@ -1,44 +1,45 @@
 import pytest
-from run_web import app as main_app, db as main_db
-from cyberhunter_3d.web.models import User, Scan, Target
+from run_web import create_app
+from cyberhunter_3d.web.models import db, User, Scan, Target
 from cyberhunter_3d.core.post_scan_operations import schedule_next_scan
 
 @pytest.fixture
-def test_app():
-    """Uses the main Flask app for testing with an in-memory SQLite database."""
-    main_app.config['TESTING'] = True
-    main_app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    main_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+def app():
+    """Create and configure a new app instance for each test."""
+    app = create_app()
+    app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    with main_app.app_context():
-        main_db.create_all()
+    with app.app_context():
+        db.create_all()
 
-    yield main_app
+    yield app
 
-    with main_app.app_context():
-        main_db.drop_all()
+    with app.app_context():
+        db.drop_all()
 
-def test_add_user(test_app):
-    with test_app.app_context():
+def test_add_user(app):
+    with app.app_context():
         user = User(username="testuser2", password_hash="test", otp_secret="test")
-        main_db.session.add(user)
-        main_db.session.commit()
+        db.session.add(user)
+        db.session.commit()
 
-        retrieved_user = main_db.session.query(User).filter_by(username="testuser2").first()
+        retrieved_user = db.session.query(User).filter_by(username="testuser2").first()
         assert retrieved_user is not None
 
-def test_schedule_next_scan(test_app):
+def test_schedule_next_scan(app):
     """Tests that a new scan is scheduled correctly."""
-    with test_app.app_context():
+    with app.app_context():
         # Create a user and an initial scan with a target
         user = User(username="testuser", password_hash="test", otp_secret="test")
-        main_db.session.add(user)
-        main_db.session.commit()
+        db.session.add(user)
+        db.session.commit()
 
         initial_scan = Scan(user_id=user.id)
         initial_scan.targets.append(Target(value="example.com", type="domain"))
-        main_db.session.add(initial_scan)
-        main_db.session.commit()
+        db.session.add(initial_scan)
+        db.session.commit()
 
         initial_scan_id = initial_scan.id
 

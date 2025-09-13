@@ -1,20 +1,21 @@
 import unittest
 from unittest.mock import patch
 import pyotp
-from run_web import app, db
-from cyberhunter_3d.web.models import User, Scan, Target, Asset, Vulnerability
+from run_web import create_app
+from cyberhunter_3d.web.models import db, User, Scan, Target, Asset, Vulnerability
+from cyberhunter_3d.extensions import bcrypt
 
 class Test3DVisualization(unittest.TestCase):
 
     def setUp(self):
-        app.config['TESTING'] = True
-        app.config['WTF_CSRF_ENABLED'] = False
-        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-        self.client = app.test_client()
-        with app.app_context():
+        self.app = create_app()
+        self.app.config['TESTING'] = True
+        self.app.config['WTF_CSRF_ENABLED'] = False
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        self.client = self.app.test_client()
+        with self.app.app_context():
             db.create_all()
             # Create a user for authentication
-            from run_web import bcrypt
             password_hash = bcrypt.generate_password_hash('testpassword').decode('utf-8')
             user = User(username='testuser', password_hash=password_hash, otp_secret='testsecret')
             user.regenerate_api_key()
@@ -23,13 +24,13 @@ class Test3DVisualization(unittest.TestCase):
             self.user = user
 
     def tearDown(self):
-        with app.app_context():
+        with self.app.app_context():
             db.session.remove()
             db.drop_all()
 
     @patch('cyberhunter_3d.core.scan_manager.run_discovery_phase')
     def test_graph_data_api_and_view(self, mock_run_discovery_phase):
-        with app.app_context():
+        with self.app.app_context():
             user = User.query.filter_by(username='testuser').first()
             self.assertIsNotNone(user)
             self.assertIsNotNone(user.api_key)

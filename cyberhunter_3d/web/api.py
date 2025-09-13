@@ -24,7 +24,7 @@ def require_api_key(f):
 from cyberhunter_3d.web.models import db, Scan, Target, Asset, Vulnerability
 from cyberhunter_3d.core.target_parser import parse_targets
 from cyberhunter_3d.tasks import run_discovery_task
-from run_web import celery_app # Assuming celery_app is accessible
+from ..extensions import celery_app
 
 @api_bp.route('/ping')
 @require_api_key

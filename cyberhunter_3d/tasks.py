@@ -1,6 +1,6 @@
 # You no longer need to pass the app object around
 from .core.scan_manager import run_discovery_phase
-from run_web import celery_app # Import the Celery app instance
+from .extensions import celery_app
 
 @celery_app.task(name="run_scan_discovery")
 def run_discovery_task(scan_id: int):
