@@ -23,14 +23,7 @@ def require_api_key(f):
 
 from cyberhunter_3d.web.models import db, Scan, Target, Asset, Vulnerability
 from cyberhunter_3d.core.target_parser import parse_targets
-from cyberhunter_3d.core.scan_manager import run_discovery_phase
-from concurrent.futures import ThreadPoolExecutor
-from flask import current_app
-
-# This is a bit of a hack to get access to the executor defined in run_web.py
-# In a real app, this would be handled by a proper application factory or shared context.
-def get_executor():
-    return current_app.executor
+from cyberhunter_3d.tasks import run_discovery_task
 
 @api_bp.route('/ping')
 @require_api_key
@@ -73,11 +66,13 @@ def create_scan():
 
     db.session.commit()
 
-    # Trigger discovery phase
-    get_executor().submit(run_discovery_phase, new_scan.id, current_app._get_current_object())
+    # --- THIS IS THE KEY CHANGE ---
+    # Instead of submitting to a ThreadPoolExecutor, you call .delay() on your task.
+    # This sends a message to Redis with the scan_id as the argument.
+    run_discovery_task.delay(new_scan.id)
 
     return jsonify({
-        'message': 'Scan created successfully',
+        'message': 'Scan successfully queued for discovery',
         'scan_id': new_scan.id
     }), 202
 
