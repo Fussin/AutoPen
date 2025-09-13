@@ -28,3 +28,7 @@ Flask-Mail
 rich
 python-dotenv
 Flask-Migrate
+celery
+redis
+gunicorn
+psycopg2-binary
