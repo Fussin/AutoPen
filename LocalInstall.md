@@ -117,6 +117,10 @@ pip3 install -e .
 
 After installation, you need to configure the platform. The main configuration file is `cyberhunter_3d/config/recon_config.yaml`.
 
+> **⚠️ Configuration Warning:** The `recon_config.yaml` file is currently out of sync with the tools installed by the `install_tools.sh` script. The configuration file still references an old toolset that is no longer installed.
+>
+> You **must** manually edit `cyberhunter_3d/config/recon_config.yaml` and update the `tools` section to match the new tools (e.g., `ffuf`, `dalfox`, `trivy`, etc.) before running a scan. Failure to do so will result in errors.
+
 #### Tool Paths
 The `recon_config.yaml` file contains paths to the external tools. If you used the `install_tools.sh` script, it likely installed Go-based tools in `/root/go/bin/`. If you installed the tools manually or are not running as root, you **must** update these paths.
 
@@ -144,13 +148,9 @@ Some tools integrated into CyberHunter 3D can use API keys for better results (e
 
 ### 1.4. Database Setup
 
-The platform uses a SQLite database to store scan information. Before running the web interface for the first time, you must initialize the database.
+The platform uses a SQLite database to store scan information. The database is created automatically the first time you run the web interface.
 
-From the root of the project directory, run:
-```bash
-python3 init_db.py
-```
-You should see a confirmation message: `Database initialized successfully.`
+When you start the server with `python3 run_web.py`, it will check if the database file exists and create it if necessary. You should see a message in your console like `Creating database and tables...` on the first run.
 
 ### 1.5. Usage
 
