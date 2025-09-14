@@ -7,9 +7,36 @@ on:
       - main
 
 jobs:
+  update-git-history:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # We need to fetch all history so that git log works correctly.
+          fetch-depth: 0
+      - name: Update GIT_HISTORY.md
+        run: |
+          echo "# Project Git History" > GIT_HISTORY.md
+          echo "" >> GIT_HISTORY.md
+          echo "**Note:** This file is automatically updated by a CI/CD pipeline after each push to the main branch." >> GIT_HISTORY.md
+          echo "" >> GIT_HISTORY.md
+          echo "\`\`\`" >> GIT_HISTORY.md
+          git log --pretty=fuller >> GIT_HISTORY.md
+          echo "\`\`\`" >> GIT_HISTORY.md
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add GIT_HISTORY.md
+          # Only commit and push if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "docs: update GIT_HISTORY.md [skip ci]"
+            git push
+          fi
+
   deploy:
     runs-on: ubuntu-latest
-
+    needs: update-git-history
     steps:
     - name: Deploy to Server via SSH
       uses: appleboy/ssh-action@master
