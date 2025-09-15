@@ -1,7 +1,7 @@
 import subprocess
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any
-from cyberhunter_3d.common.log import get_rich_logger
+from ...common.log import get_rich_logger
 
 logger = get_rich_logger(__name__)
 
